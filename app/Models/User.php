@@ -3,11 +3,13 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
@@ -47,22 +49,22 @@ class User extends Authenticatable
     }
 
     /**
-     * Required for Filament v3 access
+     * Authorize access to Filament panels.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        // For now, allow all registered users to enter.
-        // You can later restrict this to specific domains or emails.
+        // Permits all authenticated users to access the panel.
         return true; 
     }
-    public function branch()
-{
-    return $this->belongsTo(Branch::class);
-}
 
-// Helper to check if they are HQ
-public function isHeadOffice(): bool
-{
-    return is_null($this->branch_id);
-}
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    // Helper to check if they are HQ
+    public function isHeadOffice(): bool
+    {
+        return is_null($this->branch_id);
+    }
 }
