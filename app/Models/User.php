@@ -45,6 +45,16 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * Required for Filament v3 access
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        // For now, allow all registered users to enter.
+        // You can later restrict this to specific domains or emails.
+        return true; 
+    }
     public function branch()
 {
     return $this->belongsTo(Branch::class);
