@@ -12,9 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
-            $table->string('cheque_number')->nullable()->after('amount');
-            $table->date('cheque_date')->nullable()->after('cheque_number');
-            $table->string('bank_name')->nullable()->after('cheque_date');
+            //
         });
     }
 
@@ -24,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('transactions', function (Blueprint $table) {
-            $table->dropColumn(['cheque_number', 'cheque_date', 'bank_name']);
+            //
         });
     }
 };

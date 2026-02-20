@@ -16,6 +16,17 @@ class TransactionItem extends Model
         'total_price',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'quantity'    => 'integer',
+            'unit_price'  => 'decimal:2',
+            'vat'         => 'decimal:2',
+            'total_price' => 'decimal:2',
+        ];
+    }
+
+
     public function transaction()
     {
         return $this->belongsTo(Transaction::class);

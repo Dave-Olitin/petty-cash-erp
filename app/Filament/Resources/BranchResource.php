@@ -28,14 +28,6 @@ class BranchResource extends Resource
             Forms\Components\TextInput::make('name')
                 ->required()
                 ->maxLength(255),
-            Forms\Components\TextInput::make('code')
-                ->label('Branch Code')
-                ->placeholder('e.g. ETC')
-                ->maxLength(255),
-            Forms\Components\TextInput::make('gl_code')
-                ->label('GL Code (Assets)')
-                ->placeholder('e.g. 1010-02')
-                ->maxLength(255),
             Forms\Components\TextInput::make('location')
                 ->maxLength(255),
             Forms\Components\Hidden::make('max_limit')

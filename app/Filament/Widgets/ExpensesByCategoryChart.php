@@ -26,12 +26,15 @@ class ExpensesByCategoryChart extends ChartWidget
             ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
             ->join('categories', 'transaction_items.category_id', '=', 'categories.id')
             ->where('transactions.type', 'EXPENSE')
+            ->whereNull('transactions.deleted_at')        // Exclude voided transactions
+            ->where('transactions.status', '!=', 'rejected') // Exclude rejected transactions
             ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
             ->when($branchId, fn($q) => $q->where('transactions.branch_id', $branchId))
             ->selectRaw('categories.name as category_name, sum(transaction_items.total_price) as total')
             ->groupBy('categories.name')
             ->get();
+
             
         // Format for Chart.js
         $labels = $rawData->pluck('category_name');

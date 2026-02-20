@@ -11,19 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('branches', function (Blueprint $table) {
-            if (!Schema::hasColumn('branches', 'code')) {
-                $table->string('code')->nullable()->after('name');
-            }
-            if (!Schema::hasColumn('branches', 'gl_code')) {
-                $table->string('gl_code')->nullable()->after('code');
-            }
-        });
-
-        Schema::table('categories', function (Blueprint $table) {
-            if (!Schema::hasColumn('categories', 'gl_code')) {
-                $table->string('gl_code')->nullable()->after('name');
-            }
+        Schema::table('branches_and_categories', function (Blueprint $table) {
+            //
         });
     }
 
@@ -32,12 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('branches', function (Blueprint $table) {
-            $table->dropColumn(['code', 'gl_code']);
-        });
-
-        Schema::table('categories', function (Blueprint $table) {
-            $table->dropColumn('gl_code');
+        Schema::table('branches_and_categories', function (Blueprint $table) {
+            //
         });
     }
 };

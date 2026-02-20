@@ -69,71 +69,55 @@ public static function form(Form $form): Form
                         ->maxLength(255),
                 ])->columns(['default' => 1, 'sm' => 2]),
 
-            Forms\Components\Section::make('Payment Details')
-                ->schema([
-                    Forms\Components\TextInput::make('cheque_number')
-                        ->label('Cheque No.')
-                        ->maxLength(255),
-                    Forms\Components\DatePicker::make('cheque_date')
-                        ->label('Cheque Date')
-                        ->native(false),
-                    Forms\Components\TextInput::make('bank_name')
-                        ->label('Bank Name')
-                        ->maxLength(255)
-                        ->columnSpanFull(),
-                ])
-                ->columns(2)
-                ->collapsible()
-                ->collapsed(),
-
-                Forms\Components\Repeater::make('items')
+                    Forms\Components\Repeater::make('items')
                         ->relationship()
-                        ->columns(['default' => 12, 'md' => 10, 'lg' => 10]) 
                         ->schema([
                             Forms\Components\Select::make('category_id')
                                 ->relationship('category', 'name', function (Builder $query, callable $get) {
+                                    // Use the parent transaction type if possible, or defaulting to 'expense' if complicated. 
+                                    // Accessing parent state from repeater item can be tricky. 
+                                    // For now, let's allow all active categories or try to filter if feasible.
+                                    // $get('../../type') might work depending on structure.
+                                    // Let's keep it simple: Show all active categories for now.
                                     return $query->where('is_active', true);
                                 })
                                 ->label('Category')
                                 ->searchable()
                                 ->preload()
                                 ->required()
-                                ->visible(fn () => auth()->user()->isHeadOffice())
-                                ->columnSpan(['default' => 12, 'md' => 3]), // Full width on mobile, 3/10 on desktop
+                                ->visible(fn () => auth()->user()->isHeadOffice()) // Only HO can see/set
+                                ->columnSpan(2),
                             Forms\Components\TextInput::make('name')
                                 ->required()
-                                ->columnSpan(['default' => 12, 'md' => 3]), // Full width on mobile, 3/10 on desktop
+                                ->columnSpan(2),
                             Forms\Components\TextInput::make('quantity')
                                 ->numeric()
                                 ->default(1)
                                 ->required()
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat')))
-                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat'))),
                             Forms\Components\TextInput::make('unit_price')
                                 ->numeric()
                                 ->default(0)
                                 ->required()
                                 ->prefix('AED')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat')))
-                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat'))),
                             Forms\Components\TextInput::make('vat')
                                 ->label('VAT')
                                 ->numeric()
                                 ->default(0)
                                 ->prefix('AED')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state))
-                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state)),
                             Forms\Components\TextInput::make('total_price')
                                 ->numeric()
                                 ->readOnly()
                                 ->prefix('AED')
                                 ->default(0)
-                                ->dehydrated()
-                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
+                                ->dehydrated(),
                         ])
+                        ->columns(['default' => 1, 'sm' => 6]) // Increased columns for VAT
                         ->columnSpanFull()
                         ->live()
                         ->afterStateUpdated(function (callable $get, callable $set) {
@@ -499,7 +483,6 @@ public static function table(Table $table): Table
                 Tables\Actions\Action::make('print')
                     ->label('Print Voucher')
                     ->icon('heroicon-o-printer')
-                    ->visible(fn () => auth()->user()->branch_id === null)
                     ->url(fn (Transaction $record) => route('transaction.print', $record))
                     ->openUrlInNewTab(),
                     
@@ -514,34 +497,13 @@ public static function table(Table $table): Table
                 // Accounting Specs Action Removed
 
                 Tables\Actions\EditAction::make()
-                    ->slideOver()
-                    ->using(function (Transaction $record, array $data): Transaction {
-                        // 1. Capture Original Data
-                        $originalData = $record->fresh()->toArray();
-
-                        // 2. Extract Reason
-                        $reason = $data['edit_reason'] ?? 'No reason provided';
-                        unset($data['edit_reason']);
-
-                        // 3. Update Record
-                        $record->update($data);
-
-                        // 4. Create History Log
-                        \App\Models\TransactionHistory::create([
-                            'transaction_id' => $record->id,
-                            'user_id' => auth()->id(),
-                            'reason' => $reason,
-                            'original_data' => $originalData,
-                            'modified_data' => $record->fresh()->toArray(),
-                        ]);
-
-                        return $record;
-                    }),
+                    ->slideOver(),
                 Tables\Actions\DeleteAction::make()
                     ->label('Void')
                     ->modalHeading('Void Transaction')
                     ->modalDescription('Are you sure you want to void this transaction? This action cannot be undone by branch staff.')
-                    ->modalSubmitActionLabel('Void'),
+                    ->modalSubmitActionLabel('Void')
+                    ->visible(fn () => auth()->user()->branch_id === null), // HQ only
             ]),
         ])
             ->headerActions([

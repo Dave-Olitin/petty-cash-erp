@@ -11,7 +11,6 @@ class Transaction extends Model
 {
     use HasFactory, SoftDeletes;
 
-    // Allow these fields to be filled
     protected $fillable = [
         'branch_id',
         'user_id',
@@ -23,25 +22,23 @@ class Transaction extends Model
         'reference_number',
         'description',
         'receipt_path',
-        'receipt_path',
-        'receipt_path',
-        'status', // Replaces is_approved
+        'status',
         'rejection_reason',
         'accounting_remarks',
-        'created_at', // <--- ADD THIS LINE HERE
-        'updated_at', // <--- ADD THIS LINE HERE
         'category_id',
-        'cheque_number',
-        'cheque_date',
-        'bank_name',
         'vat',
     ];
 
-
-
-    protected $casts = [
-        'cheque_date' => 'date',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'amount'     => 'decimal:2',
+            'vat'        => 'decimal:2',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+        ];
+    }
 
     public function scopePending($query)
     {

@@ -13,7 +13,9 @@ class EditTransaction extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->label('Void')
+                ->visible(fn () => auth()->user()->branch_id === null), // HQ only
         ];
     }
 
@@ -22,20 +24,31 @@ class EditTransaction extends EditRecord
         // 1. Capture Original Data (Before Update)
         $originalData = $record->fresh()->toArray();
 
-        // 2. Extract the "Reason" from the form data (it's not in the DB)
+        // 2. Extract the "Reason" (not a DB column)
         $reason = $data['edit_reason'] ?? 'No reason provided';
-        unset($data['edit_reason']); // Remove it so it doesn't try to save to 'transactions' table
+        unset($data['edit_reason']);
 
-        // 3. Update the Record
+        // 3. Extract created_at — bypasses fillable guard by applying via raw query
+        $customDate = $data['created_at'] ?? null;
+        unset($data['created_at']);
+
+        // 4. Update the Record (mass-assignable fields only)
         $record->update($data);
 
-        // 4. Create History Log
+        // 5. Apply custom date directly if provided
+        if ($customDate) {
+            $record->newQueryWithoutScopes()
+                ->where('id', $record->id)
+                ->update(['created_at' => $customDate]);
+        }
+
+        // 6. Create History Log
         \App\Models\TransactionHistory::create([
             'transaction_id' => $record->id,
-            'user_id' => auth()->id(),
-            'reason' => $reason,
-            'original_data' => $originalData,
-            'modified_data' => $record->fresh()->toArray(),
+            'user_id'        => auth()->id(),
+            'reason'         => $reason,
+            'original_data'  => $originalData,
+            'modified_data'  => $record->fresh()->toArray(),
         ]);
 
         return $record;

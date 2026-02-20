@@ -6,10 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Category extends Model
 {
-    protected $fillable = ['name', 'gl_code', 'type', 'is_active'];
+    protected $fillable = ['name', 'type', 'is_active'];
 
-    public function transactions()
+    public function transactionItems()
     {
-        return $this->hasMany(Transaction::class);
+        return $this->hasMany(TransactionItem::class);
     }
 }

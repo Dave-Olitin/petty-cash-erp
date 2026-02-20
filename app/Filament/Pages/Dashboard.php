@@ -23,7 +23,7 @@ class Dashboard extends BaseDashboard
                     ->schema([
                         Select::make('branch_id')
                             ->label('Branch')
-                            ->options(\App\Models\Branch::pluck('name', 'id'))
+                            ->options(\App\Models\Branch::where('is_active', true)->pluck('name', 'id'))
                             ->visible(fn () => auth()->user()->branch_id === null)
                             ->searchable()
                             ->prefixIcon('heroicon-o-building-office')

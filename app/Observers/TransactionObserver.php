@@ -3,127 +3,135 @@
 namespace App\Observers;
 
 use App\Models\Transaction;
-use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\DB;
 
 class TransactionObserver
 {
     /**
      * Handle the Transaction "created" event.
+     * Uses a DB transaction with lock to prevent race conditions on concurrent balance updates.
      */
     public function created(Transaction $transaction): void
     {
-        $branch = $transaction->branch;
-
-        if (!$branch) {
+        if (!$transaction->branch_id) {
             return;
         }
 
-        if ($transaction->type === 'EXPENSE') {
-            // Money leaving the wallet
-            $branch->decrement('current_balance', $transaction->amount);
-        } else {
-            // Money entering the wallet (Replenishment)
-            $branch->increment('current_balance', $transaction->amount);
-        }
-    }
+        DB::transaction(function () use ($transaction) {
+            // Re-fetch the branch with a lock to prevent concurrent write conflicts
+            $branch = \App\Models\Branch::lockForUpdate()->find($transaction->branch_id);
 
-    /**
-     * Handle the Transaction "deleted" event.
-     * (We reverse the logic here to fix mistakes)
-     */
-    /**
-     * Handle the Transaction "updated" event.
-     */
-    public function updated(Transaction $transaction): void
-    {
-        $branch = $transaction->branch;
-
-        if (!$branch) {
-            return;
-        }
-
-        // Logic:
-        // 1. If status changed TO 'rejected' -> Reverse the transaction (Refund money).
-        // 2. If status changed FROM 'rejected' -> Apply the transaction.
-        // 3. If standard update (amount/type changed) AND status is NOT 'rejected' -> Adjust difference.
-
-        $oldStatus = $transaction->getOriginal('status');
-        $newStatus = $transaction->status;
-        $oldAmount = $transaction->getOriginal('amount');
-        $oldType = $transaction->getOriginal('type');
-
-        // Case A: Transaction was JUST Rejected
-        if ($oldStatus !== 'rejected' && $newStatus === 'rejected') {
-            // Reverse the OLD amount benefit/cost
-            if ($oldType === 'EXPENSE') {
-                $branch->increment('current_balance', $oldAmount);
-            } else {
-                $branch->decrement('current_balance', $oldAmount);
+            if (!$branch) {
+                return;
             }
-            return; // Done
-        }
 
-        // Case B: Transaction was JUST Un-Rejected (e.g. Approved again)
-        if ($oldStatus === 'rejected' && $newStatus !== 'rejected') {
-            // Apply the NEW amount benefit/cost
             if ($transaction->type === 'EXPENSE') {
                 $branch->decrement('current_balance', $transaction->amount);
             } else {
                 $branch->increment('current_balance', $transaction->amount);
             }
-            return; // Done
-        }
-
-        // Case C: Standard Edit (Amount/Type change) - BUT IGNORE if currently rejected
-        if ($newStatus === 'rejected') {
-            return; // Do nothing if we are editing a rejected record (it shouldn't affect balance)
-        }
-
-        // 1. Revert Old Amount
-        if ($oldType === 'EXPENSE') {
-            $branch->increment('current_balance', $oldAmount);
-        } else {
-            $branch->decrement('current_balance', $oldAmount);
-        }
-
-        // 2. Apply New Amount
-        if ($transaction->type === 'EXPENSE') {
-            $branch->decrement('current_balance', $transaction->amount);
-        } else {
-            $branch->increment('current_balance', $transaction->amount);
-        }
+        });
     }
 
     /**
-     * Handle the Transaction "deleted" event.
+     * Handle the Transaction "updated" event.
+     * Handles all status transitions and amount/type changes.
      */
-    /**
-     * Handle the Transaction "restored" event.
-     */
-    public function restored(Transaction $transaction): void
+    public function updated(Transaction $transaction): void
     {
-        // If a transaction is restored (un-voided), we need to re-apply its effect.
-        // This is essentially the same as "created" logic.
-        $this->created($transaction);
-    }
-    
-    /**
-     * Handle the Transaction "deleted" event.
-     */
-    public function deleted(Transaction $transaction): void
-    {
-        $branch = $transaction->branch;
-
-        if (!$branch) {
+        if (!$transaction->branch_id) {
             return;
         }
 
-        if ($transaction->type === 'EXPENSE') {
-            // We deleted an expense, so put the money back
-            $branch->increment('current_balance', $transaction->amount);
-        } else {
-            // We deleted a replenishment, so remove the money
-            $branch->decrement('current_balance', $transaction->amount);
+        $oldStatus = $transaction->getOriginal('status');
+        $newStatus = $transaction->status;
+        $oldAmount = $transaction->getOriginal('amount');
+        $oldType   = $transaction->getOriginal('type');
+
+        DB::transaction(function () use ($transaction, $oldStatus, $newStatus, $oldAmount, $oldType) {
+            $branch = \App\Models\Branch::lockForUpdate()->find($transaction->branch_id);
+
+            if (!$branch) {
+                return;
+            }
+
+            // Case A: Transaction was JUST Rejected — reverse the balance impact
+            if ($oldStatus !== 'rejected' && $newStatus === 'rejected') {
+                if ($oldType === 'EXPENSE') {
+                    $branch->increment('current_balance', $oldAmount);
+                } else {
+                    $branch->decrement('current_balance', $oldAmount);
+                }
+                return;
+            }
+
+            // Case B: Transaction was UN-Rejected (e.g. re-approved from rejected state)
+            if ($oldStatus === 'rejected' && $newStatus !== 'rejected') {
+                if ($transaction->type === 'EXPENSE') {
+                    $branch->decrement('current_balance', $transaction->amount);
+                } else {
+                    $branch->increment('current_balance', $transaction->amount);
+                }
+                return;
+            }
+
+            // Case C: Standard Edit (Amount/Type change) — skip if currently rejected
+            if ($newStatus === 'rejected') {
+                return;
+            }
+
+            // Revert old amount, then apply new amount
+            if ($oldType === 'EXPENSE') {
+                $branch->increment('current_balance', $oldAmount);
+            } else {
+                $branch->decrement('current_balance', $oldAmount);
+            }
+
+            if ($transaction->type === 'EXPENSE') {
+                $branch->decrement('current_balance', $transaction->amount);
+            } else {
+                $branch->increment('current_balance', $transaction->amount);
+            }
+        });
+    }
+
+    /**
+     * Handle the Transaction "deleted" event (Void / Soft Delete).
+     * IMPORTANT: If the transaction was already 'rejected', the balance was
+     * already reversed when the rejection happened. Reversing again would
+     * cause a double-refund bug, so we skip it.
+     */
+    public function deleted(Transaction $transaction): void
+    {
+        if (!$transaction->branch_id) {
+            return;
         }
+
+        if ($transaction->status === 'rejected') {
+            return; // Balance was already reversed at rejection time
+        }
+
+        DB::transaction(function () use ($transaction) {
+            $branch = \App\Models\Branch::lockForUpdate()->find($transaction->branch_id);
+
+            if (!$branch) {
+                return;
+            }
+
+            if ($transaction->type === 'EXPENSE') {
+                $branch->increment('current_balance', $transaction->amount);
+            } else {
+                $branch->decrement('current_balance', $transaction->amount);
+            }
+        });
+    }
+
+    /**
+     * Handle the Transaction "restored" event (Un-void).
+     * Re-applies the transaction effect as if it were just created.
+     */
+    public function restored(Transaction $transaction): void
+    {
+        $this->created($transaction);
     }
 }

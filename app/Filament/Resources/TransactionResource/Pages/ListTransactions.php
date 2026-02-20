@@ -67,7 +67,7 @@ class ListTransactions extends ListRecords
 
                         // 3. Query - Use the Current Filtered Query!
                         $query = $this->getFilteredTableQuery(); // Respects Tabs & Search
-                        $query->with(['branch', 'category', 'items', 'user']);
+                        $query->with(['branch', 'items.category', 'user']); // items.category fixes N+1
                         $query->latest(); // Ensure order
 
                         $query->chunk(100, function ($transactions) use ($file, $exportRow) {

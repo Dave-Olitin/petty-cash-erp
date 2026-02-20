@@ -35,30 +35,17 @@ class StatsOverview extends BaseWidget
                 ->when($branchId, fn($q) => $q->where('branch_id', $branchId));
         };
 
-        // Cache Key for Heavy Aggregates (Trends, Totals)
-        $cacheKey = 'stats_aggregates_' . ($user->id) . '_' . md5(json_encode($this->filters));
+        // Trend data: cached for 30s — close enough to live, saves DB load during polling
+        $cacheKey = 'stats_trends_' . ($user->id) . '_' . md5(json_encode($this->filters));
 
-        // REMOVED CACHING TO FIX "CONFUSION" - DATA MUST BE LIVE
-        // Fetch Aggregates (Totals & Trends)
-            
-        $expenseTrend = $this->getTrend('EXPENSE', $branchId);
-        $totalExpenses = $query()->where('type', 'EXPENSE')->sum('amount');
-        
-        // Initializing replenishment vars
-        $replenishTrend = []; 
-        $totalReplenishments = 0;
-
-        // Only calculate replenishment stats if relevant (prevent extra queries if not needed)
-        // But for simplicity/consistency we calculate them.
-        $replenishTrend = $this->getTrend('REPLENISHMENT', $branchId);
-        $totalReplenishments = $query()->where('type', 'REPLENISHMENT')->sum('amount');
-
-        $cachedStats = [
-            'expenseTrend' => $expenseTrend,
-            'replenishTrend' => $replenishTrend,
-            'totalExpenses' => $totalExpenses,
-            'totalReplenishments' => $totalReplenishments,
-        ];
+        $cachedStats = \Illuminate\Support\Facades\Cache::remember($cacheKey, 30, function () use ($query) {
+            return [
+                'expenseTrend'       => $this->getTrend('EXPENSE', $this->filters['branch_id'] ?? auth()->user()->branch_id),
+                'replenishTrend'     => $this->getTrend('REPLENISHMENT', $this->filters['branch_id'] ?? auth()->user()->branch_id),
+                'totalExpenses'      => $query()->where('type', 'EXPENSE')->sum('amount'),
+                'totalReplenishments'=> $query()->where('type', 'REPLENISHMENT')->sum('amount'),
+            ];
+        });
 
         // LIVE Data Construction
         if ($user->isHeadOffice() && !$branchId) {
