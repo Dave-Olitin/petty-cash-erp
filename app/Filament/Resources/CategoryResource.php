@@ -31,6 +31,10 @@ class CategoryResource extends Resource
                 Forms\Components\TextInput::make('name')
                     ->required()
                     ->unique(ignoreRecord: true),
+                Forms\Components\TextInput::make('gl_code')
+                    ->label('GL Code (Expense)')
+                    ->placeholder('e.g. 2000-01.112')
+                    ->maxLength(255),
                 Forms\Components\Select::make('type')
                     ->options([
                         'expense' => 'Expense',

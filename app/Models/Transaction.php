@@ -31,7 +31,16 @@ class Transaction extends Model
         'created_at', // <--- ADD THIS LINE HERE
         'updated_at', // <--- ADD THIS LINE HERE
         'category_id',
+        'cheque_number',
+        'cheque_date',
+        'bank_name',
         'vat',
+    ];
+
+
+
+    protected $casts = [
+        'cheque_date' => 'date',
     ];
 
     public function scopePending($query)

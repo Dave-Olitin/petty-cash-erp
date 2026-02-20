@@ -69,6 +69,23 @@ public static function form(Form $form): Form
                         ->maxLength(255),
                 ])->columns(['default' => 1, 'sm' => 2]),
 
+            Forms\Components\Section::make('Payment Details')
+                ->schema([
+                    Forms\Components\TextInput::make('cheque_number')
+                        ->label('Cheque No.')
+                        ->maxLength(255),
+                    Forms\Components\DatePicker::make('cheque_date')
+                        ->label('Cheque Date')
+                        ->native(false),
+                    Forms\Components\TextInput::make('bank_name')
+                        ->label('Bank Name')
+                        ->maxLength(255)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->collapsible()
+                ->collapsed(),
+
                     Forms\Components\Repeater::make('items')
                         ->relationship()
                         ->schema([
@@ -483,6 +500,7 @@ public static function table(Table $table): Table
                 Tables\Actions\Action::make('print')
                     ->label('Print Voucher')
                     ->icon('heroicon-o-printer')
+                    ->visible(fn () => auth()->user()->branch_id === null)
                     ->url(fn (Transaction $record) => route('transaction.print', $record))
                     ->openUrlInNewTab(),
                     

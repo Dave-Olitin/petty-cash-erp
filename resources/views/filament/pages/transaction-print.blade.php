@@ -3,128 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transaction #{{ $transaction->id }}</title>
+    <title>Payment Voucher #{{ $transaction->id }}</title>
     <style>
-        body { font-family: sans-serif; line-height: 1.4; color: #333; padding: 1rem; }
-        .header { text-align: center; margin-bottom: 1rem; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; }
-        .header h1 { margin: 0; color: #4338ca; font-size: 1.5rem; }
-        .header p { margin: 0.25rem 0 0; color: #666; font-size: 0.875rem; }
+        body { font-family: 'Courier New', Courier, monospace; font-size: 14px; line-height: 1.3; color: #000; padding: 20px; max-width: 900px; margin: 0 auto; }
+        .header-top { text-align: left; margin-bottom: 20px; }
+        .company-name { font-weight: bold; font-size: 18px; text-transform: uppercase; }
+        .company-details { font-size: 12px; }
         
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-        .box { background: #f9fafb; padding: 1rem; border-radius: 8px; border: 1px solid #eee; }
-        .box h3 { margin-top: 0; font-size: 0.75rem; text-transform: uppercase; color: #6b7280; margin-bottom: 0.5rem; }
-        
-        .row { display: flex; justify-content: space-between; margin-bottom: 0.25rem; border-bottom: 1px dashed #eee; padding-bottom: 0.125rem; font-size: 0.875rem; }
-        .label { font-weight: 500; color: #374151; }
-        .value { color: #111827; }
+        .voucher-title { 
+            text-align: center; 
+            font-weight: bold; 
+            border: 1px solid #000; 
+            padding: 5px; 
+            margin: 15px 0; 
+            font-size: 16px;
+        }
 
-        .amount-box { text-align: center; margin: 1rem 0; padding: 1rem; background: #eff6ff; border-radius: 8px; border: 1px solid #dbeafe; }
-        .amount-label { font-size: 0.75rem; color: #1e40af; text-transform: uppercase; letter-spacing: 0.05em; }
-        .amount-value { font-size: 2rem; font-weight: bold; color: #1e3a8a; margin: 0.25rem 0; }
+        .meta-row { display: flex; justify-content: space-between; margin-bottom: 15px; }
         
-        .footer { margin-top: 2rem; text-align: center; font-size: 0.75rem; color: #9ca3af; border-top: 1px solid #eee; padding-top: 0.5rem; }
+        .payment-info { margin-bottom: 20px; }
+        .info-row { display: flex; margin-bottom: 5px; align-items: baseline; }
+        .info-label { width: 80px; font-weight: bold; white-space: nowrap; }
+        .info-value { flex: 1; border-bottom: 1px solid #000; padding-left: 5px; }
+
+        table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+        th, td { border: 1px solid #000; padding: 5px; vertical-align: top; }
+        th { text-align: center; font-weight: bold; background-color: #f0f0f0; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
         
+        .amount-words-row { border: 1px solid #000; border-top: none; padding: 5px; margin-top: -1px; }
+        .amount-words-content { border: 1px solid #000; padding: 5px; min-height: 40px; display: flex; align-items: center; }
+        
+        .signatures { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; }
+        .sig-block { width: 22%; }
+        .sig-label { font-weight: bold; margin-bottom: 40px; }
+        .sig-line { border-bottom: 1px solid #000; margin-bottom: 5px; }
+
         @media print {
-            body { padding: 0; }
+            body { padding: 0; margin: 0; }
             .no-print { display: none; }
-            .box, .amount-box { border: 1px solid #ccc; }
+            @page { margin: 0.5cm; }
         }
     </style>
 </head>
 <body onload="window.print()">
 
-    <div class="header">
-        <h1>Erick Trading Co.</h1>
-        <p>Petty Cash Voucher • #{{ $transaction->id }} • {{ $transaction->created_at->format('F j, Y h:i A') }}</p>
+    <div class="header-top">
+        <div class="company-name">ERICK TR CO</div>
+        <div class="company-details">TEL. NO. 06-525-2030</div>
+        <div class="company-details">TIGER 2 BLDG AL TAAWUN ST. SHARJAH, UAE</div>
     </div>
 
-    <div class="amount-box">
-        <div class="amount-label">{{ $transaction->type === 'EXPENSE' ? 'Paid Amount' : 'Received Amount' }}</div>
-        <div class="amount-value">AED {{ number_format($transaction->amount, 2) }}</div>
-        <div style="color: #666; font-size: 0.875rem;">{{ $transaction->type }}</div>
-    </div>
+    <div class="voucher-title">PAYMENT VOUCHER</div>
 
-    <div class="grid">
-        <div class="box">
-            <h3>Details</h3>
-            <div class="row"><span class="label">Payee</span> <span class="value">{{ $transaction->payee ?? 'N/A' }}</span></div>
-            {{-- Category removed from header as it is per-item --}}
-            <div class="row"><span class="label">Branch</span> <span class="value">{{ $transaction->branch->name ?? 'N/A' }}</span></div>
-            <div class="row"><span class="label">Status</span> <span class="value" style="text-transform: capitalize;">{{ $transaction->status }}</span></div>
-            @if($transaction->status === 'rejected')
-                <div class="row" style="color: red;"><span class="label">Rejection Reason</span> <span class="value">{{ $transaction->rejection_reason }}</span></div>
-            @endif
+    <div class="meta-row">
+        <div>
+            <strong>P.V NO:</strong> 
+            {{ $transaction->branch ? $transaction->branch->code : 'HO' }}-{{ $transaction->id }}
         </div>
-        
-        <div class="box">
-            <h3>Description</h3>
-            <p style="margin:0; font-size: 0.875rem;">{{ $transaction->description }}</p>
+        <div>
+            <strong>DATE:</strong> {{ $transaction->created_at->format('d/m/Y') }}
         </div>
     </div>
 
-    @if($transaction->items->count() > 0)
-    <div class="box" style="margin-bottom: 1rem;">
-        <h3>Line Items</h3>
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-            <thead>
-                <tr style="border-bottom: 2px solid #eee; text-align: left;">
-                    <th style="padding: 0.25rem;">Item Description</th>
-                    <th style="padding: 0.25rem;">Category</th>
-                    <th style="padding: 0.25rem; text-align: center;">Qty</th>
-                    <th style="padding: 0.25rem; text-align: right;">Unit Price</th>
-                    <th style="padding: 0.25rem; text-align: right;">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($transaction->items as $item)
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 0.25rem;">{{ $item->name }}</td>
-                    <td style="padding: 0.25rem;">{{ $item->category->name ?? '-' }}</td>
-                    <td style="padding: 0.25rem; text-align: center;">{{ $item->quantity }}</td>
-                    <td style="padding: 0.25rem; text-align: right;">{{ number_format($item->unit_price, 2) }}</td>
-                    <td style="padding: 0.25rem; text-align: right;">{{ number_format($item->total_price, 2) }}</td>
-                </tr>
-                @endforeach
-            </tbody>
-            <tfoot>
-                @if($transaction->vat > 0 || $transaction->items->sum('vat') > 0)
-                <tr>
-                    <td colspan="4" style="padding: 0.25rem; text-align: right; font-weight: bold;">Subtotal:</td>
-                    <td style="padding: 0.25rem; text-align: right;">{{ number_format($transaction->items->sum('total_price') - $transaction->items->sum('vat'), 2) }}</td>
-                </tr>
-                 <tr>
-                    <td colspan="4" style="padding: 0.25rem; text-align: right; font-weight: bold;">Total Item VAT:</td>
-                    <td style="padding: 0.25rem; text-align: right;">{{ number_format($transaction->items->sum('vat'), 2) }}</td>
-                </tr>
-                <tr>
-                    <td colspan="4" style="padding: 0.25rem; text-align: right; font-weight: bold;">VAT:</td>
-                    <td style="padding: 0.25rem; text-align: right;">{{ number_format($transaction->vat, 2) }}</td>
-                </tr>
-                @endif
-                <tr>
-                    <td colspan="4" style="padding: 0.25rem; text-align: right; font-weight: bold;">Grand Total:</td>
-                    <td style="padding: 0.25rem; text-align: right; font-weight: bold;">{{ number_format($transaction->amount, 2) }}</td>
-                </tr>
-            </tfoot>
-        </table>
+    @if($transaction->cheque_number || $transaction->bank_name)
+    <div class="meta-row" style="margin-top: -10px; margin-bottom: 20px;">
+        <div>
+            <strong>CHEQUE NO:</strong> {{ $transaction->cheque_number ?? 'N/A' }}
+        </div>
+        <div>
+            <strong>DATE:</strong> {{ $transaction->cheque_date ? $transaction->cheque_date->format('d/m/Y') : 'N/A' }}
+        </div>
+        <div>
+            <strong>BANK:</strong> {{ strtoupper($transaction->bank_name ?? 'N/A') }}
+        </div>
     </div>
     @endif
-    
-    <div style="margin-top: 2rem; display: flex; justify-content: space-between;">
-        <div style="text-align: center; width: 150px;">
-            <div style="border-bottom: 1px solid #000; height: 40px;"></div>
-            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Approved By</p>
+
+    <div class="payment-info">
+        <div class="info-row">
+            <span class="info-label">PAID TO:</span>
+            <span class="info-value">{{ strtoupper($transaction->payee) }}</span>
         </div>
-        <div style="text-align: center; width: 150px;">
-            <div style="border-bottom: 1px solid #000; height: 40px;"></div>
-            <p style="font-size: 0.75rem; margin-top: 0.25rem;">Received By</p>
+        <div class="info-row">
+            <span class="info-label">BEING:</span>
+            <span class="info-value">{{ strtoupper($transaction->description) }}</span>
         </div>
     </div>
 
-    <div class="footer">
-        Generated by Petty Cash ERP on {{ now()->format('Y-m-d H:i:s') }}
-        <br>
-        This is a computer-generated document.
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 10%;">BRANCH</th>
+                <th style="width: 15%;">ACCT CODE</th>
+                <th style="width: 55%;">ACCOUNT DETAILS</th>
+                <th style="width: 10%;">DR</th>
+                <th style="width: 10%;">CR</th>
+            </tr>
+        </thead>
+        <tbody>
+            @php
+                $totalDebit = 0;
+            @endphp
+            {{-- Debit Rows (Expenses) --}}
+            @foreach($transaction->items as $item)
+            @php $totalDebit += $item->total_price; @endphp
+            <tr>
+                <td class="text-center">{{ $transaction->branch ? $transaction->branch->code : 'HO' }}</td>
+                <td class="text-center">{{ $item->category->gl_code ?? 'N/A' }}</td>
+                <td>
+                    {{ strtoupper($item->category->name ?? '') }}
+                    @if($item->name) - {{ strtoupper($item->name) }} @endif
+                </td>
+                <td class="text-right">{{ number_format($item->total_price, 2) }}</td>
+                <td class="text-right"></td>
+            </tr>
+            @endforeach
+
+            {{-- Credit Row (Cash/Bank) --}}
+            <tr>
+                <td class="text-center">{{ $transaction->branch ? $transaction->branch->code : 'HO' }}</td>
+                <td class="text-center">{{ $transaction->branch->gl_code ?? '1010-00' }}</td>
+                <td>
+                    CASH IN HAND/BANK - {{ strtoupper($transaction->branch->name ?? 'Head Office') }}
+                </td>
+                <td class="text-right"></td>
+                <td class="text-right">{{ number_format($transaction->amount, 2) }}</td>
+            </tr>
+            
+            {{-- Spacer Rows to fill height --}}
+            @for($i = count($transaction->items); $i < 5; $i++)
+            <tr style="height: 25px;">
+                <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+            </tr>
+            @endfor
+
+            {{-- Total Row --}}
+            <tr style="font-weight: bold;">
+                <td colspan="3" class="text-right">TOTAL</td>
+                <td class="text-right">{{ number_format($totalDebit, 2) }}</td>
+                <td class="text-right">{{ number_format($transaction->amount, 2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="amount-words-row">
+        <div style="font-weight: bold; margin-bottom: 5px;">AMOUNT IN WORDS</div>
+        <div style="border: 1px solid #000; padding: 10px; min-height: 20px; text-transform: uppercase;">
+             @php
+                try {
+                    $f = new NumberFormatter("en", NumberFormatter::SPELLOUT);
+                    $amount = $transaction->amount;
+                    $words = $f->format($amount);
+                    echo ucwords($words) . " Dirhams Only"; 
+                } catch (\Throwable $e) {
+                    echo "AED " . number_format($transaction->amount, 2) . " Only";
+                }
+            @endphp
+        </div>
+    </div>
+
+    <div class="signatures">
+        <div class="sig-block">
+            <div class="sig-label">PREPARED BY:</div>
+            <div class="sig-line"></div>
+            <div class="text-center"></div>
+        </div>
+        <div class="sig-block">
+             <div class="sig-label">ACCOUNTANT:</div>
+            <div class="sig-line"></div>
+        </div>
+        <div class="sig-block">
+             <div class="sig-label">GM:</div>
+            <div class="sig-line"></div>
+        </div>
+        <div class="sig-block">
+             <div class="sig-label">RECEIVED BY:</div>
+            <div class="sig-line"></div>
+        </div>
     </div>
 
 </body>
