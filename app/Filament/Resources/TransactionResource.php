@@ -86,6 +86,8 @@ public static function form(Form $form): Form
                 ->collapsible()
                 ->collapsed(),
 
+                Forms\Components\Repeater::make('items')
+                        ->relationship()
                         ->columns(['default' => 12, 'md' => 10, 'lg' => 10]) 
                         ->schema([
                             Forms\Components\Select::make('category_id')
