@@ -63,7 +63,7 @@ class AdminPanelProvider extends PanelProvider
             )
             ->renderHook(
                 'panels::user-menu.before',
-                fn () => view('filament.hooks.privacy-toggle')
+                fn () => view('filament.hooks.privacy-toggle') . view('filament.hooks.install-pwa')
             )
             ->authMiddleware([
                 Authenticate::class,
