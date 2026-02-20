@@ -86,55 +86,52 @@ public static function form(Form $form): Form
                 ->collapsible()
                 ->collapsed(),
 
-                    Forms\Components\Repeater::make('items')
-                        ->relationship()
+                        ->columns(['default' => 12, 'md' => 10, 'lg' => 10]) 
                         ->schema([
                             Forms\Components\Select::make('category_id')
                                 ->relationship('category', 'name', function (Builder $query, callable $get) {
-                                    // Use the parent transaction type if possible, or defaulting to 'expense' if complicated. 
-                                    // Accessing parent state from repeater item can be tricky. 
-                                    // For now, let's allow all active categories or try to filter if feasible.
-                                    // $get('../../type') might work depending on structure.
-                                    // Let's keep it simple: Show all active categories for now.
                                     return $query->where('is_active', true);
                                 })
                                 ->label('Category')
                                 ->searchable()
                                 ->preload()
                                 ->required()
-                                ->visible(fn () => auth()->user()->isHeadOffice()) // Only HO can see/set
-                                ->columnSpan(2),
+                                ->visible(fn () => auth()->user()->isHeadOffice())
+                                ->columnSpan(['default' => 12, 'md' => 3]), // Full width on mobile, 3/10 on desktop
                             Forms\Components\TextInput::make('name')
                                 ->required()
-                                ->columnSpan(2),
+                                ->columnSpan(['default' => 12, 'md' => 3]), // Full width on mobile, 3/10 on desktop
                             Forms\Components\TextInput::make('quantity')
                                 ->numeric()
                                 ->default(1)
                                 ->required()
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat'))),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat')))
+                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
                             Forms\Components\TextInput::make('unit_price')
                                 ->numeric()
                                 ->default(0)
                                 ->required()
                                 ->prefix('AED')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat'))),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat')))
+                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
                             Forms\Components\TextInput::make('vat')
                                 ->label('VAT')
                                 ->numeric()
                                 ->default(0)
                                 ->prefix('AED')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state)),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state))
+                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
                             Forms\Components\TextInput::make('total_price')
                                 ->numeric()
                                 ->readOnly()
                                 ->prefix('AED')
                                 ->default(0)
-                                ->dehydrated(),
+                                ->dehydrated()
+                                ->columnSpan(['default' => 6, 'md' => 1]), // Half width on mobile
                         ])
-                        ->columns(['default' => 1, 'sm' => 6]) // Increased columns for VAT
                         ->columnSpanFull()
                         ->live()
                         ->afterStateUpdated(function (callable $get, callable $set) {
