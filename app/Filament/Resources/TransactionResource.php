@@ -117,7 +117,7 @@ public static function form(Form $form): Form
                                 ->default(0)
                                 ->dehydrated(),
                         ])
-                        ->columns(['default' => 1, 'sm' => 6]) // Increased columns for VAT
+                        ->columns(['default' => 1, 'md' => 3, 'lg' => 6]) // Progressive breakpoints for mobile/tablet/desktop
                         ->columnSpanFull()
                         ->live()
                         ->afterStateUpdated(function (callable $get, callable $set) {

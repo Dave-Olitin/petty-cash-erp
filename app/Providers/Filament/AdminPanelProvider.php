@@ -27,6 +27,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login(\App\Filament\Pages\Auth\CustomLogin::class)
+            ->favicon(asset('images/icon-192.png'))
             ->passwordReset()   // Enables the "Forgot Password?" flow via email
             ->brandName('Erick Trading Co.')
             ->brandLogoHeight('3rem')
