@@ -85,11 +85,9 @@ public static function form(Form $form): Form
                                 ->searchable()
                                 ->preload()
                                 ->required()
-                                ->visible(fn () => auth()->user()->isHeadOffice()) // Only HO can see/set
-                                ->columnSpan(2),
+                                ->visible(fn () => auth()->user()->isHeadOffice()), // Only HO can see/set
                             Forms\Components\TextInput::make('name')
-                                ->required()
-                                ->columnSpan(2),
+                                ->required(),
                             Forms\Components\TextInput::make('quantity')
                                 ->numeric()
                                 ->default(1)
