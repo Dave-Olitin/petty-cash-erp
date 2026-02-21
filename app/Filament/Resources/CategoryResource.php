@@ -63,11 +63,32 @@ class CategoryResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->before(function (Category $record, Tables\Actions\DeleteAction $action) {
+                        if ($record->transactionItems()->exists()) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Cannot Delete Category')
+                                ->body("'{$record->name}' is used by existing transaction items. Deactivate it instead.")
+                                ->danger()
+                                ->send();
+                            $action->cancel();
+                        }
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (\Illuminate\Database\Eloquent\Collection $records, Tables\Actions\DeleteBulkAction $action) {
+                            $inUse = $records->filter(fn (Category $c) => $c->transactionItems()->exists());
+                            if ($inUse->isNotEmpty()) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Some Categories Cannot Be Deleted')
+                                    ->body('The following are in use: ' . $inUse->pluck('name')->join(', ') . '. Deactivate them instead.')
+                                    ->danger()
+                                    ->send();
+                                $action->cancel();
+                            }
+                        }),
                 ]),
             ]);
     }

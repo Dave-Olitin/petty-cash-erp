@@ -187,7 +187,7 @@ public static function form(Form $form): Form
             Forms\Components\Textarea::make('edit_reason')
                 ->label('Reason for Edit')
                 ->helperText('Please explain why you are modifying this record.')
-                ->required(fn (string $operation, ?Transaction $record): bool => $operation === 'edit' && $record?->status !== 'pending')
+                ->required(fn (string $operation, ?Transaction $record): bool => $operation === 'edit' && (auth()->user()->branch_id !== null || $record?->status !== 'pending'))
                 ->visible(fn (string $operation): bool => $operation === 'edit')
                 // ->dehydrated(false) // REMOVED: We need this data in the EditPage logic! We will manually unset it there.
                 ->columnSpanFull(),
@@ -202,13 +202,10 @@ public static function form(Form $form): Form
                 ->acceptedFileTypes(['image/*', 'application/pdf'])
                 ->openable()
                 ->downloadable()
-                ->required(),
+                ->required(fn (string $operation) => $operation === 'create'),
 
-            // HIDDEN FIELDS (Auto-filled)
-            Forms\Components\Hidden::make('user_id')
-                ->default(auth()->id()),
-            
             // Logic: If user is HQ, they can pick a branch. If Branch User, it's auto-set.
+            // NOTE: user_id is set server-side in CreateTransaction::mutateFormDataBeforeCreate()
             Forms\Components\Select::make('branch_id')
                 ->relationship('branch', 'name')
                 ->hidden(fn () => auth()->user()->branch_id !== null) // Hide if normal user
@@ -435,18 +432,20 @@ public static function table(Table $table): Table
                             ->maxLength(65535),
                     ])
                     ->action(function (Transaction $record, array $data) {
+                        $originalData = $record->fresh()->toArray(); // Capture before mutation
+
                         $record->update([
-                            'status' => 'rejected',
+                            'status'           => 'rejected',
                             'rejection_reason' => $data['rejection_reason'],
                         ]);
-                        
-                        // Log History
+
+                        // Log History — original_data must not be null for a complete audit trail
                         \App\Models\TransactionHistory::create([
                             'transaction_id' => $record->id,
-                            'user_id' => auth()->id(),
-                            'reason' => 'Transaction Rejected: ' . $data['rejection_reason'],
-                            'original_data' => null,
-                            'modified_data' => ['status' => 'rejected', 'rejection_reason' => $data['rejection_reason']],
+                            'user_id'        => auth()->id(),
+                            'reason'         => 'Transaction Rejected: ' . $data['rejection_reason'],
+                            'original_data'  => $originalData,
+                            'modified_data'  => $record->fresh()->toArray(),
                         ]);
 
                         \Filament\Notifications\Notification::make()
@@ -585,16 +584,15 @@ public static function table(Table $table): Table
     }
     public static function getEloquentQuery(): Builder
     {
+        // Note: 'category' is NOT eager-loaded — Transaction has no direct category relation.
+        // Categories live on transaction_items, hence 'items.category'.
         $query = parent::getEloquentQuery()
-            ->with(['branch', 'category', 'user', 'items.category']);
+            ->with(['branch', 'user', 'items.category']);
 
-        // If the user is a "Branch User" (has a branch_id)
         if (auth()->user()->branch_id) {
-            // Force filter ONLY their branch's data
             $query->where('branch_id', auth()->user()->branch_id);
         }
 
-        // If they are Head Office (branch_id is null), they see everything.
         return $query;
     }
 }

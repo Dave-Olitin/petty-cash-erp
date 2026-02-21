@@ -11,6 +11,9 @@ class CreateTransaction extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        // Always set user_id server-side — never trust the form field.
+        $data['user_id'] = auth()->id();
+
         // Force branch for branch users
         if (auth()->user()->branch_id) {
             $data['branch_id'] = auth()->user()->branch_id;

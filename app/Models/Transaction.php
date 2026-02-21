@@ -61,11 +61,7 @@ class Transaction extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function category(): BelongsTo
-    {
-        return $this->belongsTo(Category::class);
-    }
-
+    // Note: categories are per-item, not per-transaction. See TransactionItem::category()
     public function histories()
     {
         return $this->hasMany(TransactionHistory::class);

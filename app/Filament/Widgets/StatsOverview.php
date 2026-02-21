@@ -98,10 +98,17 @@ class StatsOverview extends BaseWidget
 
     protected function getTrend(string $type, ?int $branchId = null): array
     {
+        $startDate = $this->filters['startDate'] ?? null;
+        $endDate   = $this->filters['endDate'] ?? null;
+
+        // Default to last 7 days if no date filter is set
+        $from = $startDate ? \Carbon\Carbon::parse($startDate) : now()->subDays(7);
+        $to   = $endDate   ? \Carbon\Carbon::parse($endDate)->endOfDay() : now();
+
         return Transaction::query()
             ->where('type', $type)
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-            ->where('created_at', '>=', now()->subDays(7))
+            ->whereBetween('created_at', [$from, $to])
             ->selectRaw('DATE(created_at) as date, sum(amount) as total')
             ->groupBy('date')
             ->orderBy('date')

@@ -4,12 +4,14 @@ namespace App\Observers;
 
 use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class TransactionObserver
 {
     /**
      * Handle the Transaction "created" event.
      * Uses a DB transaction with lock to prevent race conditions on concurrent balance updates.
+     * Also performs a server-side balance double-check (TOCTOU guard).
      */
     public function created(Transaction $transaction): void
     {
@@ -18,11 +20,22 @@ class TransactionObserver
         }
 
         DB::transaction(function () use ($transaction) {
-            // Re-fetch the branch with a lock to prevent concurrent write conflicts
             $branch = \App\Models\Branch::lockForUpdate()->find($transaction->branch_id);
 
             if (!$branch) {
                 return;
+            }
+
+            // TOCTOU guard: Re-check balance AFTER acquiring the lock.
+            // The form-level validation happens seconds before this write,
+            // so another concurrent request could have already debited the balance.
+            if ($transaction->type === 'EXPENSE' && $transaction->amount > $branch->current_balance) {
+                // Rollback by soft-deleting this transaction immediately
+                $transaction->deleteQuietly();
+
+                throw ValidationException::withMessages([
+                    'amount' => "Insufficient funds — the balance was updated by another request. The branch only has AED {$branch->current_balance}.",
+                ]);
             }
 
             if ($transaction->type === 'EXPENSE') {

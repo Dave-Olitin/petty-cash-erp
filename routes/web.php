@@ -31,12 +31,33 @@ Route::middleware(['auth'])->group(function () {
             abort(404);
         }
 
+        // Security: reject any path that doesn't start with 'receipts/'
+        // to prevent path traversal attacks on storage files.
+        if (!str_starts_with($path, 'receipts/')) {
+            abort(403, 'Invalid receipt path.');
+        }
+
         if (\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
-            return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($path));
+            $fullPath = \Illuminate\Support\Facades\Storage::disk('local')->path($path);
+            $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+
+            // Only serve images and PDFs — never executable types
+            if (!str_starts_with($mimeType, 'image/') && $mimeType !== 'application/pdf') {
+                abort(403, 'File type not allowed.');
+            }
+
+            return response()->file($fullPath, ['Content-Type' => $mimeType]);
         }
 
         if (\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
-            return response()->file(\Illuminate\Support\Facades\Storage::disk('public')->path($path));
+            $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
+            $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+
+            if (!str_starts_with($mimeType, 'image/') && $mimeType !== 'application/pdf') {
+                abort(403, 'File type not allowed.');
+            }
+
+            return response()->file($fullPath, ['Content-Type' => $mimeType]);
         }
 
         abort(404);

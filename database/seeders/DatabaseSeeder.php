@@ -16,18 +16,18 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 0. Cleanup
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        // 0. Cleanup — using cross-database compatible FK disable
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
         Transaction::truncate();
         TransactionItem::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
 
         // 1. Create Head Office Admin
         $admin = User::firstOrCreate(
             ['email' => 'admin@pettycash.com'],
             [
-                'name' => 'Head Office Admin',
-                'password' => Hash::make('password'), // Change in production
+                'name'      => 'Head Office Admin',
+                'password'  => Hash::make(env('ADMIN_SEED_PASSWORD', \Illuminate\Support\Str::random(32))),
                 'branch_id' => null,
             ]
         );

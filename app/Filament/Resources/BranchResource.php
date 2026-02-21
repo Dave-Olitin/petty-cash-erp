@@ -30,7 +30,11 @@ class BranchResource extends Resource
                 ->maxLength(255),
             Forms\Components\TextInput::make('location')
                 ->maxLength(255),
-            Forms\Components\Hidden::make('max_limit')
+            Forms\Components\TextInput::make('max_limit')
+                ->label('Max Balance (Float Limit)')
+                ->helperText('The maximum cash float allowed for this branch.')
+                ->prefix('AED')
+                ->numeric()
                 ->default(500.00),
             Forms\Components\TextInput::make('transaction_limit')
                 ->label('Max Amount Per Transaction')
@@ -58,7 +62,10 @@ public static function table(Table $table): Table
             Tables\Columns\IconColumn::make('is_active')->boolean(),
         ])
         ->filters([
-            // later we can add filters here
+            Tables\Filters\TernaryFilter::make('is_active')->label('Active'),
+        ])
+        ->actions([
+            Tables\Actions\EditAction::make(),
         ]);
 }
 

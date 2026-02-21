@@ -70,10 +70,21 @@ public static function form(Form $form): Form
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn (User $record) =>
+                        $record->id !== 1 && $record->id !== auth()->id()
+                    ),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (\Illuminate\Database\Eloquent\Collection $records, Tables\Actions\DeleteBulkAction $action) {
+                            // Remove protected users before bulk delete executes
+                            $records->reject(fn (User $record) =>
+                                $record->id === 1 || $record->id === auth()->id()
+                            )->each->delete();
+                            $action->cancel(); // We handled deletion ourselves
+                        }),
                 ]),
             ]);
     }

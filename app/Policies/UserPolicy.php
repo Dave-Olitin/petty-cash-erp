@@ -44,9 +44,16 @@ class UserPolicy
      */
     public function delete(User $user, User $model): bool
     {
+        // Rule 1: Never allow deletion of the root super-admin (ID 1).
         if ($model->id === 1) {
             return false;
         }
+
+        // Rule 2: Users cannot delete themselves — prevents accidental self-lockout.
+        if ($user->id === $model->id) {
+            return false;
+        }
+
         return $user->isHeadOffice();
     }
 

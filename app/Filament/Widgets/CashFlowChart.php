@@ -51,20 +51,24 @@ class CashFlowChart extends ChartWidget
                 $replenishmentsData[$key] = 0;
             }
 
-            // 2. Fetch Data
+            // 2. Fetch Data — using DB-agnostic raw date (no DATE_FORMAT which is MySQL-only)
             $results = \App\Models\Transaction::query()
-                ->selectRaw("DATE_FORMAT(created_at, '$excludeTime') as date_key, type, SUM(amount) as total")
                 ->whereBetween('created_at', [$filterStart, $filterEnd])
+                ->whereNull('deleted_at')
+                ->where('status', '!=', 'rejected')
                 ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-                ->groupBy('date_key', 'type')
+                ->select('created_at', 'type', 'amount')
                 ->get();
 
-            // 3. Map Results
+            // 3. Map Results — group in PHP using Carbon (DB-agnostic)
             foreach ($results as $row) {
+                $key = \Carbon\Carbon::parse($row->created_at)->format($format);
+                if (!isset($expensesData[$key])) continue; // outside range (paranoia guard)
+
                 if ($row->type === 'EXPENSE') {
-                    $expensesData[$row->date_key] = (float) $row->total;
+                    $expensesData[$key] = ($expensesData[$key] ?? 0) + (float) $row->amount;
                 } elseif ($row->type === 'REPLENISHMENT') {
-                    $replenishmentsData[$row->date_key] = (float) $row->total;
+                    $replenishmentsData[$key] = ($replenishmentsData[$key] ?? 0) + (float) $row->amount;
                 }
             }
 
