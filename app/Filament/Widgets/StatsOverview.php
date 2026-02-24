@@ -17,6 +17,11 @@ class StatsOverview extends BaseWidget
     // Auto-refresh every 15 seconds to show new pending requests
     protected static ?string $pollingInterval = '15s';
 
+    public static function canView(): bool
+    {
+        return auth()->user()->can('access_petty_cash_panel');
+    }
+
     protected function getStats(): array
     {
         $user = auth()->user();

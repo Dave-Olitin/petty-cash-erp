@@ -85,8 +85,7 @@ public static function table(Table $table): Table
         ];
     }
     public static function canViewAny(): bool
-{
-    // Only show this page if the user is Head Office (branch_id is NULL)
-    return auth()->user()->branch_id === null;
-}
+    {
+        return auth()->user()->can('manage_settings');
+    }
 }

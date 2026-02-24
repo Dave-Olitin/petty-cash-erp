@@ -21,45 +21,86 @@ class UserResource extends Resource
     protected static ?string $navigationGroup = 'System Settings';
     protected static ?int $navigationSort = 3;
 
-public static function form(Form $form): Form
-{
-    return $form
-        ->schema([
-            Forms\Components\TextInput::make('name')
-                ->required(),
-            Forms\Components\TextInput::make('email')
-                ->email()
-                ->required()
-                ->unique(ignoreRecord: true),
-            Forms\Components\TextInput::make('password')
-                ->password()
-                ->required(fn (string $context): bool => $context === 'create') // Only required when creating new
-                ->dehydrated(fn ($state) => filled($state)), // Don't update if empty
-                
-            // THE MAGIC FIELD: Assign a user to a branch
-            Forms\Components\Select::make('branch_id')
-                ->relationship('branch', 'name')
-                ->label('Assigned Branch')
-                ->placeholder('Head Office (Super Admin)') // If empty, they are HQ
-                ->searchable()
-                ->preload(),
-        ]);
-}
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Group::make()->schema([
+                    Forms\Components\Section::make('Profile Information')
+                        ->description('Basic account details and credentials.')
+                        ->schema([
+                            Forms\Components\TextInput::make('name')
+                                ->required()
+                                ->maxLength(255),
+                                
+                            Forms\Components\TextInput::make('email')
+                                ->email()
+                                ->required()
+                                ->unique(ignoreRecord: true)
+                                ->maxLength(255),
+                                
+                            Forms\Components\TextInput::make('password')
+                                ->password()
+                                ->required(fn (string $context): bool => $context === 'create')
+                                ->dehydrated(fn ($state) => filled($state)),
+                        ])->columns(2),
+                ])->columnSpan(['lg' => 2]),
+
+                Forms\Components\Group::make()->schema([
+                    Forms\Components\Section::make('Petty Cash ERP Access')
+                        ->description('Assign the user to a branch to grant them Petty Cash access.')
+                        ->schema([
+                            Forms\Components\Select::make('branch_id')
+                                ->relationship('branch', 'name')
+                                ->label('Assigned Branch')
+                                ->placeholder('Head Office (Super Admin)')
+                                ->searchable()
+                                ->preload(),
+                        ]),
+
+                    Forms\Components\Section::make('Voucher System Access')
+                        ->description('Assign roles to grant access to the separate Vouchers software.')
+                        ->schema([
+                            Forms\Components\CheckboxList::make('roles')
+                                ->relationship('roles', 'name')
+                                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->name}" . ($record->description ? " - {$record->description}" : ''))
+                                ->columns(1),
+                        ]),
+                ])->columnSpan(['lg' => 1]),
+            ])->columns(3);
+    }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
+                    ->searchable()
+                    ->sortable(),
+                    
                 Tables\Columns\TextColumn::make('email')
                     ->searchable(),
+                    
                 Tables\Columns\TextColumn::make('branch.name')
-                    ->label('Assigned Branch')
+                    ->label('Petty Cash Branch')
                     ->sortable()
                     ->badge()
-                    ->color(fn ($state) => $state ? 'info' : 'success') // Blue for branch, Green for HQ (null)
-                    ->formatStateUsing(fn ($state) => $state ?? 'Head Office (Admin)'),
+                    ->color(fn ($state) => $state ? 'gray' : 'success') // Gray for branch, Green for HQ
+                    ->formatStateUsing(fn ($state) => $state ?? 'HQ / Super Admin')
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('roles.name')
+                    ->label('Voucher Roles')
+                    ->badge()
+                    ->separator(',')
+                    ->color(fn (string $state): string => match ($state) {
+                        'Accountant' => 'warning',
+                        'Approver' => 'success',
+                        'Requester' => 'info',
+                        default => 'gray',
+                    })
+                    ->searchable(),
+                    
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -106,6 +147,6 @@ public static function form(Form $form): Form
     }
     public static function canViewAny(): bool
 {
-    return auth()->user()->branch_id === null;
+    return auth()->user()->can('manage_settings');
 }
 }

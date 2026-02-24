@@ -111,6 +111,6 @@ class CategoryResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()->branch_id === null;
+        return auth()->user()->can('manage_settings');
     }
 }

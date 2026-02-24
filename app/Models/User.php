@@ -7,11 +7,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, HasRoles;
 
     protected $fillable = [
         'name',
@@ -43,5 +46,32 @@ class User extends Authenticatable
     public function isHeadOffice(): bool
     {
         return is_null($this->branch_id);
+    }
+
+    public function vouchers()
+    {
+        return $this->hasMany(Voucher::class);
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        if ($panel->getId() === 'vouchers') {
+            return $this->can('access_vouchers_panel');
+        }
+
+        if ($panel->getId() === 'admin') {
+            // Voucher-only roles are never allowed into the admin panel
+            $isVoucherOnlyUser = $this->hasAnyRole(['Accountant', 'Approver', 'Requester'])
+                && !$this->hasRole('Admin');
+
+            if ($isVoucherOnlyUser) {
+                return false;
+            }
+
+            return $this->can('access_petty_cash_panel');
+        }
+
+        // Deny access to any unrecognised panel by default
+        return false;
     }
 }

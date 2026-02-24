@@ -63,5 +63,16 @@ Route::middleware(['auth'])->group(function () {
         abort(404);
     })->name('transaction.receipt');
 
+    Route::get('/admin/vouchers/{voucher}/pdf', function (\App\Models\Voucher $voucher) {
+        // Must have access to Vouchers Panel
+        if (!auth()->user()->can('access_vouchers_panel')) {
+            abort(403);
+        }
+
+        $voucher->load(['user', 'category', 'approvals.user']);
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.voucher', ['voucher' => $voucher])->stream($voucher->voucher_number . '.pdf');
+    })->name('voucher.pdf');
+
 });
 

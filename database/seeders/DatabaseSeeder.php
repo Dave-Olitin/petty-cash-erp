@@ -32,6 +32,8 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        $this->call(RolesAndPermissionsSeeder::class);
+
         // 2. Create Branches
         $branches = [
             ['name' => 'Dubai Branch', 'current_balance' => 0, 'limit' => 5000],

@@ -13,6 +13,11 @@ class ExpensesByCategoryChart extends ChartWidget
     protected static ?int $sort = 3;
     protected static ?string $maxHeight = '300px';
 
+    public static function canView(): bool
+    {
+        return auth()->user()->can('access_petty_cash_panel');
+    }
+
     protected function getData(): array
     {
         $user      = auth()->user();

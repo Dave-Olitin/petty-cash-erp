@@ -77,7 +77,6 @@ class LatestTransactions extends BaseWidget
 
     public static function canView(): bool
     {
-        // Both can view, but content differs.
-        return true;
+        return auth()->user()->can('access_petty_cash_panel');
     }
 }

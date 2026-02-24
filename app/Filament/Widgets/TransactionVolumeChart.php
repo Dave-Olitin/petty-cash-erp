@@ -18,6 +18,11 @@ class TransactionVolumeChart extends ChartWidget
     ];
     protected static ?string $maxHeight = '300px';
 
+    public static function canView(): bool
+    {
+        return auth()->user()->can('access_petty_cash_panel');
+    }
+
     protected function getData(): array
     {
         $startDate = $this->filters['startDate'] ? \Carbon\Carbon::parse($this->filters['startDate']) : now()->subDays(30);
