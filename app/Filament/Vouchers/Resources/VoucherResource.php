@@ -45,44 +45,62 @@ class VoucherResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('Voucher Details')->schema([
-                    Forms\Components\Select::make('type')
-                        ->options([
-                            'petty_cash' => 'Petty Cash Request',
-                            'payment' => 'Payment Voucher',
+                Forms\Components\Grid::make(3)->schema([
+                    // ── LEFT COLUMN: Input Form (Takes up 2 columns) ──────────
+                    Forms\Components\Section::make('Voucher Details')->schema([
+                        Forms\Components\Select::make('type')
+                            ->options([
+                                'petty_cash' => 'Petty Cash Request',
+                                'payment' => 'Payment Voucher',
+                            ])
+                            ->required()
+                            ->default('payment')
+                            ->live(),
+
+                        Forms\Components\TextInput::make('payee')
+                            ->required()
+                            ->maxLength(255)
+                            ->live(onBlur: true),
+
+                        Forms\Components\TextInput::make('amount')
+                            ->required()
+                            ->numeric()
+                            ->prefix('AED')
+                            ->live(onBlur: true),
+
+                        Forms\Components\Select::make('category_id')
+                            ->relationship('category', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->live(),
+
+                        Forms\Components\Textarea::make('description')
+                            ->columnSpanFull()
+                            ->live(onBlur: true),
+
+                        \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('attachments')
+                            ->collection('attachments')
+                            ->multiple()
+                            ->preserveFilenames()
+                            ->disk('local')
+                            ->visibility('private')
+                            ->downloadable()
+                            ->openable()
+                            ->label('Invoices & Receipts')
+                            ->columnSpanFull(),
+                    ])->columns(2)->columnSpan(2),
+
+                    // ── RIGHT COLUMN: Live Preview (Takes up 1 column) ──────────
+                    Forms\Components\Section::make('Live Preview')
+                        ->schema([
+                            Forms\Components\Placeholder::make('preview')
+                                ->label('')
+                                ->content(fn ($get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
                         ])
-                        ->required()
-                        ->default('payment'),
-
-                    Forms\Components\TextInput::make('payee')
-                        ->required()
-                        ->maxLength(255),
-
-                    Forms\Components\TextInput::make('amount')
-                        ->required()
-                        ->numeric()
-                        ->prefix('AED'),
-
-                    Forms\Components\Select::make('category_id')
-                        ->relationship('category', 'name')
-                        ->searchable()
-                        ->preload(),
-
-                    Forms\Components\Textarea::make('description')
-                        ->columnSpanFull(),
-
-                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('attachments')
-                        ->collection('attachments')
-                        ->multiple()
-                        ->preserveFilenames()
-                        ->disk('local')
-                        ->visibility('private')
-                        ->downloadable()
-                        ->openable()
-                        ->label('Invoices & Receipts')
-                        ->columnSpanFull(),
-                ])->columns(2),
-            ]);
+                        ->columnSpan(1)
+                        ->extraAttributes(['class' => 'sticky top-10']),
+                ]),
+            ])->columns(1);
     }
 
     public static function table(Table $table): Table
@@ -150,13 +168,36 @@ class VoucherResource extends Resource
                         'petty_cash' => 'Petty Cash',
                         'payment' => 'Payment',
                     ]),
+                Tables\Filters\SelectFilter::make('category_id')
+                    ->label('Category')
+                    ->relationship('category', 'name')
+                    ->searchable()
+                    ->preload(),
                 Tables\Filters\SelectFilter::make('user_id')
                     ->label('Requester')
                     ->relationship('user', 'name')
                     ->searchable()
                     ->preload(),
+                Tables\Filters\Filter::make('created_at')
+                    ->form([
+                        \Filament\Forms\Components\DatePicker::make('created_from')->label('From Date'),
+                        \Filament\Forms\Components\DatePicker::make('created_until')->label('Until Date'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['created_from'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '>=', $date),
+                            )
+                            ->when(
+                                $data['created_until'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
+                            );
+                    }),
             ])
             ->headerActions([
+                \Filament\Tables\Actions\ImportAction::make()
+                    ->importer(\App\Filament\Imports\VoucherImporter::class),
                 \pxlrbt\FilamentExcel\Actions\Tables\ExportAction::make()
                     ->exports([
                         \pxlrbt\FilamentExcel\Exports\ExcelExport::make('table')->fromTable(),
@@ -164,10 +205,7 @@ class VoucherResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()
-                    ->iconButton()
-                    ->slideOver()
-                    ->modalWidth(\Filament\Support\Enums\MaxWidth::SevenExtraLarge)
-                    ->modalHeading(''),
+                    ->iconButton(),
                 Tables\Actions\Action::make('print')
                     ->label('Print Voucher')
                     ->icon('heroicon-o-printer')
@@ -261,9 +299,9 @@ class VoucherResource extends Resource
                         if (!auth()->user()->can('voucher.approve')) return false;
 
                         // If a workflow chain is configured, only show to the correct step's user
-                        $step = \App\Models\ApprovalWorkflow::getApproverAtStep((int) ($record->current_approval_step ?? 1));
-                        if ($step) {
-                            return $step->user_id === auth()->id();
+                        if (\App\Models\ApprovalWorkflow::isConfigured()) {
+                            $step = \App\Models\ApprovalWorkflow::getApproverAtStep((int) ($record->current_approval_step ?? 1));
+                            return $step && $step->user_id == auth()->id();
                         }
 
                         // No chain configured — any Approver-role user can act
@@ -276,6 +314,19 @@ class VoucherResource extends Resource
                             if ($lockedRecord->status !== 'pending_approver' || $lockedRecord->current_approval_step !== $record->current_approval_step) {
                                 Notification::make()->title('Voucher was modified by another user. Please refresh.')->danger()->send();
                                 return;
+                            }
+
+                            if (\App\Models\ApprovalWorkflow::isConfigured()) {
+                                $step = \App\Models\ApprovalWorkflow::getApproverAtStep((int) ($lockedRecord->current_approval_step ?? 1));
+                                if (!$step || $step->user_id != auth()->id()) {
+                                    Notification::make()->title('Unauthorized: You are not the correct approver for this step.')->danger()->send();
+                                    return;
+                                }
+                            } else {
+                                if (!auth()->user()->hasRole('Approver')) {
+                                    Notification::make()->title('Unauthorized: You lack Approver privileges.')->danger()->send();
+                                    return;
+                                }
                             }
 
                             $lockedRecord->load('user');
@@ -404,6 +455,7 @@ class VoucherResource extends Resource
         return [
             'index' => Pages\ListVouchers::route('/'),
             'create' => Pages\CreateVoucher::route('/create'),
+            'view' => Pages\ViewVoucher::route('/{record}'),
             'edit' => Pages\EditVoucher::route('/{record}/edit'),
         ];
     }
@@ -414,7 +466,7 @@ class VoucherResource extends Resource
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ])
-            ->with(['approvals.user']);
+            ->with(['approvals.user.roles']);
     }
 
     public static function infolist(\Filament\Infolists\Infolist $infolist): \Filament\Infolists\Infolist
@@ -445,6 +497,7 @@ class VoucherResource extends Resource
 
                 // ── BOTTOM ROW: Voucher Details — full width ───────────────────────
                 \Filament\Infolists\Components\Section::make('Voucher Details')
+                    ->compact()
                     ->schema([
                         \Filament\Infolists\Components\TextEntry::make('voucher_number')
                             ->label('Voucher #')
@@ -462,7 +515,11 @@ class VoucherResource extends Resource
                                 default            => 'gray',
                             })
                             ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
-                        \Filament\Infolists\Components\TextEntry::make('user.name')->label('Requester'),
+                        \Filament\Infolists\Components\TextEntry::make('user.name')
+                            ->label('Requester')
+                            ->icon('heroicon-m-user-circle')
+                            ->iconColor('primary')
+                            ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
                         \Filament\Infolists\Components\TextEntry::make('type')
                             ->formatStateUsing(fn ($state) => $state === 'petty_cash' ? 'Petty Cash' : 'Payment Voucher'),
                         \Filament\Infolists\Components\TextEntry::make('category.name')->label('Category'),
@@ -474,6 +531,16 @@ class VoucherResource extends Resource
                             ->columnSpanFull()
                             ->placeholder('No description provided'),
                     ])->columns(4),
+
+                // ── ACTIVITY LOG: Full width chronological timeline ──────────────────────
+                \Filament\Infolists\Components\Section::make('Activity Log')
+                    ->compact()
+                    ->schema([
+                        \Filament\Infolists\Components\ViewEntry::make('activity_log')
+                            ->label('')
+                            ->view('filament.infolists.activity-log'),
+                    ])
+                    ->collapsed(),
 
             ])->columns(1);
     }

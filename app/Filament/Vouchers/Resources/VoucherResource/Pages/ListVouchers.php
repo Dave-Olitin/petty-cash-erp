@@ -22,20 +22,62 @@ class ListVouchers extends ListRecords
 
     public function getTabs(): array
     {
-        return [
+        $user = auth()->user();
+
+        // Determine what statuses constitute "Action Required" for the current user
+        $actionRequiredStatuses = [];
+        if ($user->hasRole('Accountant')) {
+            $actionRequiredStatuses[] = 'pending_checker';
+        }
+        if ($user->hasRole('Approver') || $user->hasRole('Super Admin')) {
+            $actionRequiredStatuses[] = 'pending_approver';
+        }
+        // Basic users (and everyone else) need to take action on their own rejected vouchers
+        $actionRequiredStatuses[] = 'rejected';
+
+        // Prepare base query clauses for 'Action Required' tab
+        $actionRequiredQuery = function ($query) use ($user, $actionRequiredStatuses) {
+            return $query->where(function ($q) use ($user, $actionRequiredStatuses) {
+                if (in_array('pending_checker', $actionRequiredStatuses)) {
+                    $q->orWhere('status', 'pending_checker');
+                }
+                if (in_array('pending_approver', $actionRequiredStatuses)) {
+                    $q->orWhere('status', 'pending_approver');
+                }
+                // Always include rejected vouchers if the user is the author
+                $q->orWhere(function ($sub) use ($user) {
+                    $sub->where('status', 'rejected')->where('user_id', $user->id);
+                });
+            });
+        };
+
+        $draftCount = \App\Models\Voucher::where('status', 'draft')->where('user_id', $user->id)->count();
+        $actionCount = \App\Models\Voucher::tap($actionRequiredQuery)->count();
+
+        $tabs = [
             'all' => \Filament\Resources\Components\Tab::make('All'),
-            'draft' => \Filament\Resources\Components\Tab::make('Draft')
-                ->modifyQueryUsing(fn ($query) => $query->where('status', 'draft')),
-            'pending_checker' => \Filament\Resources\Components\Tab::make('Pending Checker')
-                ->modifyQueryUsing(fn ($query) => $query->where('status', 'pending_checker')),
-            'pending_approver' => \Filament\Resources\Components\Tab::make('Pending Approver')
-                ->modifyQueryUsing(fn ($query) => $query->where('status', 'pending_approver')),
-            'approved' => \Filament\Resources\Components\Tab::make('Approved')
-                ->modifyQueryUsing(fn ($query) => $query->where('status', 'approved')),
-            'rejected' => \Filament\Resources\Components\Tab::make('Rejected')
-                ->modifyQueryUsing(fn ($query) => $query->where('status', 'rejected')),
-            'paid' => \Filament\Resources\Components\Tab::make('Paid')
-                ->modifyQueryUsing(fn ($query) => $query->where('status', 'paid')),
         ];
+
+        if ($draftCount > 0) {
+            $tabs['draft'] = \Filament\Resources\Components\Tab::make('My Drafts')
+                ->modifyQueryUsing(fn ($query) => $query->where('status', 'draft')->where('user_id', $user->id))
+                ->badge($draftCount)
+                ->badgeColor('gray');
+        }
+
+        $tabs['action_required'] = \Filament\Resources\Components\Tab::make('Action Required')
+            ->modifyQueryUsing($actionRequiredQuery)
+            ->badge($actionCount)
+            ->badgeColor($actionCount > 0 ? 'danger' : 'gray');
+
+        $tabs['in_progress'] = \Filament\Resources\Components\Tab::make('Processing & Completed')
+            ->modifyQueryUsing(fn ($query) => $query->whereIn('status', [
+                'pending_checker', 
+                'pending_approver', 
+                'approved', 
+                'paid'
+            ]));
+
+        return $tabs;
     }
 }

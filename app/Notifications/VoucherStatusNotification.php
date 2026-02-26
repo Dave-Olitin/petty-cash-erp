@@ -23,7 +23,17 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        $channels = ['database'];
+
+        // Only attempt to send an email if a real SMTP host has been configured.
+        // This prevents the application from crashing if the .env file is incomplete, 
+        // ensuring the in-app Notification Bell still successfully receives the DB alert.
+        $host = config('mail.mailers.smtp.host');
+        if ($host && $host !== '127.0.0.1' && $host !== 'your-smtp-host') {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -71,19 +81,41 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
 
     public function toDatabase(object $notifiable): array
     {
-        return [
-            'voucher_id'     => $this->voucher->id,
-            'voucher_number' => $this->voucher->voucher_number,
-            'event'          => $this->event,
-            'amount'         => $this->voucher->amount,
-            'payee'          => $this->voucher->payee,
-            'requester'      => $this->voucher->user->name,
-            'comments'       => $this->comments,
-        ];
-    }
+        $title = match ($this->event) {
+            'submitted'       => "New Voucher Submitted",
+            'checked'         => "Voucher Checked & Forwarded",
+            'approved'        => "Voucher Approved",
+            'rejected'        => "Voucher Rejected",
+            'paid'            => "Voucher Paid",
+            'reminder_checker' => "Action Required: Pending Check",
+            'reminder_approver' => "Action Required: Pending Approval",
+            default           => "Voucher Update",
+        };
 
-    public function toArray(object $notifiable): array
-    {
-        return $this->toDatabase($notifiable);
+        $icon = match ($this->event) {
+            'approved', 'paid' => 'heroicon-o-check-circle',
+            'rejected'         => 'heroicon-o-x-circle',
+            'submitted', 'checked' => 'heroicon-o-clock',
+            default            => 'heroicon-o-information-circle',
+        };
+
+        $color = match ($this->event) {
+            'approved', 'paid' => 'success',
+            'rejected'         => 'danger',
+            'submitted', 'checked' => 'warning',
+            default            => 'gray',
+        };
+
+        $body = "**{$this->voucher->voucher_number}** - AED " . number_format($this->voucher->amount, 2);
+        if ($this->comments) {
+            $body .= "\n\nComments: {$this->comments}";
+        }
+
+        return \Filament\Notifications\Notification::make()
+            ->title($title)
+            ->body($body)
+            ->icon($icon)
+            ->color($color)
+            ->getDatabaseMessage();
     }
 }

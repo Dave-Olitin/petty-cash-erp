@@ -16,7 +16,7 @@ class ApprovalWorkflowResource extends Resource
     protected static ?string $model = ApprovalWorkflow::class;
     protected static ?string $navigationIcon = 'heroicon-o-arrows-up-down';
     protected static ?string $navigationLabel = 'Approval Chain';
-    protected static ?string $navigationGroup = 'Settings';
+    protected static ?string $cluster = \App\Filament\Vouchers\Clusters\Settings::class;
     protected static ?string $pluralModelLabel = 'Approval Chain';
     protected static ?int $navigationSort = 20;
 
@@ -43,9 +43,7 @@ class ApprovalWorkflowResource extends Resource
                 ->schema([
                     Forms\Components\Select::make('user_id')
                         ->label('Approver')
-                        ->options(
-                            User::role('Approver')->pluck('name', 'id')->toArray()
-                        )
+                        ->options(fn () => User::role('Approver')->pluck('name', 'id')->toArray())
                         ->searchable()
                         ->required(),
 

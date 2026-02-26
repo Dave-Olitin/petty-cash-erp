@@ -35,12 +35,12 @@ class VouchersPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Vouchers/Resources'), for: 'App\\Filament\\Vouchers\\Resources')
             ->discoverPages(in: app_path('Filament/Vouchers/Pages'), for: 'App\\Filament\\Vouchers\\Pages')
             ->pages([
-                Pages\Dashboard::class,
+                \App\Filament\Vouchers\Pages\Dashboard::class,
             ])
+            ->discoverClusters(in: app_path('Filament/Vouchers/Clusters'), for: 'App\\Filament\\Vouchers\\Clusters')
             ->discoverWidgets(in: app_path('Filament/Vouchers/Widgets'), for: 'App\\Filament\\Vouchers\\Widgets')
             ->widgets([
-                Widgets\AccountWidget::class,
-                Widgets\FilamentInfoWidget::class,
+                //
             ])
             ->middleware([
                 EncryptCookies::class,

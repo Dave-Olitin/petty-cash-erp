@@ -40,7 +40,25 @@ class VoucherObserver
      */
     public function updated(Voucher $voucher): void
     {
-        //
+        // If a petty cash voucher was just marked as paid, deduct and check the overall hover float balance
+        if ($voucher->type === 'petty_cash' && $voucher->wasChanged('status') && $voucher->status === 'paid') {
+            
+            // Calculate current Head Office Float
+            $totalReplenishing = \App\Models\FloatReplenishment::sum('amount');
+            $totalSpent = \App\Models\Voucher::where('type', 'petty_cash')
+                ->where('status', 'paid')
+                ->sum('amount');
+
+            $currentBalance = $totalReplenishing - $totalSpent;
+
+            // Threshold Check (AED 2000)
+            if ($currentBalance < 2000) {
+                $managers = \App\Models\User::permission('voucher.manage_float')->get();
+                foreach ($managers as $manager) {
+                    $manager->notify(new \App\Notifications\LowBalanceNotification((float)$currentBalance));
+                }
+            }
+        }
     }
 
     /**
