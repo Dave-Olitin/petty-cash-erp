@@ -11,13 +11,15 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Number;
+use Livewire\WithPagination;
 
 class VoucherReportPage extends Page implements HasForms
 {
     use InteractsWithForms;
+    use WithPagination;
 
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
-    protected static ?string $navigationLabel = 'Petty Cash Report';
+    protected static ?string $navigationLabel = 'Report';
     protected static ?string $title = 'Petty Cash Usage Report';
     protected static ?string $navigationGroup = null;
     protected static ?int $navigationSort = 10;
@@ -32,6 +34,13 @@ class VoucherReportPage extends Page implements HasForms
     {
         $this->date_from = now()->startOfMonth()->toDateString();
         $this->date_to   = now()->toDateString();
+    }
+
+    public function updating($name)
+    {
+        if (in_array($name, ['date_from', 'date_to', 'type', 'category_id'])) {
+            $this->resetPage();
+        }
     }
 
     protected function getFormSchema(): array
@@ -67,14 +76,18 @@ class VoucherReportPage extends Page implements HasForms
             $query->where('category_id', $this->category_id);
         }
 
-        $vouchers = $query->orderByDesc('created_at')->get();
+        $baseQuery = clone $query;
+        $totalAmount = $baseQuery->sum('amount');
+        $totalCount = $baseQuery->count();
 
-        $byCategory = $vouchers->groupBy('category.name')->map(fn ($v) => $v->sum('amount'))->sortDesc();
+        $vouchers = $query->orderByDesc('created_at')->paginate(10);
+
+        $byCategory = $baseQuery->get()->groupBy('category.name')->map(fn ($v) => $v->sum('amount'))->sortDesc();
 
         return [
             'vouchers'      => $vouchers,
-            'total_amount'  => $vouchers->sum('amount'),
-            'total_count'   => $vouchers->count(),
+            'total_amount'  => $totalAmount,
+            'total_count'   => $totalCount,
             'by_category'   => $byCategory,
         ];
     }
@@ -82,7 +95,20 @@ class VoucherReportPage extends Page implements HasForms
     public function exportCsv(): mixed
     {
         $data = $this->getReportData();
-        $vouchers = $data['vouchers'];
+        // For CSV export, we fetch all matching records regardless of pagination:
+        $query = Voucher::query()
+            ->where('status', 'paid')
+            ->with(['user', 'category'])
+            ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
+
+        if ($this->type) {
+            $query->where('type', $this->type);
+        }
+        if ($this->category_id) {
+            $query->where('category_id', $this->category_id);
+        }
+
+        $vouchers = $query->orderByDesc('created_at')->get();
 
         return response()->streamDownload(function () use ($vouchers) {
             $out = fopen('php://output', 'w');

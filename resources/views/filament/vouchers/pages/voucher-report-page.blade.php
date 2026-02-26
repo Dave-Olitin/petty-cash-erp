@@ -233,6 +233,11 @@
                                     </tr>
                                 </tfoot>
                             </table>
+                            </table>
+                            
+                            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 border-x border-b rounded-b-xl border-t-0">
+                                {{ $data['vouchers']->links('filament::components.pagination.index') }}
+                            </div>
                         </div>
                     @endif
                 </x-filament::section>

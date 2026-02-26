@@ -33,43 +33,88 @@ class VouchersPanelProvider extends PanelProvider
                 \Filament\View\PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
                 fn (): string => \Illuminate\Support\Facades\Blade::render('
                     <style>
-                        /* Modern Background for Login */
-                        .fi-main {
+                        /* Base styling for mobile (stacked) */
+                        .fi-simple-layout {
                             background-color: #ffffff !important;
-                            background-image: url("https://images.pexels.com/photos/34577/pexels-photo.jpg") !important;
-                            background-size: cover !important;
-                            background-position: center !important;
-                            background-repeat: no-repeat !important;
                             position: relative;
-                            min-height: 100vh;
+                            display: flex;
+                            flex-direction: column !important;
                         }
-                        /* Add a subtle white wash over the background image to make the white theme pop */
-                        .fi-main::before {
+                        
+                        /* Left side (Logo container) */
+                        .fi-simple-layout::before {
                             content: "";
-                            position: absolute;
-                            top: 0; left: 0; right: 0; bottom: 0;
-                            background: rgba(255, 255, 255, 0.3);
-                            backdrop-filter: blur(2px);
-                            pointer-events: none;
+                            display: block;
+                            height: 250px; /* mobile height */
+                            width: 100%;
+                            background-color: #ffffff;
+                            background-image: url("https://etc.ericktrading.ae/assets/etclogo-NCke5EIL.jpeg");
+                            background-size: auto 60%;
+                            background-position: center;
+                            background-repeat: no-repeat;
                         }
-                        /* Mobile responsive container */
+
+                        /* Right side container (Form area) */
                         .fi-simple-main-ctn {
-                            padding: 1.5rem !important;
+                            position: relative;
+                            flex: 1;
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            min-height: 100vh;
-                        }
-                        /* Glass card effect for the login form */
-                        .fi-simple-main .fi-simple-main-ctn .fi-section {
-                            background: rgba(255, 255, 255, 0.98);
-                            backdrop-filter: blur(15px);
-                            border-radius: 1.5rem;
-                            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
-                            border: 1px solid rgba(255,255,255,0.8);
+                            padding: 1.5rem !important;
+                            background-image: url("https://images.pexels.com/photos/34577/pexels-photo.jpg") !important;
+                            background-size: cover !important;
+                            background-position: center !important;
                             width: 100%;
-                            margin: 1rem auto;
+                            background-color: transparent !important;
                         }
+
+                        /* Subtle white wash over the pexels background */
+                        .fi-simple-main-ctn::before {
+                            content: "";
+                            position: absolute;
+                            top: 0; left: 0; right: 0; bottom: 0;
+                            background: rgba(255, 255, 255, 0.4);
+                            backdrop-filter: blur(4px);
+                            pointer-events: none;
+                            z-index: 0;
+                        }
+
+                        /* Glass card effect for the login form */
+                        .fi-simple-main-ctn main.fi-simple-main {
+                            background: rgba(255, 255, 255, 0.98) !important;
+                            backdrop-filter: blur(15px);
+                            border-radius: 1.5rem !important;
+                            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2) !important;
+                            border: 1px solid rgba(255,255,255,0.8) !important;
+                            width: 100%;
+                            max-width: 28rem !important;
+                            position: relative;
+                            z-index: 1; /* keep above the background blur */
+                            margin: 0 !important;
+                        }
+
+                        /* Hide the duplicate brand text in the header */
+                        .fi-logo {
+                            display: none !important;
+                        }
+
+                        /* Desktop layout (Split screen) */
+                        @media (min-width: 1024px) {
+                            .fi-simple-layout {
+                                flex-direction: row !important;
+                            }
+                            .fi-simple-layout::before {
+                                flex: 1;
+                                height: 100vh; /* full height */
+                                border-right: 1px solid rgba(0,0,0,0.05);
+                            }
+                            .fi-simple-main-ctn {
+                                flex: 1;
+                                height: 100vh;
+                            }
+                        }
+
                         /* Header Text styling */
                         .fi-simple-header-heading {
                             font-weight: 800;
