@@ -163,11 +163,11 @@
                     </x-slot>
                     <x-slot name="headerEnd">
                         <x-filament::button
-                            wire:click="exportCsv"
-                            icon="heroicon-o-arrow-down-tray"
+                            wire:click="exportExcel"
+                            icon="heroicon-o-document-arrow-down"
                             color="success"
                             size="sm">
-                            Export CSV
+                            Export Excel
                         </x-filament::button>
                     </x-slot>
 

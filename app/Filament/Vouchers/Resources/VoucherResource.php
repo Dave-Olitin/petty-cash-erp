@@ -257,6 +257,8 @@ class VoucherResource extends Resource
                                 ->title('Voucher submitted successfully')
                                 ->success()
                                 ->send();
+
+                            $record->refresh();
                         });
                     }),
 
@@ -299,6 +301,8 @@ class VoucherResource extends Resource
                                 ->title('Voucher forwarded to Approver')
                                 ->success()
                                 ->send();
+
+                            $record->refresh();
                         });
                     }),
 
@@ -383,6 +387,8 @@ class VoucherResource extends Resource
                                     ->success()
                                     ->send();
                             }
+
+                            $record->refresh();
                         });
                     }),
 
@@ -419,6 +425,8 @@ class VoucherResource extends Resource
                                 ->title('Voucher rejected')
                                 ->danger()
                                 ->send();
+
+                            $record->refresh();
                         });
                     }),
 
@@ -446,6 +454,8 @@ class VoucherResource extends Resource
                                 ->title('Voucher marked as paid')
                                 ->success()
                                 ->send();
+
+                            $record->refresh();
                         });
                     }),
             ])

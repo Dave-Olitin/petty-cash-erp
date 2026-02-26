@@ -13,9 +13,6 @@ class ListVouchers extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            \EightyNine\ExcelImport\ExcelImportAction::make()
-                ->color('primary')
-                ->slideOver(),
             Actions\CreateAction::make(),
         ];
     }

@@ -82,7 +82,17 @@ class VoucherReportPage extends Page implements HasForms
 
         $vouchers = $query->orderByDesc('created_at')->paginate(10);
 
-        $byCategory = $baseQuery->get()->groupBy('category.name')->map(fn ($v) => $v->sum('amount'))->sortDesc();
+        // Calculate by category securely without loading everything into memory
+        $categoryData = (clone $baseQuery)->select('category_id', DB::raw('SUM(amount) as total_amount'))
+            ->withoutEagerLoads()
+            ->with('category')
+            ->groupBy('category_id')
+            ->get();
+
+        $byCategory = $categoryData->mapWithKeys(function ($item) {
+            $name = $item->category ? $item->category->name : 'Uncategorized';
+            return [$name => $item->total_amount];
+        })->sortDesc();
 
         return [
             'vouchers'      => $vouchers,
@@ -92,10 +102,8 @@ class VoucherReportPage extends Page implements HasForms
         ];
     }
 
-    public function exportCsv(): mixed
+    public function exportExcel(): mixed
     {
-        $data = $this->getReportData();
-        // For CSV export, we fetch all matching records regardless of pagination:
         $query = Voucher::query()
             ->where('status', 'paid')
             ->with(['user', 'category'])
@@ -108,23 +116,11 @@ class VoucherReportPage extends Page implements HasForms
             $query->where('category_id', $this->category_id);
         }
 
-        $vouchers = $query->orderByDesc('created_at')->get();
+        $query->orderByDesc('created_at');
 
-        return response()->streamDownload(function () use ($vouchers) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['Date', 'Voucher #', 'Type', 'Payee', 'Category', 'Requester', 'Amount (AED)']);
-            foreach ($vouchers as $v) {
-                fputcsv($out, [
-                    $v->created_at->format('Y-m-d'),
-                    $v->voucher_number,
-                    $v->type === 'petty_cash' ? 'Petty Cash' : 'Payment',
-                    $v->payee,
-                    $v->category?->name ?? 'N/A',
-                    $v->user?->name ?? 'N/A',
-                    number_format($v->amount, 2),
-                ]);
-            }
-            fclose($out);
-        }, 'petty_cash_report_' . $this->date_from . '_to_' . $this->date_to . '.csv');
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\VouchersExport($query),
+            'petty_cash_report_' . $this->date_from . '_to_' . $this->date_to . '.xlsx'
+        );
     }
 }

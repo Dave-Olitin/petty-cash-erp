@@ -14,17 +14,26 @@ class VoucherObserver
         $prefix = $voucher->type === 'petty_cash' ? 'PCV-' : 'PAY-';
         $prefix .= date('Y') . '-';
         
-        $latest = Voucher::where('voucher_number', 'like', $prefix . '%')
-            ->orderBy('id', 'desc')
-            ->first();
-            
-        if ($latest) {
-            $number = intval(substr($latest->voucher_number, -4)) + 1;
-        } else {
-            $number = 1;
-        }
+        $lock = \Illuminate\Support\Facades\Cache::lock('voucher_number_generation', 5);
         
-        $voucher->voucher_number = $prefix . str_pad($number, 4, '0', STR_PAD_LEFT);
+        try {
+            $lock->block(5, function () use ($voucher, $prefix) {
+                $latest = Voucher::where('voucher_number', 'like', $prefix . '%')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                    
+                if ($latest) {
+                    $number = intval(substr($latest->voucher_number, -4)) + 1;
+                } else {
+                    $number = 1;
+                }
+                
+                $voucher->voucher_number = $prefix . str_pad($number, 4, '0', STR_PAD_LEFT);
+            });
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+            // Fallback in case of severe contention
+            $voucher->voucher_number = $prefix . 'ERR-' . rand(1000, 9999);
+        }
     }
 
     /**

@@ -49,6 +49,8 @@ class ViewVoucher extends ViewRecord
                             ->title('Voucher submitted successfully')
                             ->success()
                             ->send();
+
+                        $record->refresh();
                     });
                 }),
 
@@ -88,6 +90,8 @@ class ViewVoucher extends ViewRecord
                             ->title('Voucher forwarded to Approver')
                             ->success()
                             ->send();
+
+                        $record->refresh();
                     });
                 }),
 
@@ -166,6 +170,8 @@ class ViewVoucher extends ViewRecord
                                 ->success()
                                 ->send();
                         }
+
+                        $record->refresh();
                     });
                 }),
 
@@ -201,6 +207,8 @@ class ViewVoucher extends ViewRecord
                             ->title('Voucher rejected')
                             ->danger()
                             ->send();
+
+                        $record->refresh();
                     });
                 }),
 
@@ -227,6 +235,8 @@ class ViewVoucher extends ViewRecord
                             ->title('Voucher marked as paid')
                             ->success()
                             ->send();
+
+                        $record->refresh();
                     });
                 }),
                 

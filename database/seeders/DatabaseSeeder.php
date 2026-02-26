@@ -16,11 +16,15 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 0. Cleanup
         \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
         \App\Models\Voucher::truncate();
         \App\Models\VoucherApproval::truncate();
         \App\Models\ApprovalWorkflow::truncate();
+        \Illuminate\Support\Facades\DB::table('model_has_roles')->truncate();
+        \Illuminate\Support\Facades\DB::table('model_has_permissions')->truncate();
+        \Illuminate\Support\Facades\DB::table('role_has_permissions')->truncate();
+        \Illuminate\Support\Facades\DB::table('permissions')->truncate();
+        \Illuminate\Support\Facades\DB::table('roles')->truncate();
         User::truncate();
         \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
 

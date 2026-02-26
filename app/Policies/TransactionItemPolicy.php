@@ -23,20 +23,23 @@ class TransactionItemPolicy
 
     public function create(User $user): bool
     {
-        // Created via Transaction
-        return false; 
+        return $user->isHeadOffice() || $user->branch_id !== null;
     }
 
     public function update(User $user, TransactionItem $transactionItem): bool
     {
-         // Updates handled via Transaction
-         return false;
+        if ($user->isHeadOffice()) {
+            return true;
+        }
+        return $user->branch_id === $transactionItem->transaction->branch_id && $transactionItem->transaction->status === 'pending';
     }
 
     public function delete(User $user, TransactionItem $transactionItem): bool
     {
-         // Deletes handled via Transaction
-         return false;
+        if ($user->isHeadOffice()) {
+            return true;
+        }
+        return $user->branch_id === $transactionItem->transaction->branch_id && $transactionItem->transaction->status === 'pending';
     }
 
     public function restore(User $user, TransactionItem $transactionItem): bool
