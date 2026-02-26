@@ -529,6 +529,15 @@ class VoucherResource extends Resource
                             ->copyable(),
                         \Filament\Infolists\Components\TextEntry::make('status')
                             ->badge()
+                            ->icon(fn (string $state): string => match ($state) {
+                                'draft'            => 'heroicon-m-pencil-square',
+                                'pending_checker'  => 'heroicon-m-clock',
+                                'pending_approver' => 'heroicon-m-clock',
+                                'approved'         => 'heroicon-m-check-circle',
+                                'rejected'         => 'heroicon-m-x-circle',
+                                'paid'             => 'heroicon-m-banknotes',
+                                default            => 'heroicon-m-question-mark-circle',
+                            })
                             ->color(fn (string $state): string => match ($state) {
                                 'draft'            => 'gray',
                                 'pending_checker'  => 'warning',
@@ -543,11 +552,13 @@ class VoucherResource extends Resource
                             ->label('Requester')
                             ->icon('heroicon-m-user-circle')
                             ->iconColor('primary')
-                            ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
+                            ->weight(\Filament\Support\Enums\FontWeight::Bold),
                         \Filament\Infolists\Components\TextEntry::make('type')
                             ->formatStateUsing(fn ($state) => $state === 'petty_cash' ? 'Petty Cash' : 'Payment Voucher'),
-                        \Filament\Infolists\Components\TextEntry::make('category.name')->label('Category'),
-                        \Filament\Infolists\Components\TextEntry::make('payee'),
+                        \Filament\Infolists\Components\TextEntry::make('category.name')
+                            ->label('Category'),
+                        \Filament\Infolists\Components\TextEntry::make('payee')
+                            ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
                         \Filament\Infolists\Components\TextEntry::make('amount')
                             ->money('aed')
                             ->weight(\Filament\Support\Enums\FontWeight::Bold),
