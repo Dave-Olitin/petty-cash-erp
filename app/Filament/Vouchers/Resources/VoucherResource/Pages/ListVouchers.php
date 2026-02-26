@@ -24,37 +24,15 @@ class ListVouchers extends ListRecords
     {
         $user = auth()->user();
 
-        // Determine what statuses constitute "Action Required" for the current user
-        $actionRequiredStatuses = [];
-        if ($user->hasRole('Accountant')) {
-            $actionRequiredStatuses[] = 'pending_checker';
-        }
-        if ($user->hasRole('Approver') || $user->hasRole('Super Admin')) {
-            $actionRequiredStatuses[] = 'pending_approver';
-        }
-        // Basic users (and everyone else) need to take action on their own rejected vouchers
-        $actionRequiredStatuses[] = 'rejected';
-
-        // Prepare base query clauses for 'Action Required' tab
-        $actionRequiredQuery = function ($query) use ($user, $actionRequiredStatuses) {
-            return $query->where(function ($q) use ($user, $actionRequiredStatuses) {
-                if (in_array('pending_checker', $actionRequiredStatuses)) {
-                    $q->orWhere('status', 'pending_checker');
-                }
-                if (in_array('pending_approver', $actionRequiredStatuses)) {
-                    $q->orWhere('status', 'pending_approver');
-                }
-                // Always include rejected vouchers if the user is the author
-                $q->orWhere(function ($sub) use ($user) {
-                    $sub->where('status', 'rejected')->where('user_id', $user->id);
-                });
-            });
-        };
-
+        $actionCount = \App\Models\Voucher::actionRequired($user)->count();
         $draftCount = \App\Models\Voucher::where('status', 'draft')->where('user_id', $user->id)->count();
-        $actionCount = \App\Models\Voucher::tap($actionRequiredQuery)->count();
 
         $tabs = [
+            'action_required' => \Filament\Resources\Components\Tab::make('Action Required')
+                ->modifyQueryUsing(fn ($query) => $query->actionRequired($user))
+                ->badge($actionCount)
+                ->badgeColor($actionCount > 0 ? 'danger' : 'gray'),
+                
             'all' => \Filament\Resources\Components\Tab::make('All'),
         ];
 
@@ -64,11 +42,6 @@ class ListVouchers extends ListRecords
                 ->badge($draftCount)
                 ->badgeColor('gray');
         }
-
-        $tabs['action_required'] = \Filament\Resources\Components\Tab::make('Action Required')
-            ->modifyQueryUsing($actionRequiredQuery)
-            ->badge($actionCount)
-            ->badgeColor($actionCount > 0 ? 'danger' : 'gray');
 
         $tabs['in_progress'] = \Filament\Resources\Components\Tab::make('Processing & Completed')
             ->modifyQueryUsing(fn ($query) => $query->whereIn('status', [

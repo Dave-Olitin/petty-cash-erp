@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Filament\Vouchers\Resources;
+namespace App\Filament\Resources;
 
-use App\Filament\Vouchers\Resources\CategoryResource\Pages;
-use App\Filament\Vouchers\Resources\CategoryResource\RelationManagers;
+use App\Filament\Resources\CategoryResource\Pages;
+use App\Filament\Resources\CategoryResource\RelationManagers;
 use App\Models\Category;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -18,7 +18,7 @@ class CategoryResource extends Resource
     protected static ?string $model = Category::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
-    protected static ?string $cluster = \App\Filament\Vouchers\Clusters\Settings::class;
+    protected static ?string $navigationGroup = 'System Settings';
     protected static ?string $navigationLabel = 'Transaction Categories';
     protected static ?string $modelLabel = 'Transaction Category';
     protected static ?string $pluralModelLabel = 'Transaction Categories';
@@ -110,10 +110,5 @@ class CategoryResource extends Resource
             'create' => Pages\CreateCategory::route('/create'),
             'edit' => Pages\EditCategory::route('/{record}/edit'),
         ];
-    }
-
-    public static function canViewAny(): bool
-    {
-        return auth()->user()->can('manage_settings');
     }
 }

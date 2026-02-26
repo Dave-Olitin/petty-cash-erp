@@ -251,7 +251,7 @@
     </div>
 
     <div class="approval-timeline-list">
-        @forelse ($getRecord()->approvals as $approval)
+        @forelse ($getRecord()->approvals()->with('user.roles')->oldest()->get() as $approval)
             <div class="approval-timeline-item">
                 <!-- Node Icon -->
                 <div class="approval-timeline-node">

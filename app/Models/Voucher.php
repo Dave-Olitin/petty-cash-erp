@@ -75,4 +75,35 @@ class Voucher extends Model implements HasMedia
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(fn(string $eventName) => "This voucher has been {$eventName}");
     }
+
+    public function scopeActionRequired($query, User $user)
+    {
+        return $query->where(function ($q) use ($user) {
+            if ($user->hasRole('Accountant')) {
+                $q->orWhere('status', 'pending_checker');
+            }
+
+            if ($user->hasRole('Approver') || $user->hasRole('Admin') || $user->hasRole('Super Admin')) {
+                if (\App\Models\ApprovalWorkflow::isConfigured()) {
+                    $q->orWhere(function ($subQ) use ($user) {
+                        $subQ->where('status', 'pending_approver')
+                             ->whereExists(function ($exists) use ($user) {
+                                 $exists->select(\Illuminate\Support\Facades\DB::raw(1))
+                                        ->from('approval_workflows')
+                                        ->whereColumn('approval_workflows.step_order', 'vouchers.current_approval_step')
+                                        ->where('approval_workflows.user_id', $user->id);
+                             });
+                    });
+                } else {
+                    $q->orWhere('status', 'pending_approver');
+                }
+            }
+
+            // Always require action from the original creator if it's draft or rejected
+            $q->orWhere(function ($subQ) use ($user) {
+                $subQ->whereIn('status', ['draft', 'rejected'])
+                     ->where('user_id', $user->id);
+            });
+        });
+    }
 }

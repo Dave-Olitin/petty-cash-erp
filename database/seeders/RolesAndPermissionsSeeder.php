@@ -36,6 +36,9 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // Float management
             'voucher.manage_float', // Can view/add head office float replenishments
+
+            // Settings
+            'manage_settings', // Can view Roles, Permissions, Categories, etc.
         ];
 
         foreach ($permissions as $perm) {

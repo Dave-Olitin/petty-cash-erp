@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('voucher_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->enum('action', ['checked', 'approved', 'rejected']);
+            $table->enum('action', ['checked', 'approved', 'rejected', 'paid']);
             $table->text('comments')->nullable();
             $table->timestamps();
         });

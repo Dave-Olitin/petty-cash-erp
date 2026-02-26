@@ -21,6 +21,20 @@ class VoucherResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    public static function getNavigationBadge(): ?string
+    {
+        $user = auth()->user();
+        if (!$user) return null;
+        
+        $count = static::getModel()::actionRequired($user)->count();
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        return static::getNavigationBadge() !== null ? 'danger' : null;
+    }
+
     public static function canCreate(): bool
     {
         return auth()->user()->can('voucher.create');
