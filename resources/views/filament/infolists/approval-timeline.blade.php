@@ -141,12 +141,6 @@
         color: #6b7280;
     }
     
-    .approval-timeline-empty {
-        font-size: 0.875rem;
-        color: #6b7280;
-        font-style: italic;
-        padding-left: 2.5rem;
-    }
 
     /* Dark Mode Overrides */
     .dark .approval-timeline-list::before { background-color: #374151; }
@@ -170,7 +164,7 @@
     </div>
 
     <div class="approval-timeline-list">
-        @forelse ($getRecord()->approvals()->with('user.roles')->oldest()->get() as $approval)
+        @foreach ($getRecord()->approvals()->with('user.roles')->oldest()->get() as $approval)
             <div class="approval-timeline-item">
                 <!-- Node Icon -->
                 <div class="approval-timeline-node 
@@ -235,11 +229,7 @@
                     @endif
                 </div>
             </div>
-        @empty
-            <div class="approval-timeline-empty">
-                <span>No approvals recorded yet.</span>
-            </div>
-        @endforelse
+        @endforeach
 
         {{-- 🔮 DYNAMIC PREDICTION OF PENDING STEPS 🔮 --}}
         @php
