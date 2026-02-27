@@ -12,7 +12,7 @@ class Dashboard extends \Filament\Pages\Dashboard
 
     public static function canAccess(): bool
     {
-        return auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Accountant', 'General Manager']);
+        return auth()->user()->can('access_vouchers_panel');
     }
 
     protected function getHeaderActions(): array
