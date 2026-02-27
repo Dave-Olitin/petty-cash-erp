@@ -18,12 +18,18 @@ class TransactionItemPolicy
 
     public function view(User $user, TransactionItem $transactionItem): bool
     {
+        // loadMissing prevents an N+1 when policies are evaluated for a table of items.
+        $transactionItem->loadMissing('transaction');
         return $user->isHeadOffice() || $user->branch_id === $transactionItem->transaction->branch_id;
     }
 
     public function create(User $user): bool
     {
-        return $user->isHeadOffice() || $user->branch_id !== null;
+        // Mirror TransactionPolicy::create — inactive branches cannot create items.
+        if ($user->isHeadOffice()) {
+            return true;
+        }
+        return $user->branch_id !== null && $user->branch && $user->branch->is_active;
     }
 
     public function update(User $user, TransactionItem $transactionItem): bool
@@ -31,6 +37,7 @@ class TransactionItemPolicy
         if ($user->isHeadOffice()) {
             return true;
         }
+        $transactionItem->loadMissing('transaction');
         return $user->branch_id === $transactionItem->transaction->branch_id && $transactionItem->transaction->status === 'pending';
     }
 
@@ -39,6 +46,7 @@ class TransactionItemPolicy
         if ($user->isHeadOffice()) {
             return true;
         }
+        $transactionItem->loadMissing('transaction');
         return $user->branch_id === $transactionItem->transaction->branch_id && $transactionItem->transaction->status === 'pending';
     }
 

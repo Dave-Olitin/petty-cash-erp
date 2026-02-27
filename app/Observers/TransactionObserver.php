@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Transaction;
+use App\Enums\TransactionStatus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -56,8 +57,10 @@ class TransactionObserver
             return;
         }
 
-        $oldStatus = $transaction->getOriginal('status');
-        $newStatus = $transaction->status;
+        // getRawOriginal() bypasses the enum cast and always returns the plain DB string.
+        // getOriginal() can return an enum object when strict mode is on, causing (string) cast errors.
+        $oldStatus = TransactionStatus::tryFrom((string) $transaction->getRawOriginal('status'));
+        $newStatus = $transaction->status; // Already cast to TransactionStatus enum via model cast
         $oldAmount = $transaction->getOriginal('amount');
         $oldType   = $transaction->getOriginal('type');
 
@@ -69,7 +72,7 @@ class TransactionObserver
             }
 
             // Case A: Transaction was JUST Rejected — reverse the balance impact
-            if ($oldStatus !== 'rejected' && $newStatus === 'rejected') {
+            if ($oldStatus !== TransactionStatus::Rejected && $newStatus === TransactionStatus::Rejected) {
                 if ($oldType === 'EXPENSE') {
                     $branch->increment('current_balance', $oldAmount);
                 } else {
@@ -79,7 +82,7 @@ class TransactionObserver
             }
 
             // Case B: Transaction was UN-Rejected (e.g. re-approved from rejected state)
-            if ($oldStatus === 'rejected' && $newStatus !== 'rejected') {
+            if ($oldStatus === TransactionStatus::Rejected && $newStatus !== TransactionStatus::Rejected) {
                 if ($transaction->type === 'EXPENSE') {
                     $branch->decrement('current_balance', $transaction->amount);
                 } else {
@@ -89,7 +92,7 @@ class TransactionObserver
             }
 
             // Case C: Standard Edit (Amount/Type change) — skip if currently rejected
-            if ($newStatus === 'rejected') {
+            if ($newStatus === TransactionStatus::Rejected) {
                 return;
             }
 
@@ -123,8 +126,9 @@ class TransactionObserver
             return;
         }
 
-        if ($transaction->status === 'rejected') {
-            return; // Balance was already reversed at rejection time
+        // The model cast means $transaction->status is already a TransactionStatus enum here.
+        if ($transaction->status === TransactionStatus::Rejected) {
+            return; // Balance was already reversed at rejection time — don't double-restore
         }
 
         DB::transaction(function () use ($transaction) {

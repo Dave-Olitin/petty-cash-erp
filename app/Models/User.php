@@ -37,7 +37,7 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
-    public function branch()
+    public function branch(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Branch::class);
     }
@@ -48,7 +48,7 @@ class User extends Authenticatable implements FilamentUser
         return is_null($this->branch_id);
     }
 
-    public function vouchers()
+    public function vouchers(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Voucher::class);
     }

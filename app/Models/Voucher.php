@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use App\Observers\VoucherObserver;
+use App\Enums\VoucherStatus;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -36,6 +37,7 @@ class Voucher extends Model implements HasMedia
     {
         return [
             'amount' => 'decimal:2',
+            'status' => VoucherStatus::class, // Enum cast — eliminates raw string comparisons
         ];
     }
 
@@ -57,7 +59,13 @@ class Voucher extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('attachments')
-            ->useDisk('local');
+            ->useDisk('local')
+            // Only allow images and PDFs — never executables or arbitrary file types.
+            ->acceptsFile(fn (\Spatie\MediaLibrary\Support\File $file) => in_array($file->mimeType, [
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf',
+            ]))
+            // Cap at 20 files per voucher to prevent storage abuse.
+            ->onlyKeepLatest(20);
     }
 
     public function getActivitylogOptions(): LogOptions

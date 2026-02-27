@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TransactionResource\Pages;
 use App\Filament\Resources\TransactionResource\RelationManagers;
 use App\Models\Transaction;
+use App\Enums\TransactionStatus;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -48,11 +49,12 @@ public static function form(Form $form): Form
 
                     // Category Select Removed - Moved to Items Repeater
                     
-                    // Amount moved to bottom with VAT
-                    Forms\Components\DateTimePicker::make('created_at')
+                    // Dedicated business date — separate from the system-managed created_at audit timestamp.
+                    // This lets users set the actual date of the expense without corrupting the audit trail.
+                    Forms\Components\DateTimePicker::make('transaction_date')
                         ->label('Date & Time')
                         ->default(now())
-                        ->seconds(false) // Optional: clean up UI
+                        ->seconds(false)
                         ->required(),
                         
                     Forms\Components\TextInput::make('payee')
@@ -74,11 +76,6 @@ public static function form(Form $form): Form
                         ->schema([
                             Forms\Components\Select::make('category_id')
                                 ->relationship('category', 'name', function (Builder $query, callable $get) {
-                                    // Use the parent transaction type if possible, or defaulting to 'expense' if complicated. 
-                                    // Accessing parent state from repeater item can be tricky. 
-                                    // For now, let's allow all active categories or try to filter if feasible.
-                                    // $get('../../type') might work depending on structure.
-                                    // Let's keep it simple: Show all active categories for now.
                                     return $query->where('is_active', true);
                                 })
                                 ->label('Category')
@@ -101,13 +98,19 @@ public static function form(Form $form): Form
                                 ->prefix('AED')
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat'))),
+
+                            // Per-item VAT — only active when vat_mode = 'per_item'
                             Forms\Components\TextInput::make('vat')
                                 ->label('VAT')
                                 ->numeric()
                                 ->default(0)
                                 ->prefix('AED')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state)),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state))
+                                // Hidden & zeroed when receipt-level VAT mode is active
+                                ->visible(fn (callable $get) => $get('../../vat_mode') !== 'receipt_total')
+                                ->disabled(fn (callable $get) => $get('../../vat_mode') === 'receipt_total'),
+
                             Forms\Components\TextInput::make('total_price')
                                 ->numeric()
                                 ->readOnly()
@@ -119,24 +122,71 @@ public static function form(Form $form): Form
                         ->columnSpanFull()
                         ->live()
                         ->afterStateUpdated(function (callable $get, callable $set) {
-                            $items = $get('items');
-                            $itemTotal = collect($items)->sum(fn($item) => ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)) + (float) ($item['vat'] ?? 0));
-                            $globalVat = (float) $get('vat');
+                            $vatMode    = $get('vat_mode');
+                            $items      = $get('items');
+                            $itemTotal  = collect($items)->sum(fn($item) => ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)) + (float) ($item['vat'] ?? 0));
+                            $globalVat  = ($vatMode === 'receipt_total') ? (float) $get('vat') : 0;
                             $set('amount', $itemTotal + $globalVat);
                         }),
-                    
+
+                    // ── VAT Mode Selector ─────────────────────────────────────────────────────
+                    // Determines which VAT field is active. The two modes are MUTUALLY EXCLUSIVE
+                    // to prevent accidental double-counting of VAT.
+                    Forms\Components\ToggleButtons::make('vat_mode')
+                        ->label('VAT Method')
+                        ->helperText('Choose how VAT is applied. You cannot use both at the same time.')
+                        ->options([
+                            'per_item'      => 'Per Item',
+                            'receipt_total' => 'Receipt Total',
+                        ])
+                        ->icons([
+                            'per_item'      => 'heroicon-o-list-bullet',
+                            'receipt_total' => 'heroicon-o-receipt-percent',
+                        ])
+                        ->colors([
+                            'per_item'      => 'info',
+                            'receipt_total' => 'warning',
+                        ])
+                        ->inline()
+                        ->default('per_item')
+                        ->live()
+                        ->dehydrated(false) // UI-only toggle — not persisted to the DB
+                        ->afterStateUpdated(function (callable $get, callable $set, string $state) {
+                            // When switching modes, zero out the opposite VAT field and recalculate
+                            if ($state === 'receipt_total') {
+                                // Zero out all per-item VAT values
+                                $items = $get('items') ?? [];
+                                foreach ($items as $key => $item) {
+                                    $set("items.{$key}.vat", 0);
+                                    $set("items.{$key}.total_price", ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)));
+                                }
+                            } else {
+                                // Zero out the receipt-level VAT field
+                                $set('vat', 0);
+                            }
+
+                            // Recalculate Grand Total
+                            $items     = $get('items') ?? [];
+                            $itemTotal = collect($items)->sum(fn($item) => ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)) + (float) ($item['vat'] ?? 0));
+                            $globalVat = ($state === 'receipt_total') ? (float) $get('vat') : 0;
+                            $set('amount', $itemTotal + $globalVat);
+                        })
+                        ->columnSpanFull(),
+
                     Forms\Components\Group::make()
                         ->schema([
+                            // Receipt-level VAT — only active when vat_mode = 'receipt_total'
                             Forms\Components\TextInput::make('vat')
-                                ->label('VAT (Receipt Level)')
-                                ->helperText('Use this if VAT is applied to the receipt total, not per item.')
+                                ->label('VAT (Receipt Total)')
+                                ->helperText('A single VAT amount applied to the entire receipt — not per line item.')
                                 ->numeric()
                                 ->default(0)
                                 ->prefix('AED')
                                 ->live(onBlur: true)
+                                ->visible(fn (callable $get) => $get('vat_mode') === 'receipt_total')
                                 ->afterStateUpdated(function (callable $get, callable $set) {
-                                    $items = $get('items');
-                                    $itemTotal = collect($items)->sum(fn($item) => ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)) + (float) ($item['vat'] ?? 0));
+                                    $items     = $get('items') ?? [];
+                                    $itemTotal = collect($items)->sum(fn($item) => ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)));
                                     $globalVat = (float) $get('vat');
                                     $set('amount', $itemTotal + $globalVat);
                                 }),
@@ -223,17 +273,12 @@ public static function form(Form $form): Form
                             Infolists\Components\Grid::make(2)
                                 ->schema([
                                     Infolists\Components\Group::make([
-                                        Infolists\Components\TextEntry::make('created_at')
-                                            ->date()
-                                            ->label('Date'),
+                                        Infolists\Components\TextEntry::make('transaction_date')
+                                            ->dateTime('M j, Y h:i A')
+                                            ->label('Transaction Date'),
                                         Infolists\Components\TextEntry::make('status')
                                             ->badge()
-                                            ->color(fn (string $state): string => match ($state) {
-                                                'approved' => 'success',
-                                                'rejected' => 'danger',
-                                                'pending' => 'warning',
-                                                default => 'gray',
-                                            }),
+                                            ->color(fn (TransactionStatus $state): string => $state->color()),
                                     ]),
                                     Infolists\Components\Group::make([
                                         Infolists\Components\TextEntry::make('type')
@@ -316,25 +361,22 @@ public static function table(Table $table): Table
 {
     return $table
         ->columns([
-            Tables\Columns\TextColumn::make('created_at')
+            Tables\Columns\TextColumn::make('transaction_date')
+                ->label('Date')
                 ->dateTime('M j, Y h:i A')
                 ->sortable(),
+            Tables\Columns\TextColumn::make('created_at')
+                ->label('Recorded At')
+                ->dateTime('M j, Y h:i A')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true)
+                ->tooltip('System timestamp — when the record was actually entered'),
                 // Category Column Removed
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'approved' => 'success',
-                        'rejected' => 'danger',
-                        'pending' => 'warning',
-                        default => 'gray',
-                    })
-                    ->icon(fn (string $state): string => match ($state) {
-                        'approved' => 'heroicon-o-check-circle',
-                        'rejected' => 'heroicon-o-x-circle',
-                        'pending' => 'heroicon-o-clock',
-                        default => 'heroicon-o-question-mark-circle',
-                    })
-                    ->tooltip(fn (Transaction $record): ?string => $record->status === 'rejected' ? $record->rejection_reason : null)
+                    ->color(fn (TransactionStatus $state): string => $state->color())
+                    ->icon(fn (TransactionStatus $state): string => $state->icon())
+                    ->tooltip(fn (Transaction $record): ?string => $record->status === TransactionStatus::Rejected ? $record->rejection_reason : null)
                     ->sortable(),
             Tables\Columns\TextColumn::make('type')
                 ->badge()
@@ -408,9 +450,13 @@ public static function table(Table $table): Table
                     ->label('Approve')
                     ->icon('heroicon-o-check')
                     ->color('success')
-                    ->visible(fn (Transaction $record) => $record->status === 'pending' && auth()->user()->branch_id === null)
+                    ->visible(fn (Transaction $record) => $record->status === TransactionStatus::Pending && auth()->user()->branch_id === null)
                     ->action(function (Transaction $record) {
-                        $record->update(['status' => 'approved']);
+                        // Server-side guard: visible() only hides the UI, it does NOT block direct Livewire calls.
+                        abort_unless(auth()->user()->isHeadOffice(), 403, 'Only HQ staff can approve transactions.');
+                        abort_unless($record->status === TransactionStatus::Pending, 403, 'Only pending transactions can be approved.');
+
+                        $record->update(['status' => TransactionStatus::Approved->value]);
                         \Filament\Notifications\Notification::make()
                             ->title('Transaction Approved')
                             ->success()
@@ -421,7 +467,7 @@ public static function table(Table $table): Table
                     ->label('Reject')
                     ->icon('heroicon-o-x-mark')
                     ->color('danger')
-                    ->visible(fn (Transaction $record) => in_array($record->status, ['pending', 'approved']) && auth()->user()->branch_id === null)
+                    ->visible(fn (Transaction $record) => in_array($record->status, [TransactionStatus::Pending, TransactionStatus::Approved]) && auth()->user()->branch_id === null)
                     ->requiresConfirmation()
                     ->form([
                         Forms\Components\Textarea::make('rejection_reason')
@@ -430,10 +476,14 @@ public static function table(Table $table): Table
                             ->maxLength(65535),
                     ])
                     ->action(function (Transaction $record, array $data) {
+                        // Server-side guard: visible() only hides the UI, it does NOT block direct Livewire calls.
+                        abort_unless(auth()->user()->isHeadOffice(), 403, 'Only HQ staff can reject transactions.');
+                        abort_unless(in_array($record->status, [TransactionStatus::Pending, TransactionStatus::Approved]), 403, 'This transaction cannot be rejected in its current state.');
+
                         $originalData = $record->fresh()->toArray(); // Capture before mutation
 
                         $record->update([
-                            'status'           => 'rejected',
+                            'status'           => TransactionStatus::Rejected->value,
                             'rejection_reason' => $data['rejection_reason'],
                         ]);
 

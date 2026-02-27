@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Enums\TransactionStatus;
 
 class Transaction extends Model
 {
@@ -15,6 +16,7 @@ class Transaction extends Model
         'branch_id',
         'user_id',
         'type',
+        'transaction_date', // User-selected business date. Separate from created_at (system audit timestamp).
         'amount',
         'payee',
         'supplier',
@@ -32,11 +34,13 @@ class Transaction extends Model
     protected function casts(): array
     {
         return [
-            'amount'     => 'decimal:2',
-            'vat'        => 'decimal:2',
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
+            'amount'           => 'decimal:2',
+            'vat'              => 'decimal:2',
+            'status'           => TransactionStatus::class, // Enum cast — eliminates raw string comparisons
+            'transaction_date' => 'datetime',
+            'created_at'       => 'datetime',
+            'updated_at'       => 'datetime',
+            'deleted_at'       => 'datetime',
         ];
     }
 
@@ -50,23 +54,22 @@ class Transaction extends Model
         return $query->where('status', 'approved');
     }
 
-    // THIS is the missing piece causing your error:
-    public function branch(): BelongsTo
+    public function branch(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Branch::class);
     }
 
-    public function user(): BelongsTo
+    public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    // Note: categories are per-item, not per-transaction. See TransactionItem::category()
-    public function histories()
+    public function histories(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(TransactionHistory::class);
     }
-    public function items()
+    // Note: categories are per-item, not per-transaction. See TransactionItem::category()
+    public function items(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(TransactionItem::class);
     }

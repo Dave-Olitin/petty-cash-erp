@@ -5,6 +5,8 @@ namespace App\Filament\Vouchers\Resources;
 use App\Filament\Vouchers\Resources\VoucherResource\Pages;
 use App\Filament\Vouchers\Resources\VoucherResource\RelationManagers;
 use App\Models\Voucher;
+use App\Enums\VoucherStatus;
+use App\Services\VoucherApprovalService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -25,8 +27,14 @@ class VoucherResource extends Resource
     {
         $user = auth()->user();
         if (!$user) return null;
-        
-        $count = static::getModel()::actionRequired($user)->count();
+
+        // Cache per-user for 30 seconds to avoid a DB hit on every page render.
+        $count = cache()->remember(
+            "voucher_action_badge_{$user->id}",
+            30,
+            fn () => static::getModel()::actionRequired($user)->count()
+        );
+
         return $count > 0 ? (string) $count : null;
     }
 
@@ -42,7 +50,7 @@ class VoucherResource extends Resource
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->can('voucher.edit') && $record->status === 'draft';
+        return auth()->user()->can('voucher.edit') && $record->status === VoucherStatus::Draft;
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
@@ -143,25 +151,9 @@ class VoucherResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
-                    ->icon(fn (string $state): string => match ($state) {
-                        'draft' => 'heroicon-m-pencil-square',
-                        'pending_checker' => 'heroicon-m-clock',
-                        'pending_approver' => 'heroicon-m-clock',
-                        'approved' => 'heroicon-m-check-circle',
-                        'rejected' => 'heroicon-m-x-circle',
-                        'paid' => 'heroicon-m-banknotes',
-                        default => 'heroicon-m-question-mark-circle',
-                    })
-                    ->color(fn (string $state): string => match ($state) {
-                        'draft' => 'gray',
-                        'pending_checker' => 'warning',
-                        'pending_approver' => 'warning',
-                        'approved' => 'success',
-                        'rejected' => 'danger',
-                        'paid' => 'success',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
+                    ->icon(fn (VoucherStatus $state): string => $state->icon())
+                    ->color(fn (VoucherStatus $state): string => $state->color())
+                    ->formatStateUsing(fn (VoucherStatus $state): string => $state->label()),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -230,7 +222,7 @@ class VoucherResource extends Resource
 
                 Tables\Actions\EditAction::make()
                     ->iconButton()
-                    ->visible(fn (Voucher $record): bool => $record->status === 'draft' && auth()->user()->can('voucher.edit')),
+                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::Draft && auth()->user()->can('voucher.edit')),
 
                 Tables\Actions\Action::make('submit')
                     ->label('Submit for Checking')
@@ -238,28 +230,15 @@ class VoucherResource extends Resource
                     ->color('primary')
                     ->iconButton()
                     ->requiresConfirmation()
-                    ->visible(fn (Voucher $record): bool => $record->status === 'draft' && auth()->user()->can('voucher.submit'))
+                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::Draft && auth()->user()->can('voucher.submit'))
                     ->action(function (Voucher $record) {
-                        \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
-                            $lockedRecord = \App\Models\Voucher::lockForUpdate()->find($record->id);
-                            if ($lockedRecord->status !== 'draft') {
-                                Notification::make()->title('Voucher status has changed.')->danger()->send();
-                                return;
-                            }
-
-                            $lockedRecord->update(['status' => 'pending_checker']);
-
-                            $lockedRecord->load('user');
-                            $checkers = User::role('Accountant')->get();
-                            $checkers->each->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'submitted'));
-
-                            Notification::make()
-                                ->title('Voucher submitted successfully')
-                                ->success()
-                                ->send();
-
-                            $record->refresh();
-                        });
+                        try {
+                            app(VoucherApprovalService::class)->submit($record, auth()->user());
+                            Notification::make()->title('Voucher submitted successfully')->success()->send();
+                        } catch (\RuntimeException $e) {
+                            Notification::make()->title($e->getMessage())->danger()->send();
+                        }
+                        $record->refresh();
                     }),
 
                 Tables\Actions\Action::make('check')
@@ -268,42 +247,15 @@ class VoucherResource extends Resource
                     ->color('warning')
                     ->iconButton()
                     ->requiresConfirmation()
-                    ->visible(fn (Voucher $record): bool => $record->status === 'pending_checker' && auth()->user()->can('voucher.check'))
+                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::PendingChecker && auth()->user()->can('voucher.check'))
                     ->action(function (Voucher $record) {
-                        \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
-                            $lockedRecord = \App\Models\Voucher::lockForUpdate()->find($record->id);
-                            if ($lockedRecord->status !== 'pending_checker') {
-                                Notification::make()->title('Voucher status changed by another user.')->danger()->send();
-                                return;
-                            }
-
-                            $lockedRecord->update([
-                                'status'               => 'pending_approver',
-                                'current_approval_step' => 1,
-                            ]);
-                            $lockedRecord->approvals()->create([
-                                'user_id' => auth()->id(),
-                                'action'  => 'checked',
-                            ]);
-
-                            $lockedRecord->load('user');
-
-                            // Notify the first approver in the chain (or all if no chain configured)
-                            $firstStep = \App\Models\ApprovalWorkflow::getApproverAtStep(1);
-                            if ($firstStep) {
-                                $firstStep->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'checked'));
-                            } else {
-                                // Fallback: notify all Approver-role users
-                                User::role('Approver')->get()->each->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'checked'));
-                            }
-
-                            Notification::make()
-                                ->title('Voucher forwarded to Approver')
-                                ->success()
-                                ->send();
-
-                            $record->refresh();
-                        });
+                        try {
+                            app(VoucherApprovalService::class)->check($record, auth()->user());
+                            Notification::make()->title('Voucher forwarded to Approver')->success()->send();
+                        } catch (\RuntimeException $e) {
+                            Notification::make()->title($e->getMessage())->danger()->send();
+                        }
+                        $record->refresh();
                     }),
 
                 Tables\Actions\Action::make('approve')
@@ -313,7 +265,7 @@ class VoucherResource extends Resource
                     ->iconButton()
                     ->requiresConfirmation()
                     ->visible(function (Voucher $record): bool {
-                        if ($record->status !== 'pending_approver') return false;
+                        if ($record->status !== VoucherStatus::PendingApprover) return false;
                         if (!auth()->user()->can('voucher.approve')) return false;
 
                         // If a workflow chain is configured, only show to the correct step's user
@@ -326,70 +278,13 @@ class VoucherResource extends Resource
                         return auth()->user()->hasRole('Approver');
                     })
                     ->action(function (Voucher $record) {
-                        \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
-                            $lockedRecord = \App\Models\Voucher::lockForUpdate()->find($record->id);
-                            
-                            if ($lockedRecord->status !== 'pending_approver' || $lockedRecord->current_approval_step !== $record->current_approval_step) {
-                                Notification::make()->title('Voucher was modified by another user. Please refresh.')->danger()->send();
-                                return;
-                            }
-
-                            if (\App\Models\ApprovalWorkflow::isConfigured()) {
-                                $step = \App\Models\ApprovalWorkflow::getApproverAtStep((int) ($lockedRecord->current_approval_step ?? 1));
-                                if (!$step || $step->user_id != auth()->id()) {
-                                    Notification::make()->title('Unauthorized: You are not the correct approver for this step.')->danger()->send();
-                                    return;
-                                }
-                            } else {
-                                if (!auth()->user()->hasRole('Approver')) {
-                                    Notification::make()->title('Unauthorized: You lack Approver privileges.')->danger()->send();
-                                    return;
-                                }
-                            }
-
-                            $lockedRecord->load('user');
-                            $currentStep  = (int) ($lockedRecord->current_approval_step ?? 1);
-                            $totalSteps   = \App\Models\ApprovalWorkflow::totalSteps();
-
-                            // Record this approval step
-                            $lockedRecord->approvals()->create([
-                                'user_id' => auth()->id(),
-                                'action'  => 'approved',
-                                'comments' => \App\Models\ApprovalWorkflow::getApproverAtStep($currentStep)?->label
-                                    ? 'Approved as ' . \App\Models\ApprovalWorkflow::getApproverAtStep($currentStep)->label
-                                    : null,
-                            ]);
-
-                            $nextStep = $currentStep + 1;
-
-                            if ($totalSteps > 0 && $nextStep <= $totalSteps) {
-                                // More steps remaining — advance to next approver
-                                $lockedRecord->update(['current_approval_step' => $nextStep]);
-
-                                $next = \App\Models\ApprovalWorkflow::getApproverAtStep($nextStep);
-                                if ($next) {
-                                    $next->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'checked'));
-                                }
-
-                                Notification::make()
-                                    ->title('Step ' . $currentStep . ' approved — forwarded to next approver')
-                                    ->success()
-                                    ->send();
-                            } else {
-                                // All steps done — fully approved
-                                $lockedRecord->update(['status' => 'approved', 'current_approval_step' => null]);
-
-                                $lockedRecord->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'approved'));
-                                User::role('Accountant')->get()->each->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'approved'));
-
-                                Notification::make()
-                                    ->title('Voucher fully approved')
-                                    ->success()
-                                    ->send();
-                            }
-
-                            $record->refresh();
-                        });
+                        try {
+                            app(VoucherApprovalService::class)->approve($record, auth()->user());
+                            Notification::make()->title('Voucher approved')->success()->send();
+                        } catch (\RuntimeException $e) {
+                            Notification::make()->title($e->getMessage())->danger()->send();
+                        }
+                        $record->refresh();
                     }),
 
                 Tables\Actions\Action::make('reject')
@@ -401,33 +296,15 @@ class VoucherResource extends Resource
                     ->form([
                         Forms\Components\Textarea::make('comments')->required()->label('Reason for Rejection'),
                     ])
-                    ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver']) && auth()->user()->can('voucher.reject'))
+                    ->visible(fn (Voucher $record): bool => in_array($record->status, [VoucherStatus::PendingChecker, VoucherStatus::PendingApprover]) && auth()->user()->can('voucher.reject'))
                     ->action(function (Voucher $record, array $data) {
-                        \Illuminate\Support\Facades\DB::transaction(function () use ($record, $data) {
-                            $lockedRecord = \App\Models\Voucher::lockForUpdate()->find($record->id);
-                            
-                            if (!in_array($lockedRecord->status, ['pending_checker', 'pending_approver'])) {
-                                Notification::make()->title('Voucher status changed by another user.')->danger()->send();
-                                return;
-                            }
-
-                            $lockedRecord->update(['status' => 'rejected']);
-                            $lockedRecord->approvals()->create([
-                                'user_id'  => auth()->id(),
-                                'action'   => 'rejected',
-                                'comments' => $data['comments'],
-                            ]);
-
-                            $lockedRecord->load('user');
-                            $lockedRecord->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'rejected', $data['comments']));
-
-                            Notification::make()
-                                ->title('Voucher rejected')
-                                ->danger()
-                                ->send();
-
-                            $record->refresh();
-                        });
+                        try {
+                            app(VoucherApprovalService::class)->reject($record, auth()->user(), $data['comments']);
+                            Notification::make()->title('Voucher rejected')->danger()->send();
+                        } catch (\RuntimeException $e) {
+                            Notification::make()->title($e->getMessage())->danger()->send();
+                        }
+                        $record->refresh();
                     }),
 
                 Tables\Actions\Action::make('mark_paid')
@@ -436,27 +313,15 @@ class VoucherResource extends Resource
                     ->color('success')
                     ->iconButton()
                     ->requiresConfirmation()
-                    ->visible(fn (Voucher $record): bool => $record->status === 'approved' && auth()->user()->can('voucher.mark_paid'))
+                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::Approved && auth()->user()->can('voucher.mark_paid'))
                     ->action(function (Voucher $record) {
-                        \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
-                            $lockedRecord = \App\Models\Voucher::lockForUpdate()->find($record->id);
-                            
-                            if ($lockedRecord->status !== 'approved') {
-                                Notification::make()->title('Voucher status changed by another user.')->danger()->send();
-                                return;
-                            }
-
-                            $lockedRecord->update(['status' => 'paid']);
-                            $lockedRecord->load('user');
-                            $lockedRecord->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'paid'));
-
-                            Notification::make()
-                                ->title('Voucher marked as paid')
-                                ->success()
-                                ->send();
-
-                            $record->refresh();
-                        });
+                        try {
+                            app(VoucherApprovalService::class)->markPaid($record, auth()->user());
+                            Notification::make()->title('Voucher marked as paid')->success()->send();
+                        } catch (\RuntimeException $e) {
+                            Notification::make()->title($e->getMessage())->danger()->send();
+                        }
+                        $record->refresh();
                     }),
             ])
             ->bulkActions([
@@ -486,10 +351,10 @@ class VoucherResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+        // SoftDeletingScope is intentionally NOT removed here.
+        // Soft-deleted vouchers should be hidden from all tables, filters, exports, and badge counts by default.
+        // If admin recovery of deleted vouchers is ever needed, add a specific ->withTrashed() filter instead.
         return parent::getEloquentQuery()
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ])
             ->with(['approvals.user.roles']);
     }
 
@@ -529,25 +394,9 @@ class VoucherResource extends Resource
                             ->copyable(),
                         \Filament\Infolists\Components\TextEntry::make('status')
                             ->badge()
-                            ->icon(fn (string $state): string => match ($state) {
-                                'draft'            => 'heroicon-m-pencil-square',
-                                'pending_checker'  => 'heroicon-m-clock',
-                                'pending_approver' => 'heroicon-m-clock',
-                                'approved'         => 'heroicon-m-check-circle',
-                                'rejected'         => 'heroicon-m-x-circle',
-                                'paid'             => 'heroicon-m-banknotes',
-                                default            => 'heroicon-m-question-mark-circle',
-                            })
-                            ->color(fn (string $state): string => match ($state) {
-                                'draft'            => 'gray',
-                                'pending_checker'  => 'warning',
-                                'pending_approver' => 'warning',
-                                'approved'         => 'success',
-                                'rejected'         => 'danger',
-                                'paid'             => 'success',
-                                default            => 'gray',
-                            })
-                            ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
+                            ->icon(fn (VoucherStatus $state): string => $state->icon())
+                            ->color(fn (VoucherStatus $state): string => $state->color())
+                            ->formatStateUsing(fn (VoucherStatus $state): string => $state->label()),
                         \Filament\Infolists\Components\TextEntry::make('user.name')
                             ->label('Requester')
                             ->icon('heroicon-m-user-circle')
