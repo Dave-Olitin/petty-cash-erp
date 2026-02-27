@@ -45,27 +45,7 @@ class FloatReplenishmentsTable extends BaseWidget
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make()
-                    ->label('Record Replenishment')
-                    ->icon('heroicon-o-plus')
-                    ->form([
-                        Forms\Components\TextInput::make('amount')
-                            ->required()
-                            ->numeric()
-                            ->prefix('AED'),
-                        Forms\Components\DatePicker::make('date')
-                            ->required()
-                            ->default(now()),
-                        Forms\Components\TextInput::make('reference')
-                            ->required()
-                            ->label('Reference (e.g. Bank Transfer Ref, Cheque No)')
-                            ->maxLength(255),
-                        Forms\Components\Textarea::make('remarks')
-                            ->columnSpanFull(),
-                        Forms\Components\Hidden::make('created_by')
-                            ->default(fn () => auth()->id()),
-                    ])
-                    ->successNotificationTitle('Replenishment recorded successfully'),
+                // Moved to Dashboard header
             ])
             ->actions([
                 Tables\Actions\EditAction::make()

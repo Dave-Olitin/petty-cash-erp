@@ -49,12 +49,12 @@ class HeadOfficeFloatWidget extends BaseWidget
                 ->descriptionIcon($icon)
                 ->color($color),
                 
-            Stat::make('Total Replenished All-Time', 'AED ' . Number::format($totalReplenishing, 2))
+            Stat::make('CASH IN', 'AED ' . Number::format($totalReplenishing, 2))
                 ->description('Total funds added to float')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color('gray'),
                 
-            Stat::make('Total Disbursed All-Time', 'AED ' . Number::format($totalSpent, 2))
+            Stat::make('CASH OUT', 'AED ' . Number::format($totalSpent, 2))
                 ->description('Total petty cash paid out')
                 ->descriptionIcon('heroicon-m-arrow-trending-down')
                 ->color('gray'),
