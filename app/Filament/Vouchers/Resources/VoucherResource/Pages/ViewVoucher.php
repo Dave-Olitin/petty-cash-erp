@@ -217,27 +217,15 @@ class ViewVoucher extends ViewRecord
                 ->icon('heroicon-m-banknotes')
                 ->color('success')
                 ->requiresConfirmation()
-                ->visible(fn (): bool => $record->status === 'approved' && auth()->user()->can('voucher.mark_paid'))
+                ->visible(fn (): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
                 ->action(function () use ($record) {
-                    \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
-                        $lockedRecord = \App\Models\Voucher::lockForUpdate()->find($record->id);
-                        
-                        if ($lockedRecord->status !== 'approved') {
-                            Notification::make()->title('Voucher status changed by another user.')->danger()->send();
-                            return;
-                        }
-
-                        $lockedRecord->update(['status' => 'paid']);
-                        $lockedRecord->load('user');
-                        $lockedRecord->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'paid'));
-
-                        Notification::make()
-                            ->title('Voucher marked as paid')
-                            ->success()
-                            ->send();
-
-                        $record->refresh();
-                    });
+                    $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
+                    if ($error) {
+                        Notification::make()->title($error)->danger()->send();
+                        return;
+                    }
+                    Notification::make()->title('Voucher marked as paid')->success()->send();
+                    $record->refresh();
                 }),
                 
             Actions\EditAction::make()

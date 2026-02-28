@@ -5,8 +5,6 @@ namespace App\Filament\Vouchers\Resources;
 use App\Filament\Vouchers\Resources\VoucherResource\Pages;
 use App\Filament\Vouchers\Resources\VoucherResource\RelationManagers;
 use App\Models\Voucher;
-use App\Enums\VoucherStatus;
-use App\Services\VoucherApprovalService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -28,9 +26,9 @@ class VoucherResource extends Resource
         $user = auth()->user();
         if (!$user) return null;
 
-        // Cache per-user for 30 seconds to avoid a DB hit on every page render.
-        $count = cache()->remember(
-            "voucher_action_badge_{$user->id}",
+        // Cache per-user for 30 seconds — this query fires on every Filament page render.
+        $count = \Illuminate\Support\Facades\Cache::remember(
+            "voucher_badge_{$user->id}",
             30,
             fn () => static::getModel()::actionRequired($user)->count()
         );
@@ -50,7 +48,7 @@ class VoucherResource extends Resource
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->can('voucher.edit') && $record->status === VoucherStatus::Draft;
+        return auth()->user()->can('voucher.edit') && $record->status === 'draft';
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
@@ -67,9 +65,30 @@ class VoucherResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Grid::make(3)->schema([
-                    // ── LEFT COLUMN: Input Form (Takes up 2 columns) ──────────
-                    Forms\Components\Section::make('Voucher Details')->schema([
+                // ── VOUCHER HEADER ───────────────────────────────────────
+                Forms\Components\Section::make('Voucher Details')
+                    ->icon('heroicon-o-document-text')
+                    ->description('Select the company template and fill in voucher information.')
+                    ->schema([
+                        Forms\Components\Select::make('voucher_template_id')
+                            ->label('Company / Header Template')
+                            ->relationship('template', 'company_name', fn ($query) => $query->where('is_active', true))
+                            ->searchable()
+                            ->preload()
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                                if ($state) {
+                                    $template = \App\Models\VoucherTemplate::find($state);
+                                    if ($template) {
+                                        $items = $get('items') ?? [];
+                                        foreach ($items as $key => $item) {
+                                            $set("items.{$key}.branch_code", $template->branch_code);
+                                        }
+                                    }
+                                }
+                            }),
+
                         Forms\Components\Select::make('type')
                             ->options([
                                 'petty_cash' => 'Petty Cash Request',
@@ -80,49 +99,145 @@ class VoucherResource extends Resource
                             ->live(),
 
                         Forms\Components\TextInput::make('payee')
+                            ->label('Paid To')
                             ->required()
                             ->maxLength(255)
                             ->live(onBlur: true),
 
-                        Forms\Components\TextInput::make('amount')
-                            ->required()
-                            ->numeric()
-                            ->prefix('AED')
-                            ->live(onBlur: true),
-
-                        Forms\Components\Select::make('category_id')
-                            ->relationship('category', 'name')
-                            ->searchable()
-                            ->preload()
-                            ->live(),
-
                         Forms\Components\Textarea::make('description')
+                            ->label('Being (Purpose)')
+                            ->rows(2)
                             ->columnSpanFull()
                             ->live(onBlur: true),
+                    ])
+                    ->columns(3)
+                    ->collapsible(),
 
-                        \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('attachments')
-                            ->collection('attachments')
+                // ── CHEQUE / PAYMENT INFO ─────────────────────────────────
+                Forms\Components\Section::make('Payment / Cheque Details')
+                    ->icon('heroicon-o-credit-card')
+                    ->description('Fill in cheque or payment details if applicable.')
+                    ->schema([
+                        Forms\Components\TextInput::make('cheque_no')
+                            ->label('Cheque No.')
+                            ->maxLength(50)
+                            ->placeholder('Enter cheque number'),
+
+                        Forms\Components\DatePicker::make('cheque_date')
+                            ->label('Cheque Date')
+                            ->native(false)
+                            ->displayFormat('d/m/Y'),
+
+                        Forms\Components\TextInput::make('bank')
+                            ->label('Bank')
+                            ->maxLength(100)
+                            ->placeholder('e.g. Emirates NBD'),
+                    ])
+                    ->columns(3)
+                    ->collapsible()
+                    ->collapsed(),
+
+                // ── LEDGER ENTRIES ────────────────────────────────────────
+                Forms\Components\Section::make('Ledger Entries')
+                    ->icon('heroicon-o-table-cells')
+                    ->description('Add debit and credit entries. Total auto-calculates from debit amounts.')
+                    ->schema([
+                        Forms\Components\Repeater::make('items')
+                            ->relationship()
+                            ->label('')
+                            ->schema([
+                                // Row 1: Type, Branch, Account Code
+                                Forms\Components\Grid::make(12)->schema([
+                                    Forms\Components\Select::make('entry_type')
+                                        ->options([
+                                            'debit' => 'DR — Debit',
+                                            'credit' => 'CR — Credit',
+                                        ])
+                                        ->required()
+                                        ->default('debit')
+                                        ->live()
+                                        ->columnSpan(3),
+
+                                    Forms\Components\TextInput::make('branch_code')
+                                        ->label('Branch')
+                                        ->maxLength(10)
+                                        ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
+                                        ->columnSpan(3),
+
+                                    Forms\Components\TextInput::make('account_code')
+                                        ->label('Account Code')
+                                        ->maxLength(50)
+                                        ->placeholder('e.g. 1010-02')
+                                        ->columnSpan(3),
+
+                                    Forms\Components\TextInput::make('amount')
+                                        ->numeric()
+                                        ->required()
+                                        ->prefix('AED')
+                                        ->default(0)
+                                        ->live(onBlur: true)
+                                        ->columnSpan(2),
+
+                                    Forms\Components\TextInput::make('description')
+                                        ->label('Account Details / Description')
+                                        ->placeholder('Enter description for this entry')
+                                        ->columnSpan(4),
+                                ]),
+                            ])
+                            ->defaultItems(2)
+                            ->reorderable()
+                            ->reorderableWithButtons()
+                            ->collapsible()
+                            ->cloneable()
+                            ->addActionLabel('+ Add Ledger Entry')
+                            ->itemLabel(fn (array $state): ?string =>
+                                (($state['entry_type'] ?? 'debit') === 'credit' ? '🔴 CR' : '🟢 DR') .
+                                ' — ' . ($state['description'] ?: ($state['account_code'] ?: 'New Entry')) .
+                                ' — AED ' . number_format((float) ($state['amount'] ?? 0), 2)
+                            )
+                            ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
+                                $items = $get('items') ?? [];
+                                $totalDebit = 0;
+                                foreach ($items as $item) {
+                                    if (($item['entry_type'] ?? 'debit') === 'debit') {
+                                        $totalDebit += (float) ($item['amount'] ?? 0);
+                                    }
+                                }
+                                $set('amount', number_format($totalDebit, 2, '.', ''));
+                            })
+                            ->live(),
+                    ])
+                    ->collapsible(),
+
+                // ── SUMMARY & ATTACHMENTS ─────────────────────────────────
+                Forms\Components\Section::make('Summary & Attachments')
+                    ->icon('heroicon-o-calculator')
+                    ->schema([
+                        Forms\Components\TextInput::make('amount')
+                            ->label('Total Amount')
+                            ->numeric()
+                            ->prefix('AED')
+                            ->required()
+                            ->live(onBlur: true)
+                            ->helperText('Auto-calculated from debit entries. You can override this manually.')
+                            ->columnSpan(1),
+
+                        Forms\Components\FileUpload::make('attachment_paths')
                             ->multiple()
                             ->preserveFilenames()
-                            ->disk('local')
-                            ->visibility('private')
+                            ->directory('voucher-attachments')
+                            ->disk('public')
                             ->downloadable()
                             ->openable()
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+                            ->maxSize(10240)
                             ->label('Invoices & Receipts')
+                            ->helperText('Upload receipts, invoices, or supporting documents (JPG, PNG, PDF, max 10MB each).')
                             ->columnSpanFull(),
-                    ])->columns(2)->columnSpan(2),
-
-                    // ── RIGHT COLUMN: Live Preview (Takes up 1 column) ──────────
-                    Forms\Components\Section::make('Live Preview')
-                        ->schema([
-                            Forms\Components\Placeholder::make('preview')
-                                ->label('')
-                                ->content(fn ($get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
-                        ])
-                        ->columnSpan(1)
-                        ->extraAttributes(['class' => 'sticky top-10']),
-                ]),
-            ])->columns(1);
+                    ])
+                    ->columns(2)
+                    ->collapsible(),
+            ]);
     }
 
     public static function table(Table $table): Table
@@ -151,9 +266,25 @@ class VoucherResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
-                    ->icon(fn (VoucherStatus $state): string => $state->icon())
-                    ->color(fn (VoucherStatus $state): string => $state->color())
-                    ->formatStateUsing(fn (VoucherStatus $state): string => $state->label()),
+                    ->icon(fn (string $state): string => match ($state) {
+                        'draft' => 'heroicon-m-pencil-square',
+                        'pending_checker' => 'heroicon-m-clock',
+                        'pending_approver' => 'heroicon-m-clock',
+                        'approved' => 'heroicon-m-check-circle',
+                        'rejected' => 'heroicon-m-x-circle',
+                        'paid' => 'heroicon-m-banknotes',
+                        default => 'heroicon-m-question-mark-circle',
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'draft' => 'gray',
+                        'pending_checker' => 'warning',
+                        'pending_approver' => 'warning',
+                        'approved' => 'success',
+                        'rejected' => 'danger',
+                        'paid' => 'success',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -222,7 +353,7 @@ class VoucherResource extends Resource
 
                 Tables\Actions\EditAction::make()
                     ->iconButton()
-                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::Draft && auth()->user()->can('voucher.edit')),
+                    ->visible(fn (Voucher $record): bool => $record->status === 'draft' && auth()->user()->can('voucher.edit')),
 
                 Tables\Actions\Action::make('submit')
                     ->label('Submit for Checking')
@@ -230,14 +361,14 @@ class VoucherResource extends Resource
                     ->color('primary')
                     ->iconButton()
                     ->requiresConfirmation()
-                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::Draft && auth()->user()->can('voucher.submit'))
+                    ->visible(fn (Voucher $record): bool => $record->status === 'draft' && auth()->user()->can('voucher.submit'))
                     ->action(function (Voucher $record) {
-                        try {
-                            app(VoucherApprovalService::class)->submit($record, auth()->user());
-                            Notification::make()->title('Voucher submitted successfully')->success()->send();
-                        } catch (\RuntimeException $e) {
-                            Notification::make()->title($e->getMessage())->danger()->send();
+                        $error = app(\App\Services\VoucherApprovalService::class)->submit($record, auth()->user());
+                        if ($error) {
+                            Notification::make()->title($error)->danger()->send();
+                            return;
                         }
+                        Notification::make()->title('Voucher submitted successfully')->success()->send();
                         $record->refresh();
                     }),
 
@@ -247,14 +378,14 @@ class VoucherResource extends Resource
                     ->color('warning')
                     ->iconButton()
                     ->requiresConfirmation()
-                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::PendingChecker && auth()->user()->can('voucher.check'))
+                    ->visible(fn (Voucher $record): bool => $record->status === 'pending_checker' && auth()->user()->can('voucher.check'))
                     ->action(function (Voucher $record) {
-                        try {
-                            app(VoucherApprovalService::class)->check($record, auth()->user());
-                            Notification::make()->title('Voucher forwarded to Approver')->success()->send();
-                        } catch (\RuntimeException $e) {
-                            Notification::make()->title($e->getMessage())->danger()->send();
+                        $error = app(\App\Services\VoucherApprovalService::class)->check($record, auth()->user());
+                        if ($error) {
+                            Notification::make()->title($error)->danger()->send();
+                            return;
                         }
+                        Notification::make()->title('Voucher forwarded to Approver')->success()->send();
                         $record->refresh();
                     }),
 
@@ -265,7 +396,7 @@ class VoucherResource extends Resource
                     ->iconButton()
                     ->requiresConfirmation()
                     ->visible(function (Voucher $record): bool {
-                        if ($record->status !== VoucherStatus::PendingApprover) return false;
+                        if ($record->status !== 'pending_approver') return false;
                         if (!auth()->user()->can('voucher.approve')) return false;
 
                         // If a workflow chain is configured, only show to the correct step's user
@@ -278,12 +409,23 @@ class VoucherResource extends Resource
                         return auth()->user()->hasRole('Approver');
                     })
                     ->action(function (Voucher $record) {
-                        try {
-                            app(VoucherApprovalService::class)->approve($record, auth()->user());
-                            Notification::make()->title('Voucher approved')->success()->send();
-                        } catch (\RuntimeException $e) {
-                            Notification::make()->title($e->getMessage())->danger()->send();
+                        $service = app(\App\Services\VoucherApprovalService::class);
+                        $wasMultiStep = \App\Models\ApprovalWorkflow::totalSteps() > 0;
+                        $currentStep  = (int) ($record->current_approval_step ?? 1);
+                        $totalSteps   = \App\Models\ApprovalWorkflow::totalSteps();
+                        $isLastStep   = $totalSteps === 0 || $currentStep >= $totalSteps;
+
+                        $error = $service->approve($record, auth()->user());
+                        if ($error) {
+                            Notification::make()->title($error)->danger()->send();
+                            return;
                         }
+
+                        $title = $isLastStep
+                            ? 'Voucher fully approved'
+                            : 'Step ' . $currentStep . ' approved — forwarded to next approver';
+
+                        Notification::make()->title($title)->success()->send();
                         $record->refresh();
                     }),
 
@@ -296,14 +438,14 @@ class VoucherResource extends Resource
                     ->form([
                         Forms\Components\Textarea::make('comments')->required()->label('Reason for Rejection'),
                     ])
-                    ->visible(fn (Voucher $record): bool => in_array($record->status, [VoucherStatus::PendingChecker, VoucherStatus::PendingApprover]) && auth()->user()->can('voucher.reject'))
+                    ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver']) && auth()->user()->can('voucher.reject'))
                     ->action(function (Voucher $record, array $data) {
-                        try {
-                            app(VoucherApprovalService::class)->reject($record, auth()->user(), $data['comments']);
-                            Notification::make()->title('Voucher rejected')->danger()->send();
-                        } catch (\RuntimeException $e) {
-                            Notification::make()->title($e->getMessage())->danger()->send();
+                        $error = app(\App\Services\VoucherApprovalService::class)->reject($record, auth()->user(), $data['comments']);
+                        if ($error) {
+                            Notification::make()->title($error)->danger()->send();
+                            return;
                         }
+                        Notification::make()->title('Voucher rejected')->danger()->send();
                         $record->refresh();
                     }),
 
@@ -313,14 +455,14 @@ class VoucherResource extends Resource
                     ->color('success')
                     ->iconButton()
                     ->requiresConfirmation()
-                    ->visible(fn (Voucher $record): bool => $record->status === VoucherStatus::Approved && auth()->user()->can('voucher.mark_paid'))
+                    ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
                     ->action(function (Voucher $record) {
-                        try {
-                            app(VoucherApprovalService::class)->markPaid($record, auth()->user());
-                            Notification::make()->title('Voucher marked as paid')->success()->send();
-                        } catch (\RuntimeException $e) {
-                            Notification::make()->title($e->getMessage())->danger()->send();
+                        $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
+                        if ($error) {
+                            Notification::make()->title($error)->danger()->send();
+                            return;
                         }
+                        Notification::make()->title('Voucher marked as paid')->success()->send();
                         $record->refresh();
                     }),
             ])
@@ -351,11 +493,10 @@ class VoucherResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        // SoftDeletingScope is intentionally NOT removed here.
-        // Soft-deleted vouchers should be hidden from all tables, filters, exports, and badge counts by default.
-        // If admin recovery of deleted vouchers is ever needed, add a specific ->withTrashed() filter instead.
+        // SoftDeletingScope is intentionally kept active — soft-deleted vouchers
+        // should never surface in normal views.
         return parent::getEloquentQuery()
-            ->with(['approvals.user.roles']);
+            ->with(['approvals.user.roles', 'items.category', 'template']);
     }
 
     public static function infolist(\Filament\Infolists\Infolist $infolist): \Filament\Infolists\Infolist
@@ -394,9 +535,25 @@ class VoucherResource extends Resource
                             ->copyable(),
                         \Filament\Infolists\Components\TextEntry::make('status')
                             ->badge()
-                            ->icon(fn (VoucherStatus $state): string => $state->icon())
-                            ->color(fn (VoucherStatus $state): string => $state->color())
-                            ->formatStateUsing(fn (VoucherStatus $state): string => $state->label()),
+                            ->icon(fn (string $state): string => match ($state) {
+                                'draft'            => 'heroicon-m-pencil-square',
+                                'pending_checker'  => 'heroicon-m-clock',
+                                'pending_approver' => 'heroicon-m-clock',
+                                'approved'         => 'heroicon-m-check-circle',
+                                'rejected'         => 'heroicon-m-x-circle',
+                                'paid'             => 'heroicon-m-banknotes',
+                                default            => 'heroicon-m-question-mark-circle',
+                            })
+                            ->color(fn (string $state): string => match ($state) {
+                                'draft'            => 'gray',
+                                'pending_checker'  => 'warning',
+                                'pending_approver' => 'warning',
+                                'approved'         => 'success',
+                                'rejected'         => 'danger',
+                                'paid'             => 'success',
+                                default            => 'gray',
+                            })
+                            ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
                         \Filament\Infolists\Components\TextEntry::make('user.name')
                             ->label('Requester')
                             ->icon('heroicon-m-user-circle')

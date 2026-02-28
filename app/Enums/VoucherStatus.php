@@ -2,6 +2,17 @@
 
 namespace App\Enums;
 
+/**
+ * All possible states a Voucher can be in.
+ *
+ * These values MUST match the string values stored in the database.
+ * Using an Enum prevents silent typos in status comparisons across
+ * Observers, Policies, Services, and Notifications.
+ *
+ * NOTE: Model casts are intentionally NOT set to this enum so that
+ * Filament's existing string-based match() expressions remain unchanged.
+ * Use ::from() / ->value when bridging between business logic and Filament.
+ */
 enum VoucherStatus: string
 {
     case Draft           = 'draft';
@@ -11,7 +22,32 @@ enum VoucherStatus: string
     case Rejected        = 'rejected';
     case Paid            = 'paid';
 
-    /** Human-readable label (replaces scattered ucwords/str_replace calls). */
+    /**
+     * States that are considered "in-flight" (awaiting action from someone).
+     *
+     * @return self[]
+     */
+    public static function pendingStates(): array
+    {
+        return [self::PendingChecker, self::PendingApprover];
+    }
+
+    /**
+     * States from which a rejection is possible.
+     */
+    public static function rejectableStates(): array
+    {
+        return [self::PendingChecker, self::PendingApprover];
+    }
+
+    /**
+     * Returns true if this status is a terminal / immutable state.
+     */
+    public function isTerminal(): bool
+    {
+        return in_array($this, [self::Approved, self::Rejected, self::Paid]);
+    }
+
     public function label(): string
     {
         return match ($this) {
@@ -22,43 +58,5 @@ enum VoucherStatus: string
             self::Rejected        => 'Rejected',
             self::Paid            => 'Paid',
         };
-    }
-
-    /** Filament badge color. */
-    public function color(): string
-    {
-        return match ($this) {
-            self::Draft           => 'gray',
-            self::PendingChecker  => 'warning',
-            self::PendingApprover => 'warning',
-            self::Approved        => 'success',
-            self::Rejected        => 'danger',
-            self::Paid            => 'success',
-        };
-    }
-
-    /** Filament heroicon name. */
-    public function icon(): string
-    {
-        return match ($this) {
-            self::Draft           => 'heroicon-m-pencil-square',
-            self::PendingChecker  => 'heroicon-m-clock',
-            self::PendingApprover => 'heroicon-m-clock',
-            self::Approved        => 'heroicon-m-check-circle',
-            self::Rejected        => 'heroicon-m-x-circle',
-            self::Paid            => 'heroicon-m-banknotes',
-        };
-    }
-
-    /** Statuses that are "active" (i.e. not yet resolved). */
-    public function isActive(): bool
-    {
-        return in_array($this, [self::Draft, self::PendingChecker, self::PendingApprover]);
-    }
-
-    /** Statuses that allow checker/approver rejection. */
-    public function isRejectable(): bool
-    {
-        return in_array($this, [self::PendingChecker, self::PendingApprover]);
     }
 }

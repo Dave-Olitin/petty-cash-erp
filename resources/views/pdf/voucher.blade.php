@@ -38,14 +38,19 @@
         .field-row { margin-bottom: 8px; font-size: 11px; }
         .field-label { font-weight: bold; display: inline; }
         .field-value {
-            display: inline-block;
+            display: inline;
             border-bottom: 1px solid #000;
             min-width: 75%;
             font-weight: normal;
             padding-bottom: 1px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .cheque-table { width: 100%; margin: 12px 0; font-size: 10px; }
         .cheque-table td { width: 33%; padding-bottom: 4px; }
+        .header-table { width: 100%; margin-bottom: 20px; }
+        .header-table td { vertical-align: top; }
+
         .ledger-table {
             width: 100%;
             border-collapse: collapse;
@@ -100,31 +105,46 @@
 <body>
 
 @php
-    $branchCode = $voucher->user?->branch ? strtoupper(substr($voucher->user->branch->name, 0, 3)) : 'HQ';
-    $acctCodeDR = $voucher->category?->accounting_code ?? '—';
-    $acctCodeCR = '1010-02';
+    $template = $voucher->template;
+
+    // Compute totals from items
+    $totalDR = $voucher->items->where('entry_type', 'debit')->sum('amount');
+    $totalCR = $voucher->items->where('entry_type', 'credit')->sum('amount');
+    $displayAmount = $voucher->amount ?? $totalDR;
 
     if (class_exists('NumberFormatter')) {
         $f = new NumberFormatter("en", NumberFormatter::SPELLOUT);
-        $whole    = floor($voucher->amount);
-        $fraction = round(($voucher->amount - $whole) * 100);
+        $whole    = floor($displayAmount);
+        $fraction = round(($displayAmount - $whole) * 100);
         $words = strtoupper($f->format($whole)) . ' DIRHAMS';
         $words .= $fraction > 0
             ? ' AND ' . strtoupper($f->format($fraction)) . ' FILS ONLY'
             : ' ONLY';
     } else {
-        $words = strtoupper(\Illuminate\Support\Number::spell($voucher->amount)) . ' DIRHAMS ONLY';
+        $words = strtoupper(\Illuminate\Support\Number::spell($displayAmount)) . ' DIRHAMS ONLY';
     }
 
     $checkerName  = $voucher->approvals->firstWhere('action', 'checked')?->user?->name  ?? '';
     $approverName = $voucher->approvals->whereIn('action', ['approved'])->last()?->user?->name ?? '';
 @endphp
 
-<div class="company-name">ERICK TR CO</div>
-<div class="company-sub">
-    TEL. NO. 06-525-2030<br>
-    TIGER 2 BLDG AL TAAWUN ST. SHARJAH, UAE
-</div>
+<table class="header-table">
+    <tr>
+        <td style="width: 70%;">
+            <div class="company-name">{{ $template?->company_name ?? 'COMPANY NAME' }}</div>
+            <div class="company-sub">
+                @if($template?->tel_no)Tel. No.: {{ $template->tel_no }}<br>@endif
+                @if($template?->address){!! nl2br(e($template->address)) !!}<br>@endif
+                @if($template?->trn)TRN: {{ $template->trn }}@endif
+            </div>
+        </td>
+        @if($template?->logo_path)
+        <td style="width: 30%; text-align: right;">
+            <img src="{{ storage_path('app/public/' . $template->logo_path) }}" alt="" style="max-height: 60px; max-width: 140px;">
+        </td>
+        @endif
+    </tr>
+</table>
 
 <div class="title-box">
     {{ $voucher->type === 'petty_cash' ? 'PETTY CASH VOUCHER' : 'PAYMENT VOUCHER' }}
@@ -141,19 +161,21 @@
     <span class="field-label">PAID TO:&nbsp;</span>
     <span class="field-value">{{ strtoupper($voucher->payee) }}</span>
 </div>
-<div class="field-row">
+<div class="field-row" style="margin-bottom: 2px;">
     <span class="field-label">BEING:&nbsp;&nbsp;&nbsp;</span>
     <span class="field-value">{{ strtoupper($voucher->description) }}</span>
 </div>
+@if(strlen($voucher->description) > 80)
 <div class="field-row">
     <span class="field-value" style="width:100%;">&nbsp;</span>
 </div>
+@endif
 
 <table class="cheque-table">
     <tr>
-        <td>Cheque No.: _____________________</td>
-        <td style="text-align:center;">Date: _____________________</td>
-        <td style="text-align:right;">Bank: _____________________</td>
+        <td>Cheque No.: {{ $voucher->cheque_no ?: '_____________________' }}</td>
+        <td style="text-align:center;">Date: {{ $voucher->cheque_date ? $voucher->cheque_date->format('d/m/Y') : '_____________________' }}</td>
+        <td style="text-align:right;">Bank: {{ $voucher->bank ?: '_____________________' }}</td>
     </tr>
 </table>
 
@@ -168,27 +190,30 @@
         </tr>
     </thead>
     <tbody>
+        @forelse($voucher->items as $item)
         <tr>
-            <td class="col-branch">{{ $branchCode }}</td>
-            <td class="col-acct">{{ $acctCodeDR }}</td>
-            <td class="col-detail">{{ strtoupper($voucher->category?->name ?? 'GENERAL EXPENSE') }} - {{ strtoupper($voucher->payee) }}</td>
-            <td class="col-dr">{{ number_format($voucher->amount, 2) }}</td>
-            <td class="col-cr"></td>
+            <td class="col-branch">{{ strtoupper($item->branch_code ?? ($template?->branch_code ?? 'HQ')) }}</td>
+            <td class="col-acct">{{ $item->account_code ?? '—' }}</td>
+            <td class="col-detail">{{ strtoupper($item->description ?? ($item->category?->name ?? '')) }}</td>
+            <td class="col-dr">{{ $item->entry_type === 'debit' ? number_format($item->amount, 2) : '' }}</td>
+            <td class="col-cr">{{ $item->entry_type === 'credit' ? number_format($item->amount, 2) : '' }}</td>
         </tr>
+        @empty
         <tr>
-            <td class="col-branch">{{ $branchCode }}</td>
-            <td class="col-acct">{{ $acctCodeCR }}</td>
-            <td class="col-detail">CASH IN HAND/BANK</td>
-            <td class="col-dr"></td>
-            <td class="col-cr">{{ number_format($voucher->amount, 2) }}</td>
+            <td colspan="5" style="text-align:center; padding: 10px;">No ledger entries</td>
         </tr>
-        <tr class="spacer-row"><td colspan="5"></td></tr>
+        @endforelse
+        @if($voucher->items->count() < 5)
+            @for($i = $voucher->items->count(); $i < 5; $i++)
+                <tr><td colspan="5" style="height: 22px;">&nbsp;</td></tr>
+            @endfor
+        @endif
     </tbody>
     <tfoot>
         <tr class="total-row">
             <th colspan="3" class="lbl">TOTAL</th>
-            <th class="col-dr">{{ number_format($voucher->amount, 2) }}</th>
-            <th class="col-cr">{{ number_format($voucher->amount, 2) }}</th>
+            <th class="col-dr">{{ number_format($totalDR, 2) }}</th>
+            <th class="col-cr">{{ number_format($totalCR, 2) }}</th>
         </tr>
     </tfoot>
 </table>

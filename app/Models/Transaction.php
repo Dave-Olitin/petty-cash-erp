@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Enums\TransactionStatus;
 
 class Transaction extends Model
 {
@@ -36,7 +35,6 @@ class Transaction extends Model
         return [
             'amount'           => 'decimal:2',
             'vat'              => 'decimal:2',
-            'status'           => TransactionStatus::class, // Enum cast — eliminates raw string comparisons
             'transaction_date' => 'datetime',
             'created_at'       => 'datetime',
             'updated_at'       => 'datetime',
@@ -54,22 +52,23 @@ class Transaction extends Model
         return $query->where('status', 'approved');
     }
 
-    public function branch(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    // THIS is the missing piece causing your error:
+    public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
     }
 
-    public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function histories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    // Note: categories are per-item, not per-transaction. See TransactionItem::category()
+    public function histories()
     {
         return $this->hasMany(TransactionHistory::class);
     }
-    // Note: categories are per-item, not per-transaction. See TransactionItem::category()
-    public function items(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function items()
     {
         return $this->hasMany(TransactionItem::class);
     }

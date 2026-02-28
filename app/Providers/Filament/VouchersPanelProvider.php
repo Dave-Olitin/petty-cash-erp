@@ -156,6 +156,10 @@ class VouchersPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->databaseNotifications();
+            ->databaseNotifications()
+            ->renderHook(
+                'panels::head.end',
+                fn () => view('filament.hooks.custom-styles')
+            );
     }
 }

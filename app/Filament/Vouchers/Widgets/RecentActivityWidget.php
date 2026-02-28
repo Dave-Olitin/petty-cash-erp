@@ -45,8 +45,7 @@ class RecentActivityWidget extends BaseWidget
                         default => 'gray',
                     }),
                 Tables\Columns\TextColumn::make('subject.voucher_number')
-                    ->label('Voucher')
-                    ->searchable(),
+                    ->label('Voucher'),
             ])
             ->paginated(false);
     }

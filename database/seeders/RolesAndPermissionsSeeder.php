@@ -32,7 +32,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'voucher.check',      // Can verify & forward to approver (Accountant)
             'voucher.approve',    // Can give final approval (Approver/CEO)
             'voucher.reject',     // Can reject/return a voucher
-            'voucher.mark_paid',  // Can mark an approved voucher as paid
+            'voucher.pay',        // Can pay a voucher (any payable status)
 
             // Float management
             'voucher.manage_float', // Can view/add head office float replenishments
@@ -67,7 +67,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'voucher.submit',
             'voucher.check',
             'voucher.reject',
-            'voucher.mark_paid',
+            'voucher.pay',
             'voucher.manage_float',
         ]);
 

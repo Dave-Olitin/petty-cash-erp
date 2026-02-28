@@ -36,7 +36,10 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
-
+        FilamentView::registerRenderHook(
+            'panels::auth.login.form.before',
+            fn (): string => Blade::render('<div class="flex justify-center mb-4"><div class="text-xl font-bold text-primary-600"></div></div>'),
+        );
 
         FilamentView::registerRenderHook(
             'panels::head.end',

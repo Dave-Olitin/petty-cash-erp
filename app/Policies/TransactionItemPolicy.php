@@ -25,11 +25,7 @@ class TransactionItemPolicy
 
     public function create(User $user): bool
     {
-        // Mirror TransactionPolicy::create — inactive branches cannot create items.
-        if ($user->isHeadOffice()) {
-            return true;
-        }
-        return $user->branch_id !== null && $user->branch && $user->branch->is_active;
+        return $user->isHeadOffice() || $user->branch_id !== null;
     }
 
     public function update(User $user, TransactionItem $transactionItem): bool

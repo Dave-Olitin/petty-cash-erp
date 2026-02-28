@@ -6,64 +6,57 @@ use App\Enums\VoucherStatus;
 use App\Models\ApprovalWorkflow;
 use App\Models\User;
 use App\Models\Voucher;
-use App\Models\VoucherApproval;
 use App\Notifications\VoucherStatusNotification;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Handles all voucher approval workflow transitions.
+ * Encapsulates all multi-step voucher approval business logic.
  *
- * Extracted from inline Filament table action closures to make the
- * business logic testable, reusable, and easy to follow.
- *
- * Each method is responsible for one state transition:
- *   submit()    → draft → pending_checker
- *   check()     → pending_checker → pending_approver
- *   approve()   → pending_approver → approved (or next step)
- *   reject()    → pending_checker|pending_approver → rejected
- *   markPaid()  → approved → paid
+ * Previously this logic lived inline inside Filament table action closures,
+ * making it untestable, unreusable, and hard to reason about. Centralising
+ * here makes it callable from actions, API endpoints, CLI commands, and tests.
  */
 class VoucherApprovalService
 {
     /**
      * Submit a draft voucher for checking.
-     *
-     * @throws \RuntimeException if the voucher is no longer in draft status.
+     * Returns null on success, or an error string if the state is invalid.
      */
-    public function submit(Voucher $voucher, User $actor): void
+    public function submit(Voucher $voucher, User $actor): ?string
     {
-        DB::transaction(function () use ($voucher, $actor) {
-            $locked = Voucher::lockForUpdate()->findOrFail($voucher->id);
+        return DB::transaction(function () use ($voucher, $actor) {
+            $locked = Voucher::lockForUpdate()->find($voucher->id);
 
-            if ($locked->status !== VoucherStatus::Draft) {
-                throw new \RuntimeException('Voucher is no longer in draft status.');
+            if ($locked->status !== VoucherStatus::Draft->value) {
+                return 'Voucher status has changed. Please refresh.';
             }
 
             $locked->update(['status' => VoucherStatus::PendingChecker->value]);
             $locked->load('user');
 
-            // Notify all Accountant-role users (checkers)
-            User::role('Accountant')->get()
-                ->each->notify(new VoucherStatusNotification($locked, 'submitted'));
+            User::role('Accountant')->get()->each->notify(
+                new VoucherStatusNotification($locked, 'submitted')
+            );
+
+            return null;
         });
     }
 
     /**
-     * Verify and forward a voucher from checker to approver.
-     *
-     * @throws \RuntimeException if the voucher is not pending checking.
+     * Accountant verifies the voucher and forwards it to approvers.
+     * Returns null on success, or an error string if the state is invalid.
      */
-    public function check(Voucher $voucher, User $actor): void
+    public function check(Voucher $voucher, User $actor): ?string
     {
-        DB::transaction(function () use ($voucher, $actor) {
-            $locked = Voucher::lockForUpdate()->findOrFail($voucher->id);
+        return DB::transaction(function () use ($voucher, $actor) {
+            $locked = Voucher::lockForUpdate()->find($voucher->id);
 
-            if ($locked->status !== VoucherStatus::PendingChecker) {
-                throw new \RuntimeException('Voucher status changed by another user.');
+            if ($locked->status !== VoucherStatus::PendingChecker->value) {
+                return 'Voucher status changed by another user. Please refresh.';
             }
 
             $locked->update([
-                'status'               => VoucherStatus::PendingApprover->value,
+                'status'                => VoucherStatus::PendingApprover->value,
                 'current_approval_step' => 1,
             ]);
 
@@ -74,42 +67,44 @@ class VoucherApprovalService
 
             $locked->load('user');
 
-            // Notify the first approver in the workflow chain, or all Approvers as fallback
             $firstStep = ApprovalWorkflow::getApproverAtStep(1);
             if ($firstStep) {
                 $firstStep->user->notify(new VoucherStatusNotification($locked, 'checked'));
             } else {
-                User::role('Approver')->get()->each->notify(new VoucherStatusNotification($locked, 'checked'));
+                User::role('Approver')->get()->each->notify(
+                    new VoucherStatusNotification($locked, 'checked')
+                );
             }
+
+            return null;
         });
     }
 
     /**
-     * Approve the current step of a voucher's workflow.
-     *
-     * Advances to the next step if more remain, or fully approves if this is the last step.
-     *
-     * @throws \RuntimeException on stale state or unauthorized actor.
+     * Approve the current workflow step.
+     * Advances to the next step or fully approves if all steps are complete.
+     * Returns null on success, or an error string if the state/access is invalid.
      */
-    public function approve(Voucher $voucher, User $actor): void
+    public function approve(Voucher $voucher, User $actor): ?string
     {
-        DB::transaction(function () use ($voucher, $actor) {
-            $locked = Voucher::lockForUpdate()->findOrFail($voucher->id);
+        return DB::transaction(function () use ($voucher, $actor) {
+            $locked = Voucher::lockForUpdate()->find($voucher->id);
 
-            if ($locked->status !== VoucherStatus::PendingApprover
-                || $locked->current_approval_step !== $voucher->current_approval_step) {
-                throw new \RuntimeException('Voucher was modified by another user. Please refresh.');
+            if ($locked->status !== VoucherStatus::PendingApprover->value
+                || $locked->current_approval_step !== $voucher->current_approval_step
+            ) {
+                return 'Voucher was modified by another user. Please refresh.';
             }
 
-            // Verify the actor is the correct approver for this step
+            // Validate that the actor is the correct approver for this step
             if (ApprovalWorkflow::isConfigured()) {
                 $step = ApprovalWorkflow::getApproverAtStep((int) ($locked->current_approval_step ?? 1));
                 if (!$step || $step->user_id != $actor->id) {
-                    throw new \RuntimeException('Unauthorized: You are not the correct approver for this step.');
+                    return 'Unauthorized: You are not the correct approver for this step.';
                 }
             } else {
                 if (!$actor->hasRole('Approver')) {
-                    throw new \RuntimeException('Unauthorized: You lack Approver privileges.');
+                    return 'Unauthorized: You lack Approver privileges.';
                 }
             }
 
@@ -117,49 +112,55 @@ class VoucherApprovalService
             $currentStep = (int) ($locked->current_approval_step ?? 1);
             $totalSteps  = ApprovalWorkflow::totalSteps();
 
-            // Record this approval step
+            // Record this approval
             $stepLabel = ApprovalWorkflow::getApproverAtStep($currentStep)?->label;
             $locked->approvals()->create([
                 'user_id'  => $actor->id,
                 'action'   => 'approved',
-                'comments' => $stepLabel ? "Approved as {$stepLabel}" : null,
+                'comments' => $stepLabel ? 'Approved as ' . $stepLabel : null,
             ]);
 
             $nextStep = $currentStep + 1;
 
             if ($totalSteps > 0 && $nextStep <= $totalSteps) {
-                // More steps remaining — advance to next approver
+                // More steps remaining — advance
                 $locked->update(['current_approval_step' => $nextStep]);
 
                 $next = ApprovalWorkflow::getApproverAtStep($nextStep);
                 if ($next) {
                     $next->user->notify(new VoucherStatusNotification($locked, 'checked'));
                 }
-            } else {
-                // All steps done — fully approved
-                $locked->update([
-                    'status'               => VoucherStatus::Approved->value,
-                    'current_approval_step' => null,
-                ]);
 
-                $locked->user->notify(new VoucherStatusNotification($locked, 'approved'));
-                User::role('Accountant')->get()->each->notify(new VoucherStatusNotification($locked, 'approved'));
+                return null; // caller can show "forwarded to next approver" message
             }
+
+            // All steps completed — fully approve
+            $locked->update([
+                'status'                => VoucherStatus::Approved->value,
+                'current_approval_step' => null,
+            ]);
+
+            $locked->user->notify(new VoucherStatusNotification($locked, 'approved'));
+            User::role('Accountant')->get()->each->notify(
+                new VoucherStatusNotification($locked, 'approved')
+            );
+
+            return null;
         });
     }
 
     /**
-     * Reject a voucher at any point in the checking/approval flow.
-     *
-     * @throws \RuntimeException if the voucher is not in a rejectable state.
+     * Reject (return) a voucher that is pending checker or approver review.
+     * Returns null on success, or an error string if the state is invalid.
      */
-    public function reject(Voucher $voucher, User $actor, string $reason): void
+    public function reject(Voucher $voucher, User $actor, string $reason): ?string
     {
-        DB::transaction(function () use ($voucher, $actor, $reason) {
-            $locked = Voucher::lockForUpdate()->findOrFail($voucher->id);
+        return DB::transaction(function () use ($voucher, $actor, $reason) {
+            $locked = Voucher::lockForUpdate()->find($voucher->id);
 
-            if (!$locked->status->isRejectable()) {
-                throw new \RuntimeException('Voucher status changed by another user.');
+            $rejectableValues = array_map(fn ($s) => $s->value, VoucherStatus::rejectableStates());
+            if (!in_array($locked->status, $rejectableValues)) {
+                return 'Voucher status changed by another user. Please refresh.';
             }
 
             $locked->update(['status' => VoucherStatus::Rejected->value]);
@@ -171,26 +172,56 @@ class VoucherApprovalService
 
             $locked->load('user');
             $locked->user->notify(new VoucherStatusNotification($locked, 'rejected', $reason));
+
+            return null;
         });
     }
 
     /**
      * Mark an approved voucher as paid.
-     *
-     * @throws \RuntimeException if the voucher is not in approved status.
+     * Returns null on success, or an error string if the state is invalid.
      */
-    public function markPaid(Voucher $voucher, User $actor): void
+    public function markPaid(Voucher $voucher, User $actor): ?string
     {
-        DB::transaction(function () use ($voucher, $actor) {
-            $locked = Voucher::lockForUpdate()->findOrFail($voucher->id);
+        return DB::transaction(function () use ($voucher, $actor) {
+            $locked = Voucher::lockForUpdate()->find($voucher->id);
 
-            if ($locked->status !== VoucherStatus::Approved) {
-                throw new \RuntimeException('Voucher status changed by another user.');
+            $payableStatuses = [
+                VoucherStatus::PendingChecker->value,
+                VoucherStatus::PendingApprover->value,
+                VoucherStatus::Approved->value,
+            ];
+
+            if (!in_array($locked->status, $payableStatuses)) {
+                return 'Voucher status changed by another user. Please refresh.';
             }
 
-            $locked->update(['status' => VoucherStatus::Paid->value]);
+            // The actor needs the voucher.pay permission
+            if (!$actor->can('voucher.pay')) {
+                return 'Unauthorized: You lack the required payment permission.';
+            }
+
+            $previousStatus = $locked->status;
+            $locked->update([
+                'status'                => VoucherStatus::Paid->value,
+                'current_approval_step' => null,
+            ]);
+
+            // Record in approval trail
+            $comment = $previousStatus !== VoucherStatus::Approved->value
+                ? 'Paid early (was ' . ucwords(str_replace('_', ' ', $previousStatus)) . ')'
+                : null;
+
+            $locked->approvals()->create([
+                'user_id'  => $actor->id,
+                'action'   => 'paid',
+                'comments' => $comment,
+            ]);
+
             $locked->load('user');
             $locked->user->notify(new VoucherStatusNotification($locked, 'paid'));
+
+            return null;
         });
     }
 }

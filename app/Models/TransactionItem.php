@@ -27,12 +27,12 @@ class TransactionItem extends Model
     }
 
 
-    public function transaction(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function transaction()
     {
         return $this->belongsTo(Transaction::class);
     }
 
-    public function category(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function category()
     {
         return $this->belongsTo(Category::class);
     }

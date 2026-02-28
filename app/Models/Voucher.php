@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use App\Observers\VoucherObserver;
-use App\Enums\VoucherStatus;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -31,13 +30,19 @@ class Voucher extends Model implements HasMedia
         'current_approval_step',
         'user_id',
         'category_id',
+        'voucher_template_id',
+        'attachment_paths',
+        'cheque_no',
+        'cheque_date',
+        'bank',
     ];
 
     protected function casts(): array
     {
         return [
             'amount' => 'decimal:2',
-            'status' => VoucherStatus::class, // Enum cast — eliminates raw string comparisons
+            'attachment_paths' => 'array',
+            'cheque_date' => 'date',
         ];
     }
 
@@ -56,16 +61,37 @@ class Voucher extends Model implements HasMedia
         return $this->hasMany(VoucherApproval::class);
     }
 
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(VoucherTemplate::class, 'voucher_template_id');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(VoucherItem::class)->orderBy('sort_order');
+    }
+
+    public function getTotalDebitAttribute(): float
+    {
+        return (float) $this->items()->where('entry_type', 'debit')->sum('amount');
+    }
+
+    public function getTotalCreditAttribute(): float
+    {
+        return (float) $this->items()->where('entry_type', 'credit')->sum('amount');
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('attachments')
             ->useDisk('local')
-            // Only allow images and PDFs — never executables or arbitrary file types.
-            ->acceptsFile(fn (\Spatie\MediaLibrary\Support\File $file) => in_array($file->mimeType, [
-                'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf',
-            ]))
-            // Cap at 20 files per voucher to prevent storage abuse.
-            ->onlyKeepLatest(20);
+            // Enforce allowed MIME types — only images and PDFs
+            ->acceptsFile(function (\Spatie\MediaLibrary\Support\File $file) {
+                return in_array($file->mimeType, [
+                    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                    'application/pdf',
+                ]);
+            });
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -87,10 +113,12 @@ class Voucher extends Model implements HasMedia
     public function scopeActionRequired($query, User $user)
     {
         return $query->where(function ($q) use ($user) {
+            // Accountant: needs to check pending vouchers
             if ($user->hasRole('Accountant')) {
                 $q->orWhere('status', 'pending_checker');
             }
 
+            // Approver: needs to approve pending vouchers
             if ($user->hasRole('Approver') || $user->hasRole('Admin') || $user->hasRole('Super Admin')) {
                 if (\App\Models\ApprovalWorkflow::isConfigured()) {
                     $q->orWhere(function ($subQ) use ($user) {
@@ -105,6 +133,11 @@ class Voucher extends Model implements HasMedia
                 } else {
                     $q->orWhere('status', 'pending_approver');
                 }
+            }
+
+            // Pay-capable users: approved and pending vouchers need action
+            if ($user->can('voucher.pay')) {
+                $q->orWhereIn('status', ['pending_checker', 'pending_approver', 'approved']);
             }
 
             // Always require action from the original creator if it's draft or rejected
