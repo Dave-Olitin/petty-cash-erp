@@ -61,6 +61,7 @@ class LowBalanceNotification extends Notification implements ShouldQueue
             ->title('⚠️ Low Float Balance')
             ->icon('/images/icon-192.png')
             ->body('Head Office float dropped below AED 2,000. Current: AED ' . number_format($this->currentBalance, 2))
+            ->options(['TTL' => '86400'])
             ->data(['id' => $notification->id, 'url' => url('/admin')]);
     }
 }

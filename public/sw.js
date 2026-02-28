@@ -1,4 +1,4 @@
-const CACHE_NAME = 'petty-cash-erp-v2';
+const CACHE_NAME = 'petty-cash-erp-v3';
 const urlsToCache = [
     '/manifest.json',
     '/images/icon-192.png',
@@ -55,10 +55,21 @@ self.addEventListener('push', function (e) {
     }
 
     if (e.data) {
-        let msg = e.data.json();
+        let msg;
+        try {
+            msg = e.data.json();
+        } catch (err) {
+            console.error('[SW] Push payload is not valid JSON:', err);
+            msg = {
+                title: 'New Notification',
+                body: e.data.text() || 'You have a new update.',
+                icon: '/images/icon-192.png'
+            };
+        }
+
         e.waitUntil(
-            self.registration.showNotification(msg.title, {
-                body: msg.body,
+            self.registration.showNotification(msg.title || 'Notification', {
+                body: msg.body || '',
                 icon: msg.icon || '/images/icon-192.png',
                 badge: msg.badge || '/images/icon-192.png',
                 data: msg.data || null,

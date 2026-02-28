@@ -143,6 +143,7 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             ->title($title)
             ->icon('/images/icon-192.png')
             ->body($body)
+            ->options(['TTL' => '86400'])
             ->data(['id' => $notification->id, 'url' => url('/vouchers/vouchers')]);
     }
 }
