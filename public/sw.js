@@ -1,3 +1,4 @@
+// Service Worker v3 — 2026-03-01
 const CACHE_NAME = 'petty-cash-erp-v3';
 const urlsToCache = [
     '/manifest.json',
@@ -6,92 +7,97 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', (event) => {
-    self.skipWaiting(); // Force activation
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then((cache) => {
-                return cache.addAll(urlsToCache);
-            })
-    );
-});
-
-self.addEventListener('fetch', (event) => {
-    // For navigation requests (HTML pages), always go to network first
-    if (event.request.mode === 'navigate') {
-        event.respondWith(fetch(event.request));
-        return;
-    }
-
-    // For other requests, try cache first, then network
-    event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                if (response) {
-                    return response;
-                }
-                return fetch(event.request);
-            })
+            .then((cache) => cache.addAll(urlsToCache))
     );
 });
 
 self.addEventListener('activate', (event) => {
-    const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheWhitelist.indexOf(cacheName) === -1) {
-                        return caches.delete(cacheName);
+                cacheNames.map((name) => {
+                    if (name !== CACHE_NAME) {
+                        return caches.delete(name);
                     }
                 })
             );
-        }).then(() => self.clients.claim()) // Take control immediately
+        }).then(() => self.clients.claim())
     );
 });
 
-self.addEventListener('push', function (e) {
-    if (!(self.Notification && self.Notification.permission === 'granted')) {
+self.addEventListener('fetch', (event) => {
+    if (event.request.mode === 'navigate') {
+        event.respondWith(fetch(event.request));
         return;
     }
-
-    if (e.data) {
-        let msg;
-        try {
-            msg = e.data.json();
-        } catch (err) {
-            console.error('[SW] Push payload is not valid JSON:', err);
-            msg = {
-                title: 'New Notification',
-                body: e.data.text() || 'You have a new update.',
-                icon: '/images/icon-192.png'
-            };
-        }
-
-        e.waitUntil(
-            self.registration.showNotification(msg.title || 'Notification', {
-                body: msg.body || '',
-                icon: msg.icon || '/images/icon-192.png',
-                badge: msg.badge || '/images/icon-192.png',
-                data: msg.data || null,
-                actions: msg.actions || [],
-                tag: msg.tag || 'petty-cash-erp'
-            })
-        );
-    }
+    event.respondWith(
+        caches.match(event.request).then((response) => response || fetch(event.request))
+    );
 });
 
+// ── Push Notification Handler ───────────────────────────────────────────
+// CRITICAL: We MUST call event.waitUntil(showNotification(...)) in every
+// code-path, otherwise Chrome shows "This site has been updated in the
+// background" instead of the actual notification.
+self.addEventListener('push', function (event) {
+    var title = 'Petty Cash ERP';
+    var options = {
+        body: 'You have a new notification.',
+        icon: '/images/icon-192.png',
+        badge: '/images/icon-192.png',
+        tag: 'petty-cash-notification',
+        data: { url: '/' }
+    };
+
+    if (event.data) {
+        try {
+            var payload = event.data.json();
+            title = payload.title || title;
+            options.body = payload.body || options.body;
+            options.icon = payload.icon || options.icon;
+            options.badge = payload.badge || options.badge;
+            options.tag = payload.tag || options.tag;
+            if (payload.data) {
+                options.data = payload.data;
+            }
+        } catch (e) {
+            // Payload wasn't JSON — use the raw text as body
+            var text = event.data.text();
+            if (text) {
+                options.body = text;
+            }
+        }
+    }
+
+    // Always show a notification — this is the critical line
+    event.waitUntil(
+        self.registration.showNotification(title, options)
+    );
+});
+
+// ── Notification Click Handler ──────────────────────────────────────────
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
+
+    var targetUrl = '/';
+    if (event.notification.data && event.notification.data.url) {
+        targetUrl = event.notification.data.url;
+    }
+
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
-            let targetUrl = event.notification.data?.url || '/admin';
-
-            for (let i = 0; i < clientList.length; i++) {
-                let client = clientList[i];
-                if (client.url.includes('/admin') || client.url.includes('/vouchers') && 'focus' in client) {
+            // Focus an existing tab if one is open
+            for (var i = 0; i < clientList.length; i++) {
+                var client = clientList[i];
+                if ((client.url.indexOf('/admin') !== -1 || client.url.indexOf('/vouchers') !== -1) && 'focus' in client) {
+                    client.navigate(targetUrl);
                     return client.focus();
                 }
             }
+            // Otherwise open a new window
             if (clients.openWindow) {
                 return clients.openWindow(targetUrl);
             }

@@ -99,7 +99,7 @@
 
     // Register SW then handle permissions
     window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('/sw.js?v=3')
             .then(function (registration) {
                 console.log('[PWA] ServiceWorker registered. Scope:', registration.scope);
 
