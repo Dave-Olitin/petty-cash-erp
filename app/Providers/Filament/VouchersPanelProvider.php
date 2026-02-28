@@ -157,9 +157,18 @@ class VouchersPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->renderHook(
                 'panels::head.end',
                 fn () => view('filament.hooks.custom-styles')
+            )
+            ->renderHook(
+                'panels::head.end',
+                fn () => view('filament.hooks.head-scripts')
+            )
+            ->renderHook(
+                'panels::body.end',
+                fn () => view('filament.hooks.pwa-install-banner')
             );
     }
 }

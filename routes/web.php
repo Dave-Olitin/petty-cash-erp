@@ -74,9 +74,14 @@ Route::middleware(['auth'])->group(function () {
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.voucher', ['voucher' => $voucher])->stream($voucher->voucher_number . '.pdf');
     })->name('voucher.pdf');
 
-    // Push Subscription Routes
+});
+
+// Push Subscription Routes — accessible from any panel (admin or vouchers).
+// Uses auth:web guard explicitly since both panels share the same User model on the web guard.
+Route::middleware(['auth:web'])->group(function () {
     Route::post('/push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'subscribe']);
     Route::post('/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe']);
-
 });
+
+
 
