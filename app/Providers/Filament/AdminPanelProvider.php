@@ -42,6 +42,8 @@ class AdminPanelProvider extends PanelProvider
                 // Pages\Dashboard::class, // Replaced by our custom Dashboard
                 \App\Filament\Pages\Dashboard::class,
             ])
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 // Widgets\AccountWidget::class,

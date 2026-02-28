@@ -20,9 +20,58 @@
         window.addEventListener("load", function() {
             navigator.serviceWorker.register("/sw.js").then(function(registration) {
                 console.log("ServiceWorker registered. Scope:", registration.scope);
+
+                // --- Push Notification Subscription ---
+                // Only prompt if we are logged in (we check if axios is available to make the API call)
+                if (typeof axios !== 'undefined') {
+                    Notification.requestPermission().then((permission) => {
+                        if (permission === 'granted') {
+                            subscribeUserToPush(registration);
+                        }
+                    });
+                }
             }, function(err) {
                 console.warn("ServiceWorker registration failed:", err);
             });
         });
+
+        // Function to convert Base64 string to Uint8Array
+        function urlB64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/\-/g, '+')
+                .replace(/_/g, '/');
+
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        function subscribeUserToPush(registration) {
+            const vapidPublicKey = '{{ config("webpush.vapid.public_key") }}';
+            if (!vapidPublicKey) return;
+
+            const applicationServerKey = urlB64ToUint8Array(vapidPublicKey);
+
+            registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: applicationServerKey
+            })
+            .then(function(subscription) {
+                // Send subscription to server
+                const subJSON = subscription.toJSON();
+                axios.post('/push/subscribe', {
+                    endpoint: subJSON.endpoint,
+                    keys: subJSON.keys
+                }).catch(err => console.error('Push sub save failed:', err));
+            })
+            .catch(function(err) {
+                console.log('Failed to subscribe the user: ', err);
+            });
+        }
     }
 </script>

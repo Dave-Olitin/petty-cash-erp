@@ -7,6 +7,8 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\WebPush\WebPushMessage;
+use NotificationChannels\WebPush\WebPushChannel;
 
 class VoucherStatusNotification extends Notification implements ShouldQueue
 {
@@ -23,7 +25,7 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        $channels = ['database'];
+        $channels = ['database', WebPushChannel::class];
 
         // Only attempt to send an email if a real SMTP host has been configured.
         // This prevents the application from crashing if the .env file is incomplete, 
@@ -117,5 +119,35 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             ->icon($icon)
             ->color($color)
             ->getDatabaseMessage();
+    }
+
+    public function toWebPush($notifiable, $notification)
+    {
+        $title = match ($this->event) {
+            'submitted'       => "New Voucher Submitted",
+            'checked'         => "Voucher Checked & Forwarded",
+            'approved'        => "Voucher Approved",
+            'rejected'        => "Voucher Rejected",
+            'paid'            => "Voucher Paid",
+            'reminder_checker' => "Action Required: Pending Check",
+            'reminder_approver' => "Action Required: Pending Approval",
+            default           => "Voucher Update",
+        };
+
+        $body = "{$this->voucher->voucher_number} - AED " . number_format($this->voucher->amount, 2);
+        if ($this->comments) {
+            $body .= "\n\nComments: {$this->comments}";
+        }
+
+        return (new WebPushMessage)
+            ->title($title)
+            ->icon('/images/icon-192.png')
+            ->body($body)
+            ->action('View', url('/vouchers/vouchers'))
+            ->options([
+                'TTL' => 86400, // 1 day
+                'urgency' => 'high',
+            ])
+            ->data(['id' => $notification->id, 'url' => url('/vouchers/vouchers')]);
     }
 }

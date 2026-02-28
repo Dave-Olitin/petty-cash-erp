@@ -1,4 +1,4 @@
-const CACHE_NAME = 'petty-cash-erp-v1-fixed';
+const CACHE_NAME = 'petty-cash-erp-v2';
 const urlsToCache = [
     '/manifest.json',
     '/images/icon-192.png',
@@ -46,5 +46,44 @@ self.addEventListener('activate', (event) => {
                 })
             );
         }).then(() => self.clients.claim()) // Take control immediately
+    );
+});
+
+self.addEventListener('push', function (e) {
+    if (!(self.Notification && self.Notification.permission === 'granted')) {
+        return;
+    }
+
+    if (e.data) {
+        let msg = e.data.json();
+        e.waitUntil(
+            self.registration.showNotification(msg.title, {
+                body: msg.body,
+                icon: msg.icon || '/images/icon-192.png',
+                badge: msg.badge || '/images/icon-192.png',
+                data: msg.data || null,
+                actions: msg.actions || [],
+                tag: msg.tag || 'petty-cash-erp'
+            })
+        );
+    }
+});
+
+self.addEventListener('notificationclick', function (event) {
+    event.notification.close();
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
+            let targetUrl = event.notification.data?.url || '/admin';
+
+            for (let i = 0; i < clientList.length; i++) {
+                let client = clientList[i];
+                if (client.url.includes('/admin') || client.url.includes('/vouchers') && 'focus' in client) {
+                    return client.focus();
+                }
+            }
+            if (clients.openWindow) {
+                return clients.openWindow(targetUrl);
+            }
+        })
     );
 });

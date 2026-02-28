@@ -6,6 +6,8 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\WebPush\WebPushMessage;
+use NotificationChannels\WebPush\WebPushChannel;
 
 class LowBalanceNotification extends Notification implements ShouldQueue
 {
@@ -20,7 +22,7 @@ class LowBalanceNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        $channels = ['database'];
+        $channels = ['database', WebPushChannel::class];
 
         $host = config('mail.mailers.smtp.host');
         if ($host && $host !== '127.0.0.1' && $host !== 'your-smtp-host') {
@@ -51,5 +53,19 @@ class LowBalanceNotification extends Notification implements ShouldQueue
             ->danger()
             ->icon('heroicon-o-exclamation-triangle')
             ->getDatabaseMessage();
+    }
+
+    public function toWebPush($notifiable, $notification)
+    {
+        return (new WebPushMessage)
+            ->title('⚠️ Low Float Balance')
+            ->icon('/images/icon-192.png')
+            ->body('Head Office float dropped below AED 2,000. Current: AED ' . number_format($this->currentBalance, 2))
+            ->action('View', url('/admin'))
+            ->options([
+                'TTL' => 86400, // 1 day
+                'urgency' => 'high',
+            ])
+            ->data(['id' => $notification->id, 'url' => url('/admin')]);
     }
 }
