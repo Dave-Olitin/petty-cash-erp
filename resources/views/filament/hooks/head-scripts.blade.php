@@ -22,8 +22,7 @@
                 console.log("ServiceWorker registered. Scope:", registration.scope);
 
                 // --- Push Notification Subscription ---
-                // Only prompt if we are logged in (we check if axios is available to make the API call)
-                if (typeof axios !== 'undefined') {
+                if ('Notification' in window && 'PushManager' in window) {
                     Notification.requestPermission().then((permission) => {
                         if (permission === 'granted') {
                             subscribeUserToPush(registration);
@@ -64,9 +63,16 @@
             .then(function(subscription) {
                 // Send subscription to server
                 const subJSON = subscription.toJSON();
-                axios.post('/push/subscribe', {
-                    endpoint: subJSON.endpoint,
-                    keys: subJSON.keys
+                fetch('/push/subscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        endpoint: subJSON.endpoint,
+                        keys: subJSON.keys
+                    })
                 }).catch(err => console.error('Push sub save failed:', err));
             })
             .catch(function(err) {
