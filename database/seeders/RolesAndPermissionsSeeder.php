@@ -86,19 +86,19 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // ─── 3. Create / Update Test Users ───────────────────────────────────
 
-        $testAccountant = User::firstOrCreate(
+        $testAccountant = User::updateOrCreate(
             ['email' => 'accountant@pettycash.com'],
             ['name' => 'Test Accountant', 'password' => Hash::make('password')]
         );
         $testAccountant->syncRoles($accountantRole);
 
-        $testApprover = User::firstOrCreate(
+        $testApprover = User::updateOrCreate(
             ['email' => 'approver@pettycash.com'],
             ['name' => 'Test Approver', 'password' => Hash::make('password')]
         );
         $testApprover->syncRoles($approverRole);
 
-        $testRequester = User::firstOrCreate(
+        $testRequester = User::updateOrCreate(
             ['email' => 'requester@pettycash.com'],
             ['name' => 'Test Requester', 'password' => Hash::make('password')]
         );
