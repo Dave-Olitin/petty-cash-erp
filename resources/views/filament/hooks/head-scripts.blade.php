@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#3b82f6">
 
 <style>
-    /* Login Page Background */
+    /* Login Page Background — Admin panel only */
     .fi-simple-layout {
         background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
         min-height: 100vh;
@@ -16,68 +16,115 @@
 </style>
 
 <script>
-    if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function() {
-            navigator.serviceWorker.register("/sw.js").then(function(registration) {
-                console.log("ServiceWorker registered. Scope:", registration.scope);
+(function () {
+    // ── Service Worker & Push Notifications ─────────────────────────────
+    if (!('serviceWorker' in navigator)) {
+        console.warn('[PWA] Service workers not supported.');
+        return;
+    }
+    if (!('PushManager' in window)) {
+        console.warn('[PWA] Web Push not supported in this browser.');
+        return;
+    }
 
-                // --- Push Notification Subscription ---
-                if ('Notification' in window && 'PushManager' in window) {
-                    Notification.requestPermission().then((permission) => {
+    const VAPID_PUBLIC_KEY = '{!! config("webpush.vapid.public_key") !!}';
+    const CSRF_TOKEN       = '{{ csrf_token() }}';
+
+    // Convert URL-safe Base64 VAPID key to Uint8Array
+    function urlB64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        const output  = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; i++) {
+            output[i] = rawData.charCodeAt(i);
+        }
+        return output;
+    }
+
+    // Send subscription keys to our Laravel backend
+    function saveSubscription(subscription) {
+        const sub = subscription.toJSON();
+        console.log('[Push] Saving subscription to server...', sub.endpoint.substring(0, 60) + '…');
+
+        fetch('/push/subscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN':  CSRF_TOKEN,
+                'Accept':        'application/json',
+            },
+            body: JSON.stringify({
+                endpoint: sub.endpoint,
+                keys:     sub.keys,
+            }),
+        })
+        .then(res => {
+            if (!res.ok) {
+                return res.text().then(txt => { throw new Error('HTTP ' + res.status + ': ' + txt); });
+            }
+            console.log('[Push] Subscription saved ✅');
+        })
+        .catch(err => console.error('[Push] Failed to save subscription:', err));
+    }
+
+    // Subscribe (or re-use existing subscription)
+    function subscribeToPush(registration) {
+        if (!VAPID_PUBLIC_KEY) {
+            console.warn('[Push] VAPID public key missing in config.');
+            return;
+        }
+
+        const appServerKey = urlB64ToUint8Array(VAPID_PUBLIC_KEY);
+
+        // Check if already subscribed
+        registration.pushManager.getSubscription()
+            .then(existing => {
+                if (existing) {
+                    console.log('[Push] Already subscribed — refreshing server record.');
+                    saveSubscription(existing);
+                    return;
+                }
+                console.log('[Push] Creating new push subscription…');
+                return registration.pushManager.subscribe({
+                    userVisibleOnly:      true,
+                    applicationServerKey: appServerKey,
+                });
+            })
+            .then(subscription => {
+                if (subscription) saveSubscription(subscription);
+            })
+            .catch(err => console.error('[Push] Subscription failed:', err));
+    }
+
+    // Register SW then handle permissions
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js')
+            .then(function (registration) {
+                console.log('[PWA] ServiceWorker registered. Scope:', registration.scope);
+
+                const currentPermission = Notification.permission;
+                console.log('[Push] Notification permission:', currentPermission);
+
+                if (currentPermission === 'granted') {
+                    // Already allowed — just make sure our subscription is on the server
+                    subscribeToPush(registration);
+
+                } else if (currentPermission === 'default') {
+                    // Not yet asked — prompt the user
+                    Notification.requestPermission().then(permission => {
+                        console.log('[Push] User responded:', permission);
                         if (permission === 'granted') {
-                            subscribeUserToPush(registration);
+                            subscribeToPush(registration);
                         }
                     });
+
+                } else {
+                    // 'denied' — user blocked notifications; nothing we can do
+                    console.warn('[Push] Notifications are BLOCKED by the user in browser settings.');
                 }
-            }, function(err) {
-                console.warn("ServiceWorker registration failed:", err);
-            });
-        });
-
-        // Function to convert Base64 string to Uint8Array
-        function urlB64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-                .replace(/\-/g, '+')
-                .replace(/_/g, '/');
-
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
-
-        function subscribeUserToPush(registration) {
-            const vapidPublicKey = '{{ config("webpush.vapid.public_key") }}';
-            if (!vapidPublicKey) return;
-
-            const applicationServerKey = urlB64ToUint8Array(vapidPublicKey);
-
-            registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: applicationServerKey
             })
-            .then(function(subscription) {
-                // Send subscription to server
-                const subJSON = subscription.toJSON();
-                fetch('/push/subscribe', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        endpoint: subJSON.endpoint,
-                        keys: subJSON.keys
-                    })
-                }).catch(err => console.error('Push sub save failed:', err));
-            })
-            .catch(function(err) {
-                console.log('Failed to subscribe the user: ', err);
-            });
-        }
-    }
+            .catch(err => console.error('[PWA] ServiceWorker registration failed:', err));
+    });
+})();
 </script>

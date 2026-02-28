@@ -157,7 +157,7 @@ class VouchersPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->databaseNotifications()
-            ->databaseNotificationsPolling('30s')
+            ->databaseNotificationsPolling('10s')
             ->renderHook(
                 'panels::head.end',
                 fn () => view('filament.hooks.custom-styles')
