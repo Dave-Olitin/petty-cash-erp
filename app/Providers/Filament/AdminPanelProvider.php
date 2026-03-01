@@ -25,7 +25,7 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
-            ->path('admin')
+            ->path('admin-hidden')
             ->login(\App\Filament\Pages\Auth\CustomLogin::class)
             ->favicon(asset('images/icon-192.png'))
             ->passwordReset()   // Enables the "Forgot Password?" flow via email
