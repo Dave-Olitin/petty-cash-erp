@@ -65,3 +65,8 @@ Route::middleware(['auth'])->group(function () {
 
 });
 
+// Push Subscription Routes — accessible from any panel
+Route::middleware(['auth'])->group(function () {
+    Route::post('/push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'subscribe']);
+    Route::post('/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe']);
+});

@@ -4,7 +4,10 @@ namespace App\Observers;
 
 use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
+use App\Models\User;
+use App\Notifications\TransactionStatusNotification;
 
 class TransactionObserver
 {
@@ -44,6 +47,12 @@ class TransactionObserver
                 $branch->increment('current_balance', $transaction->amount);
             }
         });
+
+        // Trigger Notification to Head Office
+        if ($transaction->status === 'pending') {
+            $headOfficeUsers = User::whereNull('branch_id')->get();
+            Notification::send($headOfficeUsers, new TransactionStatusNotification($transaction, 'created'));
+        }
     }
 
     /**
@@ -106,6 +115,13 @@ class TransactionObserver
                 $branch->increment('current_balance', $transaction->amount);
             }
         });
+
+        // Trigger notifications for status changes to the original creator
+        if ($oldStatus === 'pending' && $newStatus === 'approved') {
+            $transaction->user->notify(new TransactionStatusNotification($transaction, 'approved'));
+        } elseif ($oldStatus === 'pending' && $newStatus === 'rejected') {
+            $transaction->user->notify(new TransactionStatusNotification($transaction, 'rejected'));
+        }
     }
 
     /**
