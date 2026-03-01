@@ -48,3 +48,70 @@ self.addEventListener('activate', (event) => {
         }).then(() => self.clients.claim()) // Take control immediately
     );
 });
+
+// --- PUSH NOTIFICATIONS ---
+
+self.addEventListener('push', function (event) {
+    if (!event.data) {
+        console.log('[SW] Push received with no data.');
+        return;
+    }
+
+    try {
+        const payload = event.data.json();
+        const title = payload.title || 'Petty Cash ERP';
+        const options = {
+            body: payload.body,
+            icon: payload.icon || '/images/icon-192.png',
+            badge: payload.badge || '/images/badge-72.png',
+            tag: payload.tag || 'default',
+            data: payload.data || {}
+        };
+
+        if (payload.actions) {
+            options.actions = payload.actions;
+        }
+
+        event.waitUntil(
+            self.registration.showNotification(title, options)
+        );
+    } catch (e) {
+        // Fallback for simple text payloads
+        console.warn('[SW] Push data was not JSON:', e);
+        event.waitUntil(
+            self.registration.showNotification('Petty Cash ERP', {
+                body: event.data.text(),
+                icon: '/images/icon-192.png'
+            })
+        );
+    }
+});
+
+self.addEventListener('notificationclick', function (event) {
+    console.log('[SW] Notification click received.', event.notification.data);
+    event.notification.close();
+
+    let targetUrl = '/'; // Default fallback
+
+    // Attempt to extract the URL from the notification data
+    if (event.notification.data && event.notification.data.url) {
+        targetUrl = event.notification.data.url;
+    }
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            // If the user already has the tab open, focus it and navigate
+            for (let i = 0; i < windowClients.length; i++) {
+                const client = windowClients[i];
+                if (client.url && 'focus' in client) {
+                    client.focus();
+                    return client.navigate(targetUrl);
+                }
+            }
+            // If the app is closed, open a new window
+            if (clients.openWindow) {
+                return clients.openWindow(targetUrl);
+            }
+        })
+    );
+});

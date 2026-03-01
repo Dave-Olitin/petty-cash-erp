@@ -411,6 +411,12 @@ public static function table(Table $table): Table
                     ->visible(fn (Transaction $record) => $record->status === 'pending' && auth()->user()->branch_id === null)
                     ->action(function (Transaction $record) {
                         $record->update(['status' => 'approved']);
+                        
+                        // Notify the Branch User
+                        if ($record->user) {
+                            $record->user->notify(new \App\Notifications\TransactionStatusNotification($record, 'approved'));
+                        }
+
                         \Filament\Notifications\Notification::make()
                             ->title('Transaction Approved')
                             ->success()
@@ -445,6 +451,11 @@ public static function table(Table $table): Table
                             'original_data'  => $originalData,
                             'modified_data'  => $record->fresh()->toArray(),
                         ]);
+
+                        // Notify the Branch User
+                        if ($record->user) {
+                            $record->user->notify(new \App\Notifications\TransactionStatusNotification($record, 'rejected'));
+                        }
 
                         \Filament\Notifications\Notification::make()
                             ->title('Transaction Rejected')

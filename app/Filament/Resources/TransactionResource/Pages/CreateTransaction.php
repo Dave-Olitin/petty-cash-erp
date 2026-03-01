@@ -37,6 +37,15 @@ class CreateTransaction extends CreateRecord
                 ->where('id', $this->record->id)
                 ->update(['created_at' => $customDate]);
         }
+
+        // Notify Head Office that a new transaction is pending
+        if ($this->record->status === 'pending') {
+            $headOfficeUsers = \App\Models\User::whereNull('branch_id')->get();
+            \Illuminate\Support\Facades\Notification::send(
+                $headOfficeUsers, 
+                new \App\Notifications\TransactionStatusNotification($this->record, 'created')
+            );
+        }
     }
 }
 
