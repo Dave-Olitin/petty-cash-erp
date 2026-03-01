@@ -32,7 +32,7 @@ class Dashboard extends \Filament\Pages\Dashboard
                 ->label('Fund Voucher')
                 ->icon('heroicon-o-banknotes')
                 ->color('success')
-                ->visible(fn (): bool => auth()->user()->isHeadOffice() || auth()->user()->hasRole('Accountant'))
+                ->visible(fn (): bool => auth()->user()->can('voucher.create'))
                 ->form([
                     Forms\Components\TextInput::make('amount')
                         ->required()
@@ -42,15 +42,26 @@ class Dashboard extends \Filament\Pages\Dashboard
                         ->required()
                         ->default(now()),
                     Forms\Components\TextInput::make('reference')
-                        ->required()
-                        ->label('Reference (e.g. Bank Transfer Ref, Cheque No)')
-                        ->maxLength(255),
+                        ->label('Reference (Auto-Generated)')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->placeholder('Will be generated upon save'),
                     Forms\Components\Textarea::make('remarks')
                         ->columnSpanFull(),
                     Forms\Components\Hidden::make('created_by')
                         ->default(fn () => auth()->id()),
                 ])
-                ->successNotificationTitle('Replenishment recorded successfully'),
+                ->mutateFormDataUsing(function (array $data): array {
+                    $latest = App\Models\FloatReplenishment::where('reference', 'like', 'REF-%')
+                        ->orderBy('id', 'desc')
+                        ->first();
+                    
+                    $number = $latest ? intval(substr($latest->reference, 4)) + 1 : 1;
+                    $data['reference'] = 'REF-' . str_pad($number, 4, '0', STR_PAD_LEFT);
+                    
+                    return $data;
+                })
+                ->successNotificationTitle('Fund Voucher recorded successfully'),
         ];
     }
 }

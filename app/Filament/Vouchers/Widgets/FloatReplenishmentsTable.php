@@ -58,9 +58,10 @@ class FloatReplenishmentsTable extends BaseWidget
                             ->required()
                             ->default(now()),
                         Forms\Components\TextInput::make('reference')
-                            ->required()
-                            ->label('Reference (e.g. Bank Transfer Ref, Cheque No)')
-                            ->maxLength(255),
+                            ->label('Reference (Auto-Generated)')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->placeholder('Will be generated upon save'),
                         Forms\Components\Textarea::make('remarks')
                             ->columnSpanFull(),
                     ])
