@@ -122,7 +122,7 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
                 \Filament\Notifications\Actions\Action::make('open_voucher')
                     ->label('View Voucher')
                     ->button()
-                    ->url(url("/vouchers/vouchers/{$this->voucher->id}/edit"))
+                    ->url(url("/vouchers/vouchers/{$this->voucher->id}"))
                     ->markAsRead(),
             ])
             ->getDatabaseMessage();
@@ -151,6 +151,6 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             ->icon('/images/icon-192.png')
             ->body($body)
             ->options(['TTL' => '86400'])
-            ->data(['id' => $notification->id, 'url' => url('/vouchers/vouchers')]);
+            ->data(['id' => $notification->id, 'url' => url("/vouchers/vouchers/{$this->voucher->id}")]);
     }
 }
