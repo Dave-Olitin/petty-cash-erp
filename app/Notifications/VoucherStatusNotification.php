@@ -118,6 +118,13 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             ->body($body)
             ->icon($icon)
             ->color($color)
+            ->actions([
+                \Filament\Notifications\Actions\Action::make('view')
+                    ->label('View Voucher')
+                    ->button()
+                    ->url(url("/vouchers/vouchers/{$this->voucher->id}/edit"))
+                    ->markAsRead(),
+            ])
             ->getDatabaseMessage();
     }
 

@@ -41,10 +41,10 @@ class VouchersPanelProvider extends PanelProvider
                             flex-direction: column !important;
                         }
                         
-                        /* Left side (Logo container) */
+                        /* Left side (Logo container) - HIDDEN ON MOBILE */
                         .fi-simple-layout::before {
                             content: "";
-                            display: block;
+                            display: none;
                             height: 250px; /* mobile height */
                             width: 100%;
                             background-color: #ffffff;
@@ -105,6 +105,7 @@ class VouchersPanelProvider extends PanelProvider
                                 flex-direction: row !important;
                             }
                             .fi-simple-layout::before {
+                                display: block;
                                 flex: 1;
                                 height: 100vh; /* full height */
                                 border-right: 1px solid rgba(0,0,0,0.05);
