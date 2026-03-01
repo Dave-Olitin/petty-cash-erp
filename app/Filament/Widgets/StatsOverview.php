@@ -110,7 +110,7 @@ class StatsOverview extends BaseWidget
         $from = $startDate ? \Carbon\Carbon::parse($startDate) : now()->subDays(7);
         $to   = $endDate   ? \Carbon\Carbon::parse($endDate)->endOfDay() : now();
 
-        return Transaction::query()
+        $trend = Transaction::query()
             ->where('type', $type)
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->whereBetween('created_at', [$from, $to])
@@ -119,5 +119,9 @@ class StatsOverview extends BaseWidget
             ->orderBy('date')
             ->pluck('total')
             ->toArray();
+
+        // Filament requires at least 2 data points to render an SVG sparkline trend, 
+        // otherwise it throws a Division By Zero error.
+        return count($trend) < 2 ? [0, 0] : $trend;
     }
 }

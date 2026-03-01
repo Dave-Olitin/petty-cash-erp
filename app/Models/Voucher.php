@@ -103,7 +103,7 @@ class Voucher extends Model implements HasMedia
                 'payee',
                 'description',
                 'status',
-                'category.name',
+                'category_id',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
