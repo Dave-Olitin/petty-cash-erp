@@ -1,7 +1,13 @@
 {{-- PWA & Login Page Head Injections --}}
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#3b82f6">
+@if(filament()->getCurrentPanel()->getId() === 'vouchers')
+    <link rel="manifest" href="/manifest-vouchers.json">
+    <meta name="theme-color" content="#f59e0b">
+@else
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+@endif
 
+@if(filament()->getCurrentPanel()->getId() === 'admin')
 <style>
     /* Login Page Background — Admin panel only */
     .fi-simple-layout {
@@ -14,6 +20,7 @@
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
     }
 </style>
+@endif
 
 <script>
 (function () {

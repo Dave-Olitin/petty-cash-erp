@@ -1,0 +1,24 @@
+{
+    "name": "Petty Cash Payments",
+    "short_name": "Payments",
+    "description": "Petty Cash Payment Vouchers",
+    "categories": [
+        "finance",
+        "business",
+        "productivity"
+    ],
+    "start_url": "/vouchers/login",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#f59e0b",
+    "orientation": "any",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "/images/voucher-app-icon.png",
+            "sizes": "192x192 512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
