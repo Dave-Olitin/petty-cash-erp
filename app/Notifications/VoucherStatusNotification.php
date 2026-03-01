@@ -119,7 +119,7 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             ->icon($icon)
             ->color($color)
             ->actions([
-                \Filament\Notifications\Actions\Action::make('view')
+                \Filament\Notifications\Actions\Action::make('open_voucher')
                     ->label('View Voucher')
                     ->button()
                     ->url(url("/vouchers/vouchers/{$this->voucher->id}/edit"))
