@@ -33,7 +33,10 @@ return [
     /**
      * The Guzzle client options used by Minishlink\WebPush.
      */
-    'client_options' => [],
+    'client_options' => [
+        // Windows PHP OpenSSL bug workaround for "Unable to create the local key"
+        'openssl_conf' => base_path('openssl_webpush.cnf'),
+    ],
 
     /**
      * The automatic padding in bytes used by Minishlink\WebPush.

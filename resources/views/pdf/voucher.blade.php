@@ -157,19 +157,17 @@
     </tr>
 </table>
 
-<div class="field-row">
-    <span class="field-label">PAID TO:&nbsp;</span>
-    <span class="field-value">{{ strtoupper($voucher->payee) }}</span>
-</div>
-<div class="field-row" style="margin-bottom: 2px;">
-    <span class="field-label">BEING:&nbsp;&nbsp;&nbsp;</span>
-    <span class="field-value">{{ strtoupper($voucher->description) }}</span>
-</div>
-@if(strlen($voucher->description) > 80)
-<div class="field-row">
-    <span class="field-value" style="width:100%;">&nbsp;</span>
-</div>
-@endif
+<table style="width: 100%; margin-bottom: 8px; font-size: 11px; border-collapse: collapse;">
+    <tr>
+        <td style="width: 1%; white-space: nowrap; font-weight: bold; vertical-align: bottom; padding-bottom: 2px;">PAID TO:&nbsp;</td>
+        <td style="border-bottom: 1px solid #000; vertical-align: bottom; padding-bottom: 2px;">{{ strtoupper($voucher->payee) }}</td>
+    </tr>
+    <tr><td colspan="2" style="height: 6px;"></td></tr>
+    <tr>
+        <td style="width: 1%; white-space: nowrap; font-weight: bold; vertical-align: bottom; padding-bottom: 2px;">BEING:&nbsp;&nbsp;&nbsp;</td>
+        <td style="border-bottom: 1px solid #000; vertical-align: bottom; padding-bottom: 2px;">{{ strtoupper($voucher->description) }}</td>
+    </tr>
+</table>
 
 <table class="cheque-table">
     <tr>
@@ -182,11 +180,11 @@
 <table class="ledger-table">
     <thead>
         <tr>
-            <th class="col-branch">BRANCH</th>
-            <th class="col-acct">ACCT<br>CODE</th>
-            <th class="col-detail">ACCOUNT DETAILS</th>
-            <th class="col-dr">DR</th>
-            <th class="col-cr">CR</th>
+            <th class="col-branch" style="width: 8%;">BRANCH</th>
+            <th class="col-acct" style="width: 10%;">ACCT<br>CODE</th>
+            <th class="col-detail" style="width: 42%;">ACCOUNT DETAILS</th>
+            <th class="col-dr" style="width: 20%;">DR</th>
+            <th class="col-cr" style="width: 20%;">CR</th>
         </tr>
     </thead>
     <tbody>
@@ -238,11 +236,24 @@
             <div class="sig-line">{{ $approverName }}</div>
         </td>
         <td>
-            <div class="sig-label">RECEIVED BY:</div>
+            <div class="sig-label">CEO:</div>
             <div class="sig-line"></div>
         </td>
     </tr>
+    <tr>
+        <td colspan="4" style="padding-top: 30px;">
+            <div class="sig-label">RECEIVED BY:</div>
+            <div class="sig-line" style="width: 100px;"></div>
+        </td>
+    </tr>
 </table>
+
+@if($voucher->transaction_summary)
+<div style="margin-top: 30px; border-top: 1px dashed #000; padding-top: 10px; font-size: 10px;">
+    <strong>TRANSACTION SUMMARY:</strong><br>
+    {!! nl2br(e($voucher->transaction_summary)) !!}
+</div>
+@endif
 
 </body>
 </html>

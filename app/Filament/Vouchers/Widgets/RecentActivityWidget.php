@@ -19,14 +19,21 @@ class RecentActivityWidget extends BaseWidget
 
     public function table(Table $table): Table
     {
+        $user = auth()->user();
+        $query = \Spatie\Activitylog\Models\Activity::query()
+            ->where('subject_type', \App\Models\Voucher::class)
+            ->latest()
+            ->limit(10);
+
+        if ($user && !$user->isHeadOffice() && !$user->hasAnyRole(['Accountant', 'Approver', 'Admin', 'Super Admin'])) {
+            $query->whereHasMorph('subject', [\App\Models\Voucher::class], function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            });
+        }
+
         return $table
             ->heading('Recent Voucher Activity')
-            ->query(
-                \Spatie\Activitylog\Models\Activity::query()
-                    ->where('subject_type', \App\Models\Voucher::class)
-                    ->latest()
-                    ->limit(10)
-            )
+            ->query($query)
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Time')

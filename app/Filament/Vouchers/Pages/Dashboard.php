@@ -52,12 +52,20 @@ class Dashboard extends \Filament\Pages\Dashboard
                         ->default(fn () => auth()->id()),
                 ])
                 ->mutateFormDataUsing(function (array $data): array {
-                    $latest = App\Models\FloatReplenishment::where('reference', 'like', 'REF-%')
-                        ->orderBy('id', 'desc')
-                        ->first();
-                    
-                    $number = $latest ? intval(substr($latest->reference, 4)) + 1 : 1;
-                    $data['reference'] = 'REF-' . str_pad($number, 4, '0', STR_PAD_LEFT);
+                    $lock = \Illuminate\Support\Facades\Cache::lock('replenishment_ref_generation', 5);
+
+                    try {
+                        $lock->block(5, function () use (&$data) {
+                            $latest = \App\Models\FloatReplenishment::where('reference', 'like', 'REF-%')
+                                ->orderBy('id', 'desc')
+                                ->first();
+
+                            $number = $latest ? intval(substr($latest->reference, 4)) + 1 : 1;
+                            $data['reference'] = 'REF-' . str_pad($number, 4, '0', STR_PAD_LEFT);
+                        });
+                    } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+                        throw new \RuntimeException('Could not generate reference due to system load. Please try again.');
+                    }
                     
                     return $data;
                 })

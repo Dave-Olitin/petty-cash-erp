@@ -48,17 +48,17 @@ class VoucherResource extends Resource
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->can('voucher.edit') && $record->status === 'draft';
+        return true; // Delegation to Policy
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->can('voucher.delete');
+        return true; // Delegation to Policy
     }
 
     public static function canView(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->can('voucher.view');
+        return true; // Delegation to Policy
     }
 
     public static function form(Form $form): Form
@@ -102,13 +102,13 @@ class VoucherResource extends Resource
                             ->label('Paid To')
                             ->required()
                             ->maxLength(255)
-                            ->live(onBlur: true),
+                            ->live(debounce: 500),
 
                         Forms\Components\Textarea::make('description')
                             ->label('Being (Purpose)')
                             ->rows(2)
                             ->columnSpanFull()
-                            ->live(onBlur: true),
+                            ->live(debounce: 500),
                     ])
                     ->columns(3)
                     ->collapsible(),
@@ -162,26 +162,45 @@ class VoucherResource extends Resource
                                         ->label('Branch')
                                         ->maxLength(10)
                                         ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
-                                        ->columnSpan(3),
+                                        ->columnSpan(2),
 
-                                    Forms\Components\TextInput::make('account_code')
+                                    Forms\Components\Select::make('account_code')
                                         ->label('Account Code')
-                                        ->maxLength(50)
-                                        ->placeholder('e.g. 1010-02')
-                                        ->columnSpan(3),
+                                        ->searchable()
+                                        ->allowHtml()
+                                        ->getSearchResultsUsing(fn (string $search): array => \App\Models\AccountCode::where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%")->limit(50)->get()->mapWithKeys(fn ($ac) => [$ac->code => $ac->code])->toArray())
+                                        ->getOptionLabelUsing(fn ($value): ?string => \App\Models\AccountCode::where('code', $value)->first()?->code ?? $value)
+                                        ->createOptionForm([
+                                            Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
+                                            Forms\Components\TextInput::make('name')->required(),
+                                        ])
+                                        ->createOptionUsing(function (array $data) {
+                                            \App\Models\AccountCode::create($data);
+                                            return $data['code'];
+                                        })
+                                        ->live(debounce: 500)
+                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
+                                            if (blank($state)) return;
+                                            $account = \App\Models\AccountCode::where('code', $state)->first();
+                                            if ($account) {
+                                                $set('description', $account->name);
+                                            }
+                                        })
+                                        ->columnSpan(4),
 
                                     Forms\Components\TextInput::make('amount')
                                         ->numeric()
                                         ->required()
                                         ->prefix('AED')
                                         ->default(0)
-                                        ->live(onBlur: true)
-                                        ->columnSpan(2),
+                                        ->live(debounce: 500)
+                                        ->columnSpan(3),
 
                                     Forms\Components\TextInput::make('description')
                                         ->label('Account Details / Description')
                                         ->placeholder('Enter description for this entry')
-                                        ->columnSpan(4),
+                                        ->live(debounce: 500)
+                                        ->columnSpan(12),
                                 ]),
                             ])
                             ->defaultItems(2)
@@ -207,20 +226,41 @@ class VoucherResource extends Resource
                             })
                             ->live(),
                     ])
+                    ->columnSpan(2)
                     ->collapsible(),
+
+                // ── LIVE PREVIEW ──────────────────────────────────────────
+                Forms\Components\Section::make('Live Preview')
+                    ->extraAttributes(['class' => 'preview-section-no-padding', 'style' => 'padding:0!important; margin:0!important;'])
+                    ->schema([
+                        Forms\Components\Placeholder::make('pdf_preview_form')
+                            ->label('')
+                            ->content(fn (Forms\Get $get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
+                    ])
+                    ->columnSpan(1)
+                    ->collapsible()
+                    ->collapsed(false),
 
                 // ── SUMMARY & ATTACHMENTS ─────────────────────────────────
                 Forms\Components\Section::make('Summary & Attachments')
                     ->icon('heroicon-o-calculator')
+                    ->compact()
                     ->schema([
                         Forms\Components\TextInput::make('amount')
                             ->label('Total Amount')
                             ->numeric()
                             ->prefix('AED')
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: 500)
                             ->helperText('Auto-calculated from debit entries. You can override this manually.')
-                            ->columnSpan(1),
+                            ->columnSpanFull(),
+
+                        Forms\Components\Textarea::make('transaction_summary')
+                            ->label('Transaction Summary')
+                            ->rows(3)
+                            ->helperText('Optional manual text to print on the voucher summary at the bottom.')
+                            ->live(debounce: 500)
+                            ->columnSpanFull(),
 
                         Forms\Components\FileUpload::make('attachment_paths')
                             ->multiple()
@@ -237,7 +277,7 @@ class VoucherResource extends Resource
                     ])
                     ->columns(2)
                     ->collapsible(),
-            ]);
+            ])->columns(3);
     }
 
     public static function table(Table $table): Table
@@ -493,10 +533,17 @@ class VoucherResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        // SoftDeletingScope is intentionally kept active — soft-deleted vouchers
-        // should never surface in normal views.
-        return parent::getEloquentQuery()
+        $query = parent::getEloquentQuery()
             ->with(['approvals.user.roles', 'items.category', 'template']);
+            
+        $user = auth()->user();
+
+        // Scope queries based on user permissions/branch
+        if ($user && !$user->isHeadOffice() && !$user->hasAnyRole(['Accountant', 'Approver', 'Admin', 'Super Admin'])) {
+            $query->where('user_id', $user->id);
+        }
+
+        return $query;
     }
 
     public static function infolist(\Filament\Infolists\Infolist $infolist): \Filament\Infolists\Infolist

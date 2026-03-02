@@ -35,6 +35,7 @@ class Voucher extends Model implements HasMedia
         'cheque_no',
         'cheque_date',
         'bank',
+        'transaction_summary',
     ];
 
     protected function casts(): array
