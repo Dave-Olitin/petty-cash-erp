@@ -13,7 +13,7 @@ class VoucherStatsOverview extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user()->can('access_vouchers_panel');
+        return auth()->user()->hasAnyRole(['Admin', 'Super Admin']);
     }
 
     protected function getStats(): array

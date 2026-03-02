@@ -64,7 +64,9 @@ class Dashboard extends \Filament\Pages\Dashboard
                             $data['reference'] = 'REF-' . str_pad($number, 4, '0', STR_PAD_LEFT);
                         });
                     } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
-                        throw new \RuntimeException('Could not generate reference due to system load. Please try again.');
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'amount' => 'Could not generate reference due to system load. Please try again.',
+                        ]);
                     }
                     
                     return $data;

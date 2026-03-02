@@ -25,6 +25,11 @@ class VoucherReportPage extends Page implements HasForms
     protected static ?int $navigationSort = 10;
     protected static string $view = 'filament.vouchers.pages.voucher-report-page';
 
+    public static function canAccess(): bool
+    {
+        return auth()->user()->hasAnyRole(['Admin', 'Super Admin']);
+    }
+
     public ?string $date_from = null;
     public ?string $date_to = null;
     public ?string $category_id = null;

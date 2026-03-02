@@ -26,4 +26,14 @@ return Application::configure(basePath: dirname(__DIR__))
             // A simple back() will often just reload the same page with a fresh token.
             return back()->with('error', 'Your session expired. Please try submitting again.');
         });
+
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, \Illuminate\Http\Request $request) {
+            $msg = $e->getMessage();
+            if ($e->getCode() === '40001' || str_contains($msg, 'Lock wait timeout') || str_contains($msg, 'Deadlock')) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => 'The system is heavily loaded or processing concurrent requests. Please wait a few seconds and try again.',
+                    'voucher_template_id' => 'The system is heavily loaded or processing concurrent requests. Please wait a few seconds and try again.',
+                ]);
+            }
+        });
     })->create();
