@@ -13,8 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
-            '/push/subscribe',
-            '/push/unsubscribe',
+            'push/subscribe',
+            'push/unsubscribe',
+            'push/*'
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
