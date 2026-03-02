@@ -24,7 +24,7 @@ class CashFlowChart extends ChartWidget
         
         $filterStart = $this->filters['startDate'] ? \Carbon\Carbon::parse($this->filters['startDate']) : now()->subMonths(5)->startOfMonth();
         $filterEnd = $this->filters['endDate'] ? \Carbon\Carbon::parse($this->filters['endDate'])->endOfDay() : now()->endOfMonth();
-        $branchId = $this->filters['branch_id'] ?? ($user->branch_id);
+        $branchId = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
 
         $cacheKey = 'cash_flow_' . ($user->id) . '_' . md5(json_encode($this->filters));
 

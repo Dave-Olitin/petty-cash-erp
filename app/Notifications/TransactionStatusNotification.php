@@ -34,7 +34,13 @@ class TransactionStatusNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'mail', WebPushChannel::class];
+        $channels = ['database', WebPushChannel::class];
+
+        if (config('mail.mailers.smtp.host') && config('mail.mailers.smtp.host') !== '127.0.0.1') {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     /**

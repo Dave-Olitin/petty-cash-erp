@@ -19,5 +19,15 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            // A 419 Token Mismatch occurred (typically page expired).
+            // Instead of showing the default error page, we return a response that reloads the page.
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'CSRF token mismatch. Please refresh.'], 419);
+            }
+            
+            // Redirect back with a flash message if possible, or just back.
+            // A simple back() will often just reload the same page with a fresh token.
+            return back()->with('error', 'Your session expired. Please try submitting again.');
+        });
     })->create();

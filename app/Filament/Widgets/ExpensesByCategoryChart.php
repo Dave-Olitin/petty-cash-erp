@@ -18,7 +18,7 @@ class ExpensesByCategoryChart extends ChartWidget
         $user      = auth()->user();
         $startDate = $this->filters['startDate'] ?? null;
         $endDate   = $this->filters['endDate'] ?? null;
-        $branchId  = $this->filters['branch_id'] ?? ($user->branch_id);
+        $branchId  = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
 
         // ──────────────────────────────────────────────────────────────────────
         // BUG FIX: The original query used INNER JOIN on categories, but
