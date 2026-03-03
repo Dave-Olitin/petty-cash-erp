@@ -373,10 +373,15 @@ class VoucherResource extends Resource
             ->headerActions([
                 \Filament\Tables\Actions\ImportAction::make()
                     ->importer(\App\Filament\Imports\VoucherImporter::class),
-                \pxlrbt\FilamentExcel\Actions\Tables\ExportAction::make()
-                    ->exports([
-                        \pxlrbt\FilamentExcel\Exports\ExcelExport::make('table')->fromTable(),
-                    ]),
+                \Filament\Tables\Actions\Action::make('export_custom')
+                    ->label('Export')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->action(function ($livewire) {
+                        return \Maatwebsite\Excel\Facades\Excel::download(
+                            new \App\Exports\VouchersExport($livewire->getFilteredTableQuery()),
+                            'vouchers_export_' . now()->format('Y-m-d_H-i-s') . '.xlsx'
+                        );
+                    }),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()
@@ -506,7 +511,15 @@ class VoucherResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    \pxlrbt\FilamentExcel\Actions\Tables\ExportBulkAction::make(),
+                    Tables\Actions\BulkAction::make('export_selected')
+                        ->label('Export Selected')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            return \Maatwebsite\Excel\Facades\Excel::download(
+                                new \App\Exports\VouchersExport(\App\Models\Voucher::whereIn('vouchers.id', $records->pluck('id'))),
+                                'vouchers_selected_' . now()->format('Y-m-d_H-i-s') . '.xlsx'
+                            );
+                        }),
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
