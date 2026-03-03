@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes, \NotificationChannels\WebPush\HasPushSubscriptions;
@@ -17,7 +19,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'branch_id', // Required for branch scoping. Must be fillable for UserResource to save it.
+        'branch_id',
     ];
 
     protected $hidden = [
@@ -39,9 +41,13 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class);
     }
 
-    // Helper to check if they are HQ
     public function isHeadOffice(): bool
     {
         return is_null($this->branch_id);
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return true; 
     }
 }
