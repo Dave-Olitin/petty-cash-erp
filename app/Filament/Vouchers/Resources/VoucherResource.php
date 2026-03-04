@@ -124,7 +124,8 @@ class VoucherResource extends Resource
                             ->columnSpanFull()
                             ->live(debounce: 500),
                     ])
-                    ->columns(3)
+                    ->columns(['default' => 1, 'md' => 3])
+                    ->columnSpan('full')
                     ->collapsible(),
 
                 // ── CHEQUE / PAYMENT INFO ─────────────────────────────────
@@ -147,7 +148,8 @@ class VoucherResource extends Resource
                             ->maxLength(100)
                             ->placeholder('e.g. Emirates NBD'),
                     ])
-                    ->columns(3)
+                    ->columns(['default' => 1, 'md' => 3])
+                    ->columnSpan('full')
                     ->collapsible()
                     ->collapsed(),
 
@@ -240,7 +242,7 @@ class VoucherResource extends Resource
                             })
                             ->live(),
                     ])
-                    ->columnSpan(['default' => 3, 'lg' => 2])
+                    ->columnSpan(['default' => 'full', 'lg' => 2])
                     ->collapsible(),
 
                 // ── LIVE PREVIEW ──────────────────────────────────────────
@@ -251,7 +253,7 @@ class VoucherResource extends Resource
                             ->label('')
                             ->content(fn (Forms\Get $get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
                     ])
-                    ->columnSpan(['default' => 3, 'lg' => 1])
+                    ->columnSpan(['default' => 'full', 'lg' => 1])
                     ->collapsible()
                     ->collapsed(false),
 
@@ -289,9 +291,10 @@ class VoucherResource extends Resource
                             ->helperText('Upload receipts, invoices, or supporting documents (JPG, PNG, PDF, max 10MB each).')
                             ->columnSpanFull(),
                     ])
-                    ->columns(2)
+                    ->columns(['default' => 1, 'md' => 2])
+                    ->columnSpan('full')
                     ->collapsible(),
-            ])->columns(3);
+            ])->columns(['default' => 1, 'lg' => 3]);
     }
 
     public static function table(Table $table): Table
