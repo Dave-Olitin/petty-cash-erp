@@ -170,13 +170,13 @@ class VoucherResource extends Resource
                                         ->required()
                                         ->default('debit')
                                         ->live()
-                                        ->columnSpan(3),
+                                        ->columnSpan(['default' => 12, 'md' => 3]),
 
                                     Forms\Components\TextInput::make('branch_code')
                                         ->label('Branch')
                                         ->maxLength(10)
                                         ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
-                                        ->columnSpan(2),
+                                        ->columnSpan(['default' => 12, 'md' => 2]),
 
                                     Forms\Components\Select::make('account_code')
                                         ->label('Account Code')
@@ -200,7 +200,7 @@ class VoucherResource extends Resource
                                                 $set('description', $account->name);
                                             }
                                         })
-                                        ->columnSpan(4),
+                                        ->columnSpan(['default' => 12, 'md' => 4]),
 
                                     Forms\Components\TextInput::make('amount')
                                         ->numeric()
@@ -208,7 +208,7 @@ class VoucherResource extends Resource
                                         ->prefix('AED')
                                         ->default(0)
                                         ->live(debounce: 500)
-                                        ->columnSpan(3),
+                                        ->columnSpan(['default' => 12, 'md' => 3]),
 
                                     Forms\Components\TextInput::make('description')
                                         ->label('Account Details / Description')
@@ -240,7 +240,7 @@ class VoucherResource extends Resource
                             })
                             ->live(),
                     ])
-                    ->columnSpan(2)
+                    ->columnSpan(['default' => 3, 'lg' => 2])
                     ->collapsible(),
 
                 // ── LIVE PREVIEW ──────────────────────────────────────────
@@ -251,7 +251,7 @@ class VoucherResource extends Resource
                             ->label('')
                             ->content(fn (Forms\Get $get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
                     ])
-                    ->columnSpan(1)
+                    ->columnSpan(['default' => 3, 'lg' => 1])
                     ->collapsible()
                     ->collapsed(false),
 
