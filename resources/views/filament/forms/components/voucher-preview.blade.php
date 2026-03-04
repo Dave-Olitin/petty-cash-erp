@@ -50,6 +50,7 @@
     $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.voucher', [
         'voucher' => $voucher,
         'template' => $template,
+        'isPreview' => true,
     ]);
     
     // Set to A4 and render

@@ -68,14 +68,39 @@ class VoucherResource extends Resource
                     ->icon('heroicon-o-document-text')
                     ->description('Select the company template and fill in voucher information.')
                     ->schema([
+                        Forms\Components\Select::make('type')
+                            ->options([
+                                'petty_cash' => 'Petty Cash Request',
+                                'payment' => 'Payment Voucher',
+                            ])
+                            ->required()
+                            ->default('payment')
+                            ->live()
+                            ->afterStateUpdated(function (\Filament\Forms\Set $set, $state) {
+                                if ($state === 'petty_cash') {
+                                    $template = \App\Models\VoucherTemplate::where('company_name', 'Erick Trading Co.')->first();
+                                    if ($template) {
+                                        $set('voucher_template_id', $template->id);
+                                    }
+                                } else {
+                                    $set('voucher_template_id', null);
+                                }
+                            }),
+
                         Forms\Components\Select::make('voucher_template_id')
                             ->label('Company / Header Template')
-                            ->relationship('template', 'company_name', fn ($query) => $query->where('is_active', true))
+                            ->relationship('template', 'company_name', function (\Illuminate\Database\Eloquent\Builder $query, \Filament\Forms\Get $get) {
+                                $query->where('is_active', true);
+                                if ($get('type') === 'petty_cash') {
+                                    $query->where('company_name', 'Erick Trading Co.');
+                                }
+                                return $query;
+                            })
                             ->searchable()
                             ->preload()
                             ->required()
                             ->live()
-                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                            ->afterStateUpdated(function ($state, \Filament\Forms\Set $set, \Filament\Forms\Get $get) {
                                 if ($state) {
                                     $template = \App\Models\VoucherTemplate::find($state);
                                     if ($template) {
@@ -86,15 +111,6 @@ class VoucherResource extends Resource
                                     }
                                 }
                             }),
-
-                        Forms\Components\Select::make('type')
-                            ->options([
-                                'petty_cash' => 'Petty Cash Request',
-                                'payment' => 'Payment Voucher',
-                            ])
-                            ->required()
-                            ->default('payment')
-                            ->live(),
 
                         Forms\Components\TextInput::make('payee')
                             ->label('Paid To')

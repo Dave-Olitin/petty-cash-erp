@@ -24,7 +24,8 @@ class VoucherObserver
 
         try {
             $lock->block(5, function () use ($voucher, $prefix) {
-                $latest = Voucher::where('voucher_number', 'like', $prefix . '%')
+                $latest = Voucher::withTrashed()
+                    ->where('voucher_number', 'like', $prefix . '%')
                     ->orderBy('id', 'desc')
                     ->first();
 
