@@ -17,7 +17,7 @@ class VoucherTemplateResource extends Resource
 
     protected static ?string $navigationLabel = 'Company Templates';
 
-    protected static ?string $navigationGroup = 'Settings';
+    protected static ?string $cluster = \App\Filament\Vouchers\Clusters\Settings::class;
 
     protected static ?int $navigationSort = 10;
 
