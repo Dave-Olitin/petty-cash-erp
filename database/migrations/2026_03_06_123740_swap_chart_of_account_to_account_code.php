@@ -11,6 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // 0. Ensure 'account_codes' table exists (production did not have it)
+        if (!Schema::hasTable('account_codes')) {
+            Schema::create('account_codes', function (Blueprint $table) {
+                $table->id();
+                $table->string('code')->unique();
+                $table->string('name');
+                $table->timestamps();
+            });
+        }
+
         // 1. Swap chart_of_account_id → account_code_id on categories
         Schema::table('categories', function (Blueprint $table) {
             $table->dropForeign(['chart_of_account_id']);
