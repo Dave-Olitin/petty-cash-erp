@@ -24,6 +24,7 @@ class LatestTransactions extends BaseWidget
         return $table
             ->query(
                 Transaction::query()
+                    ->with('branch')
                     ->when($this->filters['startDate'] ?? null, fn($q, $d) => $q->whereDate('created_at', '>=', $d))
                     ->when($this->filters['endDate'] ?? null, fn($q, $d) => $q->whereDate('created_at', '<=', $d))
                     ->when($this->filters['branch_id'] ?? null, fn($q, $id) => $q->where('branch_id', $id))

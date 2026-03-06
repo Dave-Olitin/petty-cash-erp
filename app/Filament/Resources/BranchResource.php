@@ -66,6 +66,20 @@ public static function table(Table $table): Table
         ])
         ->actions([
             Tables\Actions\EditAction::make(),
+            // Fix #2: Guard against deleting a branch that has transactions.
+            // The FK migration prevents DB-level cascade, this guard surfaces
+            // a friendly warning instead of a DB constraint error.
+            Tables\Actions\DeleteAction::make()
+                ->before(function (Branch $record, Tables\Actions\DeleteAction $action) {
+                    if ($record->transactions()->exists()) {
+                        \Filament\Notifications\Notification::make()
+                            ->title('Cannot Delete Branch')
+                            ->body("'{$record->name}' has existing transactions. Reassign or void them before deleting this branch.")
+                            ->danger()
+                            ->send();
+                        $action->cancel();
+                    }
+                }),
         ]);
 }
 

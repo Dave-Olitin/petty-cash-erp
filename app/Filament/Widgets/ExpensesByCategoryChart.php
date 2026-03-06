@@ -9,7 +9,7 @@ class ExpensesByCategoryChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Expenses by Account Code';
+    protected static ?string $heading = 'Expenses by Category';
     protected static ?int $sort = 3;
     protected static ?string $maxHeight = '320px';
 

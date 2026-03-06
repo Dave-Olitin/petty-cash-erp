@@ -48,10 +48,15 @@ class TransactionObserver
             }
         });
 
-        // Trigger Notification to Head Office
-        if ($transaction->status === 'pending') {
-            $headOfficeUsers = User::whereNull('branch_id')->get();
-            Notification::send($headOfficeUsers, new TransactionStatusNotification($transaction, 'created'));
+        // Fix #8: Wrap notification dispatch in try/catch so SMTP/queue failures
+        // don't surface as a 500 when the transaction itself saved successfully.
+        try {
+            if ($transaction->status === 'pending') {
+                $headOfficeUsers = User::whereNull('branch_id')->get();
+                Notification::send($headOfficeUsers, new TransactionStatusNotification($transaction, 'created'));
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Transaction created notification failed: ' . $e->getMessage());
         }
     }
 
@@ -62,6 +67,13 @@ class TransactionObserver
     public function updated(Transaction $transaction): void
     {
         if (!$transaction->branch_id) {
+            return;
+        }
+
+        // Fix #3: Skip the entire balance recalculation if no financial fields changed.
+        // This prevents unnecessary lockForUpdate() contention on non-financial edits
+        // (description, payee, receipt_path, etc.)
+        if (!$transaction->isDirty('amount', 'type', 'status')) {
             return;
         }
 
@@ -116,11 +128,16 @@ class TransactionObserver
             }
         });
 
-        // Trigger notifications for status changes to the original creator
-        if ($oldStatus === 'pending' && $newStatus === 'approved') {
-            $transaction->user->notify(new TransactionStatusNotification($transaction, 'approved'));
-        } elseif ($oldStatus === 'pending' && $newStatus === 'rejected') {
-            $transaction->user->notify(new TransactionStatusNotification($transaction, 'rejected'));
+        // Fix #8: Wrap notification dispatch in try/catch so SMTP/queue failures
+        // don't surface as a 500 when the status update itself saved successfully.
+        try {
+            if ($oldStatus === 'pending' && $newStatus === 'approved') {
+                $transaction->user->notify(new TransactionStatusNotification($transaction, 'approved'));
+            } elseif ($oldStatus === 'pending' && $newStatus === 'rejected') {
+                $transaction->user->notify(new TransactionStatusNotification($transaction, 'rejected'));
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Transaction status notification failed: ' . $e->getMessage());
         }
     }
 

@@ -9,7 +9,10 @@ class Branch extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['name', 'location', 'max_limit', 'transaction_limit', 'current_balance', 'is_active'];
+    protected $fillable = ['name', 'location', 'max_limit', 'transaction_limit', 'is_active'];
+    // NOTE: 'current_balance' is intentionally NOT in $fillable.
+    // It must only be modified via TransactionObserver's increment()/decrement() calls.
+    // This prevents accidental or malicious overwriting via mass-assignment.
 
     protected function casts(): array
     {

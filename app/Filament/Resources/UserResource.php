@@ -33,9 +33,17 @@ public static function form(Form $form): Form
                 ->unique(ignoreRecord: true),
             Forms\Components\TextInput::make('password')
                 ->password()
-                ->required(fn (string $context): bool => $context === 'create') // Only required when creating new
-                ->dehydrated(fn ($state) => filled($state)), // Don't update if empty
-                
+                ->confirmed() // Fix #7: Requires password_confirmation to match
+                ->required(fn (string $context): bool => $context === 'create')
+                ->dehydrated(fn ($state) => filled($state)),
+
+            // Fix #7: Confirmation field — only relevant when a password is typed
+            Forms\Components\TextInput::make('password_confirmation')
+                ->password()
+                ->label('Confirm Password')
+                ->required(fn (string $context): bool => $context === 'create')
+                ->dehydrated(false), // Never save this to DB
+    
             // THE MAGIC FIELD: Assign a user to a branch
             Forms\Components\Select::make('branch_id')
                 ->relationship('branch', 'name')
