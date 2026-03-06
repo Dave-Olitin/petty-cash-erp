@@ -17,7 +17,28 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class VoucherResource extends Resource
 {
+    protected static ?string $model = Voucher::class;
+
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
+    {
+        return [
+            'Payee'  => $record->payee,
+            'Amount' => 'AED ' . number_format($record->amount, 2),
+            'Status' => ucwords(str_replace('_', ' ', $record->status)),
+        ];
+    }
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['voucher_number', 'payee', 'description'];
+    }
+
+    public static function getGlobalSearchResultUrl(\Illuminate\Database\Eloquent\Model $record): string
+    {
+        return static::getUrl('view', ['record' => $record]);
+    }
 
     public static function getNavigationBadge(): ?string
     {
@@ -163,29 +184,53 @@ class VoucherResource extends Resource
                             ->label('')
                             ->schema([
                                 // Row 1: Type, Branch, Account Code
-                                Forms\Components\Grid::make(12)->schema([
+                                Forms\Components\Grid::make(['default' => 1, 'md' => 12])->schema([
                                     Forms\Components\Select::make('entry_type')
+                                        ->label('Entry type')
                                         ->options([
-                                            'debit' => 'DR — Debit',
+                                            'debit'  => 'DR — Debit',
                                             'credit' => 'CR — Credit',
                                         ])
-                                        ->required()
                                         ->default('debit')
+                                        ->required()
                                         ->live()
-                                        ->columnSpan(['default' => 12, 'md' => 3]),
+                                        ->columnSpan(['default' => 1, 'md' => 6]),
 
-                                    Forms\Components\TextInput::make('branch_code')
+                                    Forms\Components\Select::make('branch_code')
                                         ->label('Branch')
-                                        ->maxLength(10)
+                                        ->searchable()
+                                        ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
+                                        ->createOptionForm([
+                                            Forms\Components\TextInput::make('name')
+                                                ->label('New Branch Name')
+                                                ->required()
+                                                ->unique('ledger_branches', 'name'),
+                                        ])
+                                        ->createOptionUsing(function (array $data) {
+                                            $branch = \App\Models\LedgerBranch::create(['name' => $data['name']]);
+                                            return $branch->name;
+                                        })
                                         ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
-                                        ->columnSpan(['default' => 12, 'md' => 2]),
+                                        ->columnSpan(['default' => 1, 'md' => 6]),
 
                                     Forms\Components\Select::make('account_code')
                                         ->label('Account Code')
                                         ->searchable()
                                         ->allowHtml()
-                                        ->getSearchResultsUsing(fn (string $search): array => \App\Models\AccountCode::where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%")->limit(50)->get()->mapWithKeys(fn ($ac) => [$ac->code => $ac->code])->toArray())
-                                        ->getOptionLabelUsing(fn ($value): ?string => \App\Models\AccountCode::where('code', $value)->first()?->code ?? $value)
+                                        ->getSearchResultsUsing(function (string $search) {
+                                            return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
+                                                ->orWhere('name', 'like', "%{$search}%")
+                                                ->limit(30)
+                                                ->get()
+                                                ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
+                                                ->toArray();
+                                        })
+                                        ->getOptionLabelUsing(fn (?string $value) => $value
+                                            ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                                ? "{$ac->code} — {$ac->name}"
+                                                : $value
+                                            : null
+                                        )
                                         ->createOptionForm([
                                             Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
                                             Forms\Components\TextInput::make('name')->required(),
@@ -202,7 +247,7 @@ class VoucherResource extends Resource
                                                 $set('description', $account->name);
                                             }
                                         })
-                                        ->columnSpan(['default' => 12, 'md' => 4]),
+                                        ->columnSpan(['default' => 1, 'md' => 12]),
 
                                     Forms\Components\TextInput::make('amount')
                                         ->numeric()
@@ -210,13 +255,9 @@ class VoucherResource extends Resource
                                         ->prefix('AED')
                                         ->default(0)
                                         ->live(debounce: 500)
-                                        ->columnSpan(['default' => 12, 'md' => 3]),
+                                        ->columnSpan(['default' => 1, 'md' => 12]),
 
-                                    Forms\Components\TextInput::make('description')
-                                        ->label('Account Details / Description')
-                                        ->placeholder('Enter description for this entry')
-                                        ->live(debounce: 500)
-                                        ->columnSpan(12),
+                                    Forms\Components\Hidden::make('description'),
                                 ]),
                             ])
                             ->defaultItems(2)
@@ -388,6 +429,19 @@ class VoucherResource extends Resource
                                 fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
                             );
                     }),
+            ])
+            ->filtersFormColumns(2)
+            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::Modal)
+            ->groups([
+                \Filament\Tables\Grouping\Group::make('status')
+                    ->label('Status')
+                    ->collapsible(),
+                \Filament\Tables\Grouping\Group::make('type')
+                    ->label('Type')
+                    ->collapsible(),
+                \Filament\Tables\Grouping\Group::make('user.name')
+                    ->label('Requester')
+                    ->collapsible(),
             ])
             ->headerActions([
                 \Filament\Tables\Actions\ImportAction::make()
@@ -648,6 +702,22 @@ class VoucherResource extends Resource
                         \Filament\Infolists\Components\TextEntry::make('description')
                             ->columnSpanFull()
                             ->placeholder('No description provided'),
+
+                        \Filament\Infolists\Components\TextEntry::make('cheque_no')
+                            ->label('Cheque #')
+                            ->visible(fn ($record) => !empty($record->cheque_no)),
+                        \Filament\Infolists\Components\TextEntry::make('cheque_date')
+                            ->date()
+                            ->visible(fn ($record) => !empty($record->cheque_no)),
+                        \Filament\Infolists\Components\TextEntry::make('bank')
+                            ->visible(fn ($record) => !empty($record->cheque_no)),
+
+                        \Filament\Infolists\Components\TextEntry::make('attachment_paths')
+                            ->label('Invoices / Receipts')
+                            ->columnSpanFull()
+                            ->formatStateUsing(fn (string $state): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<a href="'.asset('storage/'.$state).'" target="_blank" class="text-primary-600 underline flex items-center gap-2"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>'.basename($state).'</a>'))
+                            ->html()
+                            ->listWithLineBreaks(),
                     ])->columns(4),
 
                 // ── ACTIVITY LOG: Full width chronological timeline ──────────────────────

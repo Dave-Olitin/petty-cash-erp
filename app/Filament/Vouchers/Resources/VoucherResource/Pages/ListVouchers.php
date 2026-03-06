@@ -10,6 +10,7 @@ class ListVouchers extends ListRecords
 {
     protected static string $resource = VoucherResource::class;
 
+
     protected function getHeaderActions(): array
     {
         return [
@@ -28,16 +29,19 @@ class ListVouchers extends ListRecords
             'action_required' => \Filament\Resources\Components\Tab::make('Action Required')
                 ->modifyQueryUsing(fn ($query) => $query->actionRequired($user))
                 ->badge($actionCount)
-                ->badgeColor($actionCount > 0 ? 'danger' : 'gray'),
+                ->badgeColor($actionCount > 0 ? 'danger' : 'gray')
+                ->icon('heroicon-m-exclamation-circle'),
                 
-            'all' => \Filament\Resources\Components\Tab::make('All'),
+            'all' => \Filament\Resources\Components\Tab::make('All')
+                ->icon('heroicon-m-bars-4'),
         ];
 
         if ($draftCount > 0) {
             $tabs['draft'] = \Filament\Resources\Components\Tab::make('My Drafts')
                 ->modifyQueryUsing(fn ($query) => $query->where('status', 'draft')->where('user_id', $user->id))
                 ->badge($draftCount)
-                ->badgeColor('gray');
+                ->badgeColor('gray')
+                ->icon('heroicon-m-pencil-square');
         }
 
         $tabs['in_progress'] = \Filament\Resources\Components\Tab::make('Processing & Completed')
@@ -46,7 +50,8 @@ class ListVouchers extends ListRecords
                 'pending_approver', 
                 'approved', 
                 'paid'
-            ]));
+            ]))
+            ->icon('heroicon-m-check-badge');
 
         return $tabs;
     }

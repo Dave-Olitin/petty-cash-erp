@@ -316,6 +316,7 @@ public static function form(Form $form): Form
 public static function table(Table $table): Table
 {
     return $table
+        ->recordAction(\Filament\Tables\Actions\ViewAction::class)
         ->columns([
             Tables\Columns\TextColumn::make('transaction_date')
                 ->label('Date')
@@ -591,9 +592,10 @@ public static function table(Table $table): Table
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListTransactions::route('/'),
+            'index'  => Pages\ListTransactions::route('/'),
             'create' => Pages\CreateTransaction::route('/create'),
-            'edit' => Pages\EditTransaction::route('/{record}/edit'),
+            'view'   => Pages\ViewTransaction::route('/{record}'),
+            'edit'   => Pages\EditTransaction::route('/{record}/edit'),
         ];
     }
     public static function getEloquentQuery(): Builder

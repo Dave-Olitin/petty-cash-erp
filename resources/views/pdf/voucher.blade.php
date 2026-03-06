@@ -141,8 +141,38 @@
         $words = strtoupper(\Illuminate\Support\Number::spell($displayAmount)) . ' DIRHAMS ONLY';
     }
 
-    $checkerName  = $voucher->approvals->firstWhere('action', 'checked')?->user?->name  ?? '';
-    $approverName = $voucher->approvals->whereIn('action', ['approved'])->last()?->user?->name ?? '';
+    $checkerName  = $voucher->approvals->firstWhere('action', 'checked')?->user?->name ?? '';
+
+    // Resolve each approver slot by cross-referencing approval records with ApprovalWorkflow labels.
+    // Each 'approved' action records who approved at which step. We match by checking the
+    // workflow config for each step to get the correct name per slot.
+    $gmName  = '';
+    $ceoName = '';
+
+    $approvedActions = $voucher->approvals->where('action', 'approved')->values();
+
+    if ($approvedActions->isNotEmpty()) {
+        $totalSteps = \App\Models\ApprovalWorkflow::totalSteps();
+
+        if ($totalSteps >= 2) {
+            // Multi-step: first approval = step 1 (GM), second = step 2 (CEO)
+            $gmName  = $approvedActions->get(0)?->user?->name ?? '';
+            $ceoName = $approvedActions->get(1)?->user?->name ?? '';
+        } else {
+            // Single-step or no config: only one approver — goes into GM slot
+            $gmName = $approvedActions->last()?->user?->name ?? '';
+        }
+
+        // Override with label-based matching if workflow labels are configured (GM / CEO keywords)
+        foreach ($approvedActions as $approval) {
+            $label = strtolower($approval->comments ?? '');
+            if (str_contains($label, 'gm') || str_contains($label, 'general manager')) {
+                $gmName = $approval->user?->name ?? $gmName;
+            } elseif (str_contains($label, 'ceo') || str_contains($label, 'chief')) {
+                $ceoName = $approval->user?->name ?? $ceoName;
+            }
+        }
+    }
 @endphp
 
 <table class="header-table">
@@ -250,11 +280,11 @@
         </td>
         <td>
             <div class="sig-label">GM:</div>
-            <div class="sig-line">{{ $approverName }}</div>
+            <div class="sig-line">{{ $gmName }}</div>
         </td>
         <td>
             <div class="sig-label">CEO:</div>
-            <div class="sig-line"></div>
+            <div class="sig-line">{{ $ceoName }}</div>
         </td>
     </tr>
     <tr>

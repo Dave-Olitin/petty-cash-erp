@@ -25,12 +25,10 @@ class AccountCodeImporter extends Importer
 
     public function resolveRecord(): ?AccountCode
     {
-        // return AccountCode::firstOrNew([
-        //     // Update existing records, matching them by `$this->data['column_name']`
-        //     'email' => $this->data['email'],
-        // ]);
-
-        return new AccountCode();
+        // Upsert by code — if an account code already exists, update it; otherwise create new.
+        return AccountCode::firstOrNew([
+            'code' => $this->data['code'],
+        ]);
     }
 
     public static function getCompletedNotificationBody(Import $import): string

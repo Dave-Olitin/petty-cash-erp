@@ -140,7 +140,7 @@ class VoucherApprovalService
                 'current_approval_step' => null,
             ]);
 
-            $locked->user->notify(new VoucherStatusNotification($locked, 'approved'));
+            $locked->user?->notify(new VoucherStatusNotification($locked, 'approved'));
             User::role('Accountant')->get()->each->notify(
                 new VoucherStatusNotification($locked, 'approved')
             );
@@ -171,7 +171,7 @@ class VoucherApprovalService
             ]);
 
             $locked->load('user');
-            $locked->user->notify(new VoucherStatusNotification($locked, 'rejected', $reason));
+            $locked->user?->notify(new VoucherStatusNotification($locked, 'rejected', $reason));
 
             return null;
         });
@@ -219,7 +219,7 @@ class VoucherApprovalService
             ]);
 
             $locked->load('user');
-            $locked->user->notify(new VoucherStatusNotification($locked, 'paid'));
+            $locked->user?->notify(new VoucherStatusNotification($locked, 'paid'));
 
             return null;
         });

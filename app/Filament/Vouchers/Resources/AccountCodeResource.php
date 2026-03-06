@@ -21,6 +21,16 @@ class AccountCodeResource extends Resource
     protected static ?string $cluster = \App\Filament\Vouchers\Clusters\Settings::class;
     protected static ?int $navigationSort = 30;
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('manage_settings') ?? false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('manage_settings') ?? false;
+    }
+
     public static function form(Form $form): Form
     {
         return $form
@@ -41,6 +51,10 @@ class AccountCodeResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('code')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('voucher_count')
+                    ->counts('voucherItems')
+                    ->label('Total Vouchers')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([

@@ -103,7 +103,11 @@ class DatabaseSeeder extends Seeder
         foreach ($categories as $cat) {
             $catIds[] = Category::firstOrCreate(['name' => $cat, 'type' => 'petty_cash'])->id;
         }
-
+        // 3.5. Setup Ledger Branches
+        $ledgerBranches = ['ETC','TG','SB','ICOOK','NICE DESIGN','SB MAIN','SB BR1 (AQ)','SB BR2 (AN2)','SB BR3 (MM)','SB BR4 (AN3)','SB BR5 (KF)','SB BR6 (JAMAL)','SB BR7 (TAAWUN)','SB BR8 (ABU SHAGARA)','SB BR9 (TAAWUN-2)','SB AJMAN','SB AL KHAN (JAMAL BASEET MAIN)','SB AN4 (JAMAL BASEET BR1)','SB DUBAI (SIMPLY GORGEOUS MAIN)','SB AJMAN-2 (JURF) (AL JAMAL ALBASEET LADIES BEAUTY CENTER)','SB DUBAI-BR.1 (SOBHA)','SB DUBAI-BR.2 (NAAD AL HAMAR)','SB DUBAI-BR.3 (WASL VILLAGE)','SB DUBAI-BR.4 (API BLDG)','SB DUBAI-BR.5 (MIDTOWN)','SB DUBAI-BR.6 (CVR)-ALJAMAL ALBURTEQALI LADIES SALON L.L.C','SB DUBAI-BR.7 (CREST)-ALJAMAL ALBURTEQALI LADIES SALON L.L.C','TG MAIN (ABU SHAGARA)','TG BR1 (AN1)','TG BR2 (AQ)','TG BR3 (AN2)','TG BR4 (KF)','TG BR5 (MM)','TG BR6 (AN3)','TG BR7 (JAMAL)','TG BR8 (TAAWUN)','TG BR9 (QASIMIA)','ICUT (AL QASA JAMEELA)','TG AJMAN','TG Tashteeb Main (TG AL TAAWUN-2)','TG AL KHAN (TASHTHEEB BR.)','TG AN4 (TASHTHEEB BR.2)','TG DUBAI MAIN (ELITE TRIMMERS MAIN)','TG DUBAI BR1 (ELITE TRIMMERS BR1)','TG JURF-AJMAN','TG DUBAI BR. 2 (API BLDG) (ELITE TRIMMERS BR2)'];
+        foreach ($ledgerBranches as $branchName) {
+            \App\Models\LedgerBranch::firstOrCreate(['name' => $branchName]);
+        }
 
         // 4. Generate Exactly 10 Vouchers
         $requesters = [$requester1, $requester2];

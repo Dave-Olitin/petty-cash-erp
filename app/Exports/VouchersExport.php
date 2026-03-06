@@ -27,7 +27,7 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
     public function collection()
     {
         // Get all vouchers that match the filtered query with their items
-        $vouchers = $this->query->with(['items'])->get();
+        $vouchers = $this->query->with(['items', 'template'])->get();
         $exportRows = new Collection();
         
         foreach ($vouchers as $voucher) {

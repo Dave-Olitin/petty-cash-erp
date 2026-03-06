@@ -26,7 +26,6 @@ class Transaction extends Model
         'status',
         'rejection_reason',
         'accounting_remarks',
-        'category_id',
         'vat',
     ];
 
