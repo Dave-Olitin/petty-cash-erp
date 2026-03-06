@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
+use Illuminate\Support\Facades\Cache;
 
 class ExpensesByBranchChart extends ChartWidget
 {
@@ -11,49 +12,70 @@ class ExpensesByBranchChart extends ChartWidget
 
     protected static ?string $heading = 'Expenses by Branch';
     protected static ?int $sort = 4;
-    protected int | string | array $columnSpan = [
-        'md' => 1,
-        'xl' => 1,
-    ];
-    protected static ?string $maxHeight = '300px';
+    protected static ?string $maxHeight = '400px'; // Taller to accommodate many branches
 
     public static function canView(): bool
     {
-        // Only Head Office needs to compare branches
         return auth()->user()->branch_id === null;
     }
 
     protected function getData(): array
     {
         $startDate = $this->filters['startDate'] ?? null;
-        $endDate = $this->filters['endDate'] ?? null;
-        
-        // Query to sum expenses per branch
+        $endDate   = $this->filters['endDate'] ?? null;
+
         $cacheKey = 'expenses_by_branch_' . md5(json_encode($this->filters));
 
-        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () use ($startDate, $endDate) {
+        $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($startDate, $endDate) {
             return \App\Models\Transaction::query()
                 ->where('transactions.type', 'EXPENSE')
+                ->whereNull('transactions.deleted_at')
+                ->where('transactions.status', '!=', 'rejected')
                 ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
-                ->when($endDate, fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
+                ->when($endDate,   fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
                 ->join('branches', 'transactions.branch_id', '=', 'branches.id')
-                ->selectRaw('branches.name as branch_name, sum(transactions.amount) as total')
+                ->selectRaw('branches.name as branch_name, SUM(transactions.amount) as total')
                 ->groupBy('branches.name')
                 ->orderByDesc('total')
                 ->get();
         });
 
+        if ($data->isEmpty()) {
+            return [
+                'datasets' => [['label' => 'Total Expenses', 'data' => [], 'backgroundColor' => '#3B82F6']],
+                'labels'   => [],
+            ];
+        }
+
+        // Cap visible bars at 12 — collapse rest into "Others"
+        $top    = $data->take(12);
+        $others = $data->skip(12);
+
+        $labels = $top->pluck('branch_name')->toArray();
+        $totals = $top->pluck('total')->map(fn($v) => round((float) $v, 2))->toArray();
+
+        if ($others->isNotEmpty()) {
+            $labels[] = 'Others (' . $others->count() . ')';
+            $totals[] = round($others->sum('total'), 2);
+        }
+
+        // Dynamic bar height: 32px per bar, min 200px
+        $barCount  = count($labels);
+        $chartHeight = max(200, $barCount * 36);
+
         return [
             'datasets' => [
                 [
-                    'label' => 'Total Expenses',
-                    'data' => $data->pluck('total')->toArray(),
-                    'backgroundColor' => '#3B82F6', // Blue
-                    'borderRadius' => 4,
-                    'barThickness' => 20,
+                    'label'           => 'Total Expenses (AED)',
+                    'data'            => $totals,
+                    'backgroundColor' => '#3B82F6',
+                    'borderRadius'    => 4,
+                    // Dynamic thickness — shrinks slightly for many bars
+                    'barThickness'    => max(14, min(28, intval(280 / max($barCount, 1)))),
                 ],
             ],
-            'labels' => $data->pluck('branch_name')->toArray(),
+            'labels' => $labels,
+            '_chartHeight' => $chartHeight, // passed via options below
         ];
     }
 
@@ -64,17 +86,29 @@ class ExpensesByBranchChart extends ChartWidget
 
     protected function getOptions(): array
     {
+        $data      = $this->getData();
+        $barCount  = count($data['labels']);
+        $needsScroll = $barCount > 8;
+
         return [
-            'indexAxis' => 'y',
+            'indexAxis' => 'y', // Horizontal bars
+            'maintainAspectRatio' => !$needsScroll,
+            'plugins' => [
+                'legend' => ['display' => false],
+                'tooltip' => [
+                    'callbacks' => [],
+                ],
+            ],
             'scales' => [
                 'x' => [
-                    'grid' => [
-                        'display' => false,
-                    ],
+                    'grid'  => ['display' => false],
+                    'ticks' => ['font' => ['size' => 11]],
                 ],
                 'y' => [
-                    'grid' => [
-                        'display' => false,
+                    'grid'  => ['display' => false],
+                    'ticks' => [
+                        'font'     => ['size' => 11],
+                        'maxRotation' => 0,
                     ],
                 ],
             ],

@@ -41,6 +41,17 @@ class CategoryResource extends Resource
                 Forms\Components\Toggle::make('is_active')
                     ->default(true)
                     ->label('Active'),
+
+                Forms\Components\Select::make('account_code_id')
+                    ->label('Chart of Account')
+                    ->relationship('accountCode', 'name')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->code} – {$record->name}")
+                    ->searchable()
+                    ->preload()
+                    ->placeholder('Not assigned')
+                    ->helperText('Link this category to a GL account code for reporting purposes.')
+                    ->nullable(),
+
             ]);
     }
 
@@ -52,10 +63,17 @@ class CategoryResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'expense' => 'warning',
+                        'expense'       => 'warning',
                         'replenishment' => 'success',
+                        default         => 'gray',
                     }),
                 Tables\Columns\IconColumn::make('is_active')->boolean(),
+                Tables\Columns\TextColumn::make('accountCode.code')
+                    ->label('Account Code')
+                    ->badge()
+                    ->color('primary')
+                    ->placeholder('—')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([

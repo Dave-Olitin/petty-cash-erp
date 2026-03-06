@@ -72,20 +72,19 @@ public static function form(Form $form): Form
                     Forms\Components\Repeater::make('items')
                         ->relationship()
                         ->schema([
-                            Forms\Components\Select::make('category_id')
-                                ->relationship('category', 'name', function (Builder $query, callable $get) {
-                                    // Use the parent transaction type if possible, or defaulting to 'expense' if complicated. 
-                                    // Accessing parent state from repeater item can be tricky. 
-                                    // For now, let's allow all active categories or try to filter if feasible.
-                                    // $get('../../type') might work depending on structure.
-                                    // Let's keep it simple: Show all active categories for now.
-                                    return $query->where('is_active', true);
-                                })
-                                ->label('Category')
+                            Forms\Components\Select::make('account_code_id')
+                                ->label('Account Code')
+                                ->relationship('accountCode', 'name',
+                                    fn (Builder $query) => $query->orderBy('code')
+                                )
+                                ->getOptionLabelFromRecordUsing(
+                                    fn ($record) => "{$record->code} – {$record->name}"
+                                )
                                 ->searchable()
                                 ->preload()
-                                ->required()
-                                ->visible(fn () => auth()->user()->isHeadOffice()), // Only HO can see/set
+                                ->nullable()
+                                ->placeholder('Select account...')
+                                ->visible(fn () => auth()->user()->isHeadOffice()), // HQ-only
                             Forms\Components\TextInput::make('name')
                                 ->required(),
                             Forms\Components\TextInput::make('quantity')
@@ -275,9 +274,14 @@ public static function form(Form $form): Form
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('items')
                             ->schema([
-                                Infolists\Components\TextEntry::make('category.name')
-                                    ->label('Category')
-                                    ->default('N/A'),
+                                Infolists\Components\TextEntry::make('accountCode.name')
+                                    ->label('Account Name')
+                                    ->formatStateUsing(fn ($state, $record) => $record->accountCode
+                                        ? $record->accountCode->name
+                                        : '—'
+                                    ),
+
+
                                 Infolists\Components\TextEntry::make('name')->label('Item'),
                                 Infolists\Components\TextEntry::make('quantity')->label('Qty'),
                                 Infolists\Components\TextEntry::make('unit_price')->money('AED')->label('Unit Price'),
@@ -545,8 +549,9 @@ public static function table(Table $table): Table
                                     $record->description,
                                     $itemsSummary,
                                     $record->branch ? $record->branch->name : 'Head Office',
-                                    // Get Unique Categories from Items
-                                    $record->items->map(fn($item) => $item->category?->name)->filter()->unique()->join(', ') ?: 'N/A',
+                                    // Get Unique Account Codes from Items
+                                    $record->items->map(fn($item) => $item->accountCode ? "{$item->accountCode->code} – {$item->accountCode->name}" : null)->filter()->unique()->join(', ') ?: 'N/A',
+
                                     $record->status,
                                     $record->user ? $record->user->name : 'Unknown',
                                     $record->receipt_path ? route('transaction.receipt', $record) : '',
@@ -585,7 +590,8 @@ public static function table(Table $table): Table
         // Note: 'category' is NOT eager-loaded — Transaction has no direct category relation.
         // Categories live on transaction_items, hence 'items.category'.
         $query = parent::getEloquentQuery()
-            ->with(['branch', 'user', 'items.category']);
+            ->with(['branch', 'user', 'items.accountCode']);
+
 
         if (auth()->user()->branch_id) {
             $query->where('branch_id', auth()->user()->branch_id);

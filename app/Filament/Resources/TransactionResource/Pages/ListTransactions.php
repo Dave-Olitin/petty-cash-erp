@@ -38,8 +38,9 @@ class ListTransactions extends ListRecords
                             $itemsSummary = $record->items->map(fn($item) => "{$item->name} (x{$item->quantity})")->join(', ');
                             $totalVat = $record->items->sum('vat') + $record->vat; // Include Global VAT
                             
-                            // Get Unique Categories from Items
-                            $categoryNames = $record->items->map(fn($item) => $item->category?->name)->filter()->unique()->join(', ');
+                            // Get Unique Account Codes from Items
+                            $accountCodes = $record->items->map(fn($item) => $item->accountCode ? "{$item->accountCode->code} – {$item->accountCode->name}" : null)->filter()->unique()->join(', ');
+
 
                             $row = [
                                 $record->id,
@@ -54,7 +55,7 @@ class ListTransactions extends ListRecords
                                 $record->description,
                                 $itemsSummary,
                                 $record->branch ? $record->branch->name : 'Head Office',
-                                $categoryNames ?: 'N/A', // Use item categories
+                                $accountCodes ?: 'N/A', // Account codes from items
                                 $record->status,
                                 $record->user ? $record->user->name : 'Unknown',
                                 $record->receipt_path ? route('transaction.receipt', $record) : '',
@@ -67,7 +68,7 @@ class ListTransactions extends ListRecords
 
                         // 3. Query - Use the Current Filtered Query!
                         $query = $this->getFilteredTableQuery(); // Respects Tabs & Search
-                        $query->with(['branch', 'items.category', 'user']); // items.category fixes N+1
+                        $query->with(['branch', 'items.accountCode', 'user']); // items.accountCode fixes N+1
                         $query->latest(); // Ensure order
 
                         $query->chunk(100, function ($transactions) use ($file, $exportRow) {
