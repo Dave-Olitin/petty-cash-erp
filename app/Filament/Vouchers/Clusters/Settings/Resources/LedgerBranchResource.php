@@ -55,7 +55,9 @@ class LedgerBranchResource extends Resource
                 Tables\Columns\TextColumn::make('vouchers_count')
                     ->counts('voucherItems')
                     ->label('Total Vouchers')
-                    ->sortable(),
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->withCount('voucherItems')->orderBy('voucher_items_count', $direction);
+                    }),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
