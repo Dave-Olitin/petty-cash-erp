@@ -5,10 +5,8 @@
 
     /* ── Table Spacing Enhancements ── */
     .fi-ta-content table td.fi-ta-cell {
-        padding-top: 1.25rem !important;
-        padding-bottom: 1.25rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-top: 0.50rem !important;
+        padding-bottom: 0.50rem !important;
         border-bottom: 1px solid #f1f5f9;
     }
 
@@ -59,10 +57,11 @@
     /* Active Tab "Palatandaan" (Clear Indicator) */
     .fi-tabs-item[aria-selected="true"] {
         color: #4f46e5 !important; /* Theme Primary Color */
-        background: transparent !important;
+        /* background: transparent !important; */
         /* Thick, distinct bottom border marker */
         box-shadow: inset 0 -3px 0 0 #4f46e5 !important;
         border-bottom: 2px solid #4f46e5 !important;
+
     }
 
     /* Ensure text inside active tab is also primary color */
