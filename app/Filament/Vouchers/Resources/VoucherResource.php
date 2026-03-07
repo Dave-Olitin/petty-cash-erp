@@ -82,260 +82,271 @@ class VoucherResource extends Resource
 
     public static function form(Form $form): Form
     {
+        $getPreview = fn(string $name) => Forms\Components\Group::make()->schema([
+            Forms\Components\Section::make('Live Preview')
+                ->extraAttributes(['class' => 'preview-section-no-padding', 'style' => 'padding:0!important; margin:0!important; position: sticky; top: 1rem;'])
+                ->schema([
+                    Forms\Components\Placeholder::make($name)
+                        ->label('')
+                        ->content(fn (Forms\Get $get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
+                ])
+                ->collapsible()
+                ->collapsed(false),
+        ])->columnSpan(['default' => 'full', 'lg' => 1]);
+
         return $form
             ->schema([
-                // ── VOUCHER HEADER ───────────────────────────────────────
-                Forms\Components\Section::make('Voucher Details')
-                    ->icon('heroicon-o-document-text')
-                    ->description('Select the company template and fill in voucher information.')
-                    ->schema([
-                        Forms\Components\Select::make('type')
-                            ->options([
-                                'petty_cash' => 'Petty Cash Request',
-                                'payment' => 'Payment Voucher',
-                            ])
-                            ->required()
-                            ->default('payment')
-                            ->live()
-                            ->afterStateUpdated(function (\Filament\Forms\Set $set, $state) {
-                                if ($state === 'petty_cash') {
-                                    $template = \App\Models\VoucherTemplate::where('company_name', 'Erick Trading Co.')->first();
-                                    if ($template) {
-                                        $set('voucher_template_id', $template->id);
-                                    }
-                                } else {
-                                    $set('voucher_template_id', null);
-                                }
-                            }),
+                Forms\Components\Wizard::make([
+                    // ── VOUCHER HEADER ───────────────────────────────────────
+                    Forms\Components\Wizard\Step::make('Voucher & Payment Details')
+                        ->icon('heroicon-o-document-text')
+                        ->description('Select the company template and fill in voucher and payment information.')
+                        ->schema([
+                            Forms\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([
+                                Forms\Components\Group::make()->schema([
+                                    Forms\Components\Group::make()->schema([
+                                        Forms\Components\Select::make('type')
+                                            ->options([
+                                                'petty_cash' => 'Petty Cash Request',
+                                                'payment' => 'Payment Voucher',
+                                            ])
+                                            ->required()
+                                            ->default('payment')
+                                            ->live()
+                                            ->afterStateUpdated(function (\Filament\Forms\Set $set, $state) {
+                                                if ($state === 'petty_cash') {
+                                                    $template = \App\Models\VoucherTemplate::where('company_name', 'Erick Trading Co.')->first();
+                                                    if ($template) {
+                                                        $set('voucher_template_id', $template->id);
+                                                    }
+                                                } else {
+                                                    $set('voucher_template_id', null);
+                                                }
+                                            }),
 
-                        Forms\Components\Select::make('voucher_template_id')
-                            ->label('Company / Header Template')
-                            ->relationship('template', 'company_name', function (\Illuminate\Database\Eloquent\Builder $query, \Filament\Forms\Get $get) {
-                                $query->where('is_active', true);
-                                if ($get('type') === 'petty_cash') {
-                                    $query->where('company_name', 'Erick Trading Co.');
-                                }
-                                return $query;
-                            })
-                            ->searchable()
-                            ->preload()
-                            ->required()
-                            ->live()
-                            ->afterStateUpdated(function ($state, \Filament\Forms\Set $set, \Filament\Forms\Get $get) {
-                                if ($state) {
-                                    $template = \App\Models\VoucherTemplate::find($state);
-                                    if ($template) {
-                                        $items = $get('items') ?? [];
-                                        foreach ($items as $key => $item) {
-                                            $set("items.{$key}.branch_code", $template->branch_code);
-                                        }
-                                    }
-                                }
-                            }),
+                                        Forms\Components\Select::make('voucher_template_id')
+                                            ->label('Company / Header Template')
+                                            ->relationship('template', 'company_name', function (\Illuminate\Database\Eloquent\Builder $query, \Filament\Forms\Get $get) {
+                                                $query->where('is_active', true);
+                                                if ($get('type') === 'petty_cash') {
+                                                    $query->where('company_name', 'Erick Trading Co.');
+                                                }
+                                                return $query;
+                                            })
+                                            ->searchable()
+                                            ->preload()
+                                            ->required()
+                                            ->live()
+                                            ->afterStateUpdated(function ($state, \Filament\Forms\Set $set, \Filament\Forms\Get $get) {
+                                                if ($state) {
+                                                    $template = \App\Models\VoucherTemplate::find($state);
+                                                    if ($template) {
+                                                        $items = $get('items') ?? [];
+                                                        foreach ($items as $key => $item) {
+                                                            $set("items.{$key}.branch_code", $template->branch_code);
+                                                        }
+                                                    }
+                                                }
+                                            }),
 
-                        Forms\Components\TextInput::make('payee')
-                            ->label('Paid To')
-                            ->required()
-                            ->maxLength(255)
-                            ->live(debounce: 500),
+                                        Forms\Components\TextInput::make('payee')
+                                            ->label('Paid To')
+                                            ->required()
+                                            ->maxLength(255)
+                                            ->live(debounce: 500),
 
-                        Forms\Components\Textarea::make('description')
-                            ->label('Being (Purpose)')
-                            ->rows(2)
-                            ->columnSpanFull()
-                            ->live(debounce: 500),
-                    ])
-                    ->columns(['default' => 1, 'md' => 3])
-                    ->columnSpan('full')
-                    ->collapsible(),
+                                        Forms\Components\Textarea::make('description')
+                                            ->label('Being (Purpose)')
+                                            ->rows(4)
+                                            ->columnSpanFull()
+                                            ->live(debounce: 500),
+                                    ])->columns(['default' => 1, 'md' => 3]),
 
-                // ── CHEQUE / PAYMENT INFO ─────────────────────────────────
-                Forms\Components\Section::make('Payment / Cheque Details')
-                    ->icon('heroicon-o-credit-card')
-                    ->description('Fill in cheque or payment details if applicable.')
-                    ->schema([
-                        Forms\Components\TextInput::make('cheque_no')
-                            ->label('Cheque No.')
-                            ->maxLength(50)
-                            ->placeholder('Enter cheque number'),
+                                    // ── CHEQUE / PAYMENT INFO ─────────────────────────────────
+                                    Forms\Components\Section::make('Payment / Cheque Details')
+                                        ->collapsed()
+                                        ->icon('heroicon-o-credit-card')
+                                        ->description('Fill in cheque or payment details if applicable.')
+                                        ->schema([
+                                            Forms\Components\TextInput::make('cheque_no')
+                                                ->label('Cheque No.')
+                                                ->maxLength(50)
+                                                ->placeholder('Enter cheque number'),
 
-                        Forms\Components\DatePicker::make('cheque_date')
-                            ->label('Cheque Date')
-                            ->native(false)
-                            ->displayFormat('d/m/Y'),
+                                            Forms\Components\DatePicker::make('cheque_date')
+                                                ->label('Cheque Date')
+                                                ->native(false)
+                                                ->displayFormat('d/m/Y'),
 
-                        Forms\Components\TextInput::make('bank')
-                            ->label('Bank')
-                            ->maxLength(100)
-                            ->placeholder('e.g. Emirates NBD'),
-                    ])
-                    ->columns(['default' => 1, 'md' => 3])
-                    ->columnSpan('full')
-                    ->collapsible()
-                    ->collapsed(),
+                                            Forms\Components\TextInput::make('bank')
+                                                ->label('Bank')
+                                                ->maxLength(100)
+                                                ->placeholder('e.g. Emirates NBD'),
+                                        ])->columns(['default' => 1, 'md' => 3]),
+                                ])->columnSpan(['default' => 'full', 'lg' => 2]),
 
-                // ── LEDGER ENTRIES ────────────────────────────────────────
-                Forms\Components\Section::make('Ledger Entries')
-                    ->icon('heroicon-o-table-cells')
-                    ->description('Add debit and credit entries. Total auto-calculates from debit amounts.')
-                    ->schema([
-                        Forms\Components\Repeater::make('items')
-                            ->relationship()
-                            ->label('')
-                            ->schema([
-                                // Row 1: Type, Branch, Account Code
-                                Forms\Components\Grid::make(['default' => 1, 'md' => 12])->schema([
-                                    Forms\Components\Select::make('entry_type')
-                                        ->label('Entry type')
-                                        ->options([
-                                            'debit'  => 'DR — Debit',
-                                            'credit' => 'CR — Credit',
+                                $getPreview('preview_1'),
+                            ]),
+                        ]),
+
+                    // ── LEDGER ENTRIES ────────────────────────────────────────
+                    Forms\Components\Wizard\Step::make('Ledger Entries')
+                        ->icon('heroicon-o-table-cells')
+                        ->description('Add debit and credit entries. Total auto-calculates from debit amounts.')
+                        ->schema([
+                            Forms\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([
+                                Forms\Components\Group::make()->schema([
+                                    Forms\Components\Repeater::make('items')
+                                        ->relationship()
+                                        ->label('')
+                                        ->schema([
+                                            // Row 1: Type, Branch, Account Code
+                                            Forms\Components\Grid::make(['default' => 1, 'md' => 12])->schema([
+                                                Forms\Components\Select::make('entry_type')
+                                                    ->label('Entry type')
+                                                    ->options([
+                                                        'debit'  => 'DR — Debit',
+                                                        'credit' => 'CR — Credit',
+                                                    ])
+                                                    ->default('debit')
+                                                    ->required()
+                                                    ->live()
+                                                    ->columnSpan(['default' => 1, 'md' => 6]),
+
+                                                Forms\Components\Select::make('branch_code')
+                                                    ->label('Branch')
+                                                    ->searchable()
+                                                    ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
+                                                    ->createOptionForm([
+                                                        Forms\Components\TextInput::make('name')
+                                                            ->label('New Branch Name')
+                                                            ->required()
+                                                            ->unique('ledger_branches', 'name'),
+                                                    ])
+                                                    ->createOptionUsing(function (array $data) {
+                                                        $branch = \App\Models\LedgerBranch::create(['name' => $data['name']]);
+                                                        return $branch->name;
+                                                    })
+                                                    ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
+                                                    ->columnSpan(['default' => 1, 'md' => 6]),
+
+                                                Forms\Components\Select::make('account_code')
+                                                    ->label('Account Code')
+                                                    ->searchable()
+                                                    ->allowHtml()
+                                                    ->getSearchResultsUsing(function (string $search) {
+                                                        return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
+                                                            ->orWhere('name', 'like', "%{$search}%")
+                                                            ->limit(30)
+                                                            ->get()
+                                                            ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
+                                                            ->toArray();
+                                                    })
+                                                    ->getOptionLabelUsing(fn (?string $value) => $value
+                                                        ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                                            ? "{$ac->code} — {$ac->name}"
+                                                            : $value
+                                                        : null
+                                                    )
+                                                    ->createOptionForm([
+                                                        Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
+                                                        Forms\Components\TextInput::make('name')->required(),
+                                                    ])
+                                                    ->createOptionUsing(function (array $data) {
+                                                        \App\Models\AccountCode::create($data);
+                                                        return $data['code'];
+                                                    })
+                                                    ->live(debounce: 500)
+                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
+                                                        if (blank($state)) return;
+                                                        $account = \App\Models\AccountCode::where('code', $state)->first();
+                                                        if ($account) {
+                                                            $set('description', $account->name);
+                                                        }
+                                                    })
+                                                    ->columnSpan(['default' => 1, 'md' => 12]),
+
+                                                Forms\Components\TextInput::make('amount')
+                                                    ->numeric()
+                                                    ->required()
+                                                    ->prefix('AED')
+                                                    ->default(0)
+                                                    ->live(debounce: 500)
+                                                    ->columnSpan(['default' => 1, 'md' => 12]),
+
+                                                Forms\Components\Hidden::make('description'),
+                                            ]),
                                         ])
-                                        ->default('debit')
-                                        ->required()
-                                        ->live()
-                                        ->columnSpan(['default' => 1, 'md' => 6]),
-
-                                    Forms\Components\Select::make('branch_code')
-                                        ->label('Branch')
-                                        ->searchable()
-                                        ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
-                                        ->createOptionForm([
-                                            Forms\Components\TextInput::make('name')
-                                                ->label('New Branch Name')
-                                                ->required()
-                                                ->unique('ledger_branches', 'name'),
-                                        ])
-                                        ->createOptionUsing(function (array $data) {
-                                            $branch = \App\Models\LedgerBranch::create(['name' => $data['name']]);
-                                            return $branch->name;
-                                        })
-                                        ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
-                                        ->columnSpan(['default' => 1, 'md' => 6]),
-
-                                    Forms\Components\Select::make('account_code')
-                                        ->label('Account Code')
-                                        ->searchable()
-                                        ->allowHtml()
-                                        ->getSearchResultsUsing(function (string $search) {
-                                            return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
-                                                ->orWhere('name', 'like', "%{$search}%")
-                                                ->limit(30)
-                                                ->get()
-                                                ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
-                                                ->toArray();
-                                        })
-                                        ->getOptionLabelUsing(fn (?string $value) => $value
-                                            ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
-                                                ? "{$ac->code} — {$ac->name}"
-                                                : $value
-                                            : null
+                                        ->defaultItems(2)
+                                        ->reorderable()
+                                        ->reorderableWithButtons()
+                                        ->collapsible()
+                                        ->cloneable()
+                                        ->addActionLabel('+ Add Ledger Entry')
+                                        ->itemLabel(fn (array $state): ?string =>
+                                            (($state['entry_type'] ?? 'debit') === 'credit' ? '🔴 CR' : '🟢 DR') .
+                                            ' — ' . ($state['description'] ?: ($state['account_code'] ?: 'New Entry')) .
+                                            ' — AED ' . number_format((float) ($state['amount'] ?? 0), 2)
                                         )
-                                        ->createOptionForm([
-                                            Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
-                                            Forms\Components\TextInput::make('name')->required(),
-                                        ])
-                                        ->createOptionUsing(function (array $data) {
-                                            \App\Models\AccountCode::create($data);
-                                            return $data['code'];
-                                        })
-                                        ->live(debounce: 500)
-                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
-                                            if (blank($state)) return;
-                                            $account = \App\Models\AccountCode::where('code', $state)->first();
-                                            if ($account) {
-                                                $set('description', $account->name);
+                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
+                                            $items = $get('items') ?? [];
+                                            $totalDebit = 0;
+                                            foreach ($items as $item) {
+                                                if (($item['entry_type'] ?? 'debit') === 'debit') {
+                                                    $totalDebit += (float) ($item['amount'] ?? 0);
+                                                }
                                             }
+                                            $set('amount', number_format($totalDebit, 2, '.', ''));
                                         })
-                                        ->columnSpan(['default' => 1, 'md' => 12]),
+                                        ->live(),
+                                ])->columnSpan(['default' => 'full', 'lg' => 2]),
 
+                                $getPreview('preview_2'),
+                            ]),
+                        ]),
+
+                    // ── SUMMARY & ATTACHMENTS ─────────────────────────────────
+                    Forms\Components\Wizard\Step::make('Summary & Attachments')
+                        ->icon('heroicon-o-calculator')
+                        ->schema([
+                            Forms\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([
+                                Forms\Components\Group::make()->schema([
                                     Forms\Components\TextInput::make('amount')
+                                        ->label('Total Amount')
                                         ->numeric()
-                                        ->required()
                                         ->prefix('AED')
-                                        ->default(0)
+                                        ->required()
                                         ->live(debounce: 500)
-                                        ->columnSpan(['default' => 1, 'md' => 12]),
+                                        ->helperText('Auto-calculated from debit entries. You can override this manually.')
+                                        ->columnSpanFull(),
 
-                                    Forms\Components\Hidden::make('description'),
-                                ]),
-                            ])
-                            ->defaultItems(2)
-                            ->reorderable()
-                            ->reorderableWithButtons()
-                            ->collapsible()
-                            ->cloneable()
-                            ->addActionLabel('+ Add Ledger Entry')
-                            ->itemLabel(fn (array $state): ?string =>
-                                (($state['entry_type'] ?? 'debit') === 'credit' ? '🔴 CR' : '🟢 DR') .
-                                ' — ' . ($state['description'] ?: ($state['account_code'] ?: 'New Entry')) .
-                                ' — AED ' . number_format((float) ($state['amount'] ?? 0), 2)
-                            )
-                            ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                $items = $get('items') ?? [];
-                                $totalDebit = 0;
-                                foreach ($items as $item) {
-                                    if (($item['entry_type'] ?? 'debit') === 'debit') {
-                                        $totalDebit += (float) ($item['amount'] ?? 0);
-                                    }
-                                }
-                                $set('amount', number_format($totalDebit, 2, '.', ''));
-                            })
-                            ->live(),
-                    ])
-                    ->columnSpan(['default' => 'full', 'lg' => 2])
-                    ->collapsible(),
+                                    Forms\Components\Textarea::make('transaction_summary')
+                                        ->label('Transaction Summary')
+                                        ->rows(3)
+                                        ->helperText('Optional manual text to print on the voucher summary at the bottom.')
+                                        ->live(debounce: 500)
+                                        ->columnSpanFull(),
 
-                // ── LIVE PREVIEW ──────────────────────────────────────────
-                Forms\Components\Section::make('Live Preview')
-                    ->extraAttributes(['class' => 'preview-section-no-padding', 'style' => 'padding:0!important; margin:0!important;'])
-                    ->schema([
-                        Forms\Components\Placeholder::make('pdf_preview_form')
-                            ->label('')
-                            ->content(fn (Forms\Get $get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
-                    ])
-                    ->columnSpan(['default' => 'full', 'lg' => 1])
-                    ->collapsible()
-                    ->collapsed(false),
+                                    Forms\Components\FileUpload::make('attachment_paths')
+                                        ->multiple()
+                                        ->preserveFilenames()
+                                        ->directory('voucher-attachments')
+                                        ->disk('public')
+                                        ->downloadable()
+                                        ->openable()
+                                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+                                        ->maxSize(10240)
+                                        ->label('Invoices & Receipts')
+                                        ->helperText('Upload receipts, invoices, or supporting documents (JPG, PNG, PDF, max 10MB each).')
+                                        ->columnSpanFull(),
+                                ])->columns(['default' => 1, 'md' => 2])
+                                  ->columnSpan(['default' => 'full', 'lg' => 2]),
 
-                // ── SUMMARY & ATTACHMENTS ─────────────────────────────────
-                Forms\Components\Section::make('Summary & Attachments')
-                    ->icon('heroicon-o-calculator')
-                    ->compact()
-                    ->schema([
-                        Forms\Components\TextInput::make('amount')
-                            ->label('Total Amount')
-                            ->numeric()
-                            ->prefix('AED')
-                            ->required()
-                            ->live(debounce: 500)
-                            ->helperText('Auto-calculated from debit entries. You can override this manually.')
-                            ->columnSpanFull(),
-
-                        Forms\Components\Textarea::make('transaction_summary')
-                            ->label('Transaction Summary')
-                            ->rows(3)
-                            ->helperText('Optional manual text to print on the voucher summary at the bottom.')
-                            ->live(debounce: 500)
-                            ->columnSpanFull(),
-
-                        Forms\Components\FileUpload::make('attachment_paths')
-                            ->multiple()
-                            ->preserveFilenames()
-                            ->directory('voucher-attachments')
-                            ->disk('public')
-                            ->downloadable()
-                            ->openable()
-                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
-                            ->maxSize(10240)
-                            ->label('Invoices & Receipts')
-                            ->helperText('Upload receipts, invoices, or supporting documents (JPG, PNG, PDF, max 10MB each).')
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(['default' => 1, 'md' => 2])
-                    ->columnSpan('full')
-                    ->collapsible(),
-            ])->columns(['default' => 1, 'lg' => 3]);
+                                $getPreview('preview_3'),
+                            ]),
+                        ]),
+                ])->skippable()->contained(false)->columnSpan('full'),
+            ]);
     }
 
     public static function table(Table $table): Table
@@ -469,7 +480,7 @@ class VoucherResource extends Resource
 
                 Tables\Actions\EditAction::make()
                     ->iconButton()
-                    ->visible(fn (Voucher $record): bool => $record->status === 'draft' && auth()->user()->can('voucher.edit')),
+                    ->visible(fn (Voucher $record): bool => auth()->user()->can('update', $record)),
 
                 Tables\Actions\Action::make('submit')
                     ->label('Submit for Checking')

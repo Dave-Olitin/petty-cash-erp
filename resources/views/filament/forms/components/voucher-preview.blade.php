@@ -59,5 +59,5 @@
 @endphp
 
 <div style="height: 650px; width: 100%; margin: -1.5rem; width: calc(100% + 3rem);">
-    <iframe src="data:application/pdf;base64,{{ $base64 }}" width="100%" height="100%" style="border: none; border-radius: 6px;"></iframe>
+    <iframe src="data:application/pdf;base64,{{ $base64 }}#view=FitH" width="100%" height="100%" style="border: none; border-radius: 6px;"></iframe>
 </div>

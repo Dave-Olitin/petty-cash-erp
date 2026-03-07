@@ -64,8 +64,8 @@ Route::middleware(['auth'])->group(function () {
     })->name('transaction.receipt');
 
     Route::get('/admin/vouchers/{voucher}/pdf', function (\App\Models\Voucher $voucher) {
-        // Must have access to Vouchers Panel
-        if (!auth()->user()->can('access_vouchers_panel')) {
+        // Must have access to Vouchers Panel and permission to view this exact voucher
+        if (!auth()->user()->can('access_vouchers_panel') || !auth()->user()->can('view', $voucher)) {
             abort(403);
         }
 

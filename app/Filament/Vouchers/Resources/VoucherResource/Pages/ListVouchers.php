@@ -29,19 +29,18 @@ class ListVouchers extends ListRecords
             'action_required' => \Filament\Resources\Components\Tab::make('Action Required')
                 ->modifyQueryUsing(fn ($query) => $query->actionRequired($user))
                 ->badge($actionCount)
-                ->badgeColor($actionCount > 0 ? 'danger' : 'gray')
-                ->icon('heroicon-m-exclamation-circle'),
+                ->badgeColor($actionCount > 0 ? 'danger' : 'gray'),
                 
             'all' => \Filament\Resources\Components\Tab::make('All')
-                ->icon('heroicon-m-bars-4'),
+                ->badge(\App\Models\Voucher::count())
+                ->badgeColor('gray'),
         ];
 
         if ($draftCount > 0) {
             $tabs['draft'] = \Filament\Resources\Components\Tab::make('My Drafts')
                 ->modifyQueryUsing(fn ($query) => $query->where('status', 'draft')->where('user_id', $user->id))
                 ->badge($draftCount)
-                ->badgeColor('gray')
-                ->icon('heroicon-m-pencil-square');
+                ->badgeColor('gray');
         }
 
         $tabs['in_progress'] = \Filament\Resources\Components\Tab::make('Processing & Completed')
@@ -51,7 +50,8 @@ class ListVouchers extends ListRecords
                 'approved', 
                 'paid'
             ]))
-            ->icon('heroicon-m-check-badge');
+            ->badge(\App\Models\Voucher::whereIn('status', ['pending_checker', 'pending_approver', 'approved', 'paid'])->count())
+            ->badgeColor('primary');
 
         return $tabs;
     }

@@ -34,9 +34,13 @@ class VoucherApprovalService
             $locked->update(['status' => VoucherStatus::PendingChecker->value]);
             $locked->load('user');
 
-            User::role('Accountant')->get()->each->notify(
-                new VoucherStatusNotification($locked, 'submitted')
-            );
+            try {
+                User::role('Accountant')->get()->each->notify(
+                    new VoucherStatusNotification($locked, 'submitted')
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Voucher Submit Notification Failed: ' . $e->getMessage());
+            }
 
             return null;
         });
@@ -67,13 +71,17 @@ class VoucherApprovalService
 
             $locked->load('user');
 
-            $firstStep = ApprovalWorkflow::getApproverAtStep(1);
-            if ($firstStep) {
-                $firstStep->user->notify(new VoucherStatusNotification($locked, 'checked'));
-            } else {
-                User::role('Approver')->get()->each->notify(
-                    new VoucherStatusNotification($locked, 'checked')
-                );
+            try {
+                $firstStep = ApprovalWorkflow::getApproverAtStep(1);
+                if ($firstStep) {
+                    $firstStep->user->notify(new VoucherStatusNotification($locked, 'checked'));
+                } else {
+                    User::role('Approver')->get()->each->notify(
+                        new VoucherStatusNotification($locked, 'checked')
+                    );
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Voucher Check Notification Failed: ' . $e->getMessage());
             }
 
             return null;
@@ -126,9 +134,13 @@ class VoucherApprovalService
                 // More steps remaining — advance
                 $locked->update(['current_approval_step' => $nextStep]);
 
-                $next = ApprovalWorkflow::getApproverAtStep($nextStep);
-                if ($next) {
-                    $next->user->notify(new VoucherStatusNotification($locked, 'checked'));
+                try {
+                    $next = ApprovalWorkflow::getApproverAtStep($nextStep);
+                    if ($next) {
+                        $next->user->notify(new VoucherStatusNotification($locked, 'checked'));
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error('Voucher Next Step Notification Failed: ' . $e->getMessage());
                 }
 
                 return null; // caller can show "forwarded to next approver" message
@@ -140,10 +152,14 @@ class VoucherApprovalService
                 'current_approval_step' => null,
             ]);
 
-            $locked->user?->notify(new VoucherStatusNotification($locked, 'approved'));
-            User::role('Accountant')->get()->each->notify(
-                new VoucherStatusNotification($locked, 'approved')
-            );
+            try {
+                $locked->user?->notify(new VoucherStatusNotification($locked, 'approved'));
+                User::role('Accountant')->get()->each->notify(
+                    new VoucherStatusNotification($locked, 'approved')
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Voucher Final Approval Notification Failed: ' . $e->getMessage());
+            }
 
             return null;
         });
@@ -171,7 +187,11 @@ class VoucherApprovalService
             ]);
 
             $locked->load('user');
-            $locked->user?->notify(new VoucherStatusNotification($locked, 'rejected', $reason));
+            try {
+                $locked->user?->notify(new VoucherStatusNotification($locked, 'rejected', $reason));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Voucher Reject Notification Failed: ' . $e->getMessage());
+            }
 
             return null;
         });
@@ -219,7 +239,11 @@ class VoucherApprovalService
             ]);
 
             $locked->load('user');
-            $locked->user?->notify(new VoucherStatusNotification($locked, 'paid'));
+            try {
+                $locked->user?->notify(new VoucherStatusNotification($locked, 'paid'));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Voucher Mark Paid Notification Failed: ' . $e->getMessage());
+            }
 
             return null;
         });

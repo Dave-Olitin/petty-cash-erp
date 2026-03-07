@@ -31,6 +31,7 @@ class AdminPanelProvider extends PanelProvider
             ->passwordReset()   // Enables the "Forgot Password?" flow via email
             ->brandName('Erick Trading Co.')
             ->brandLogoHeight('3rem')
+            ->maxContentWidth(\Filament\Support\Enums\MaxWidth::Full)
             ->sidebarCollapsibleOnDesktop()
             ->defaultThemeMode(\Filament\Enums\ThemeMode::Light)
             ->colors([

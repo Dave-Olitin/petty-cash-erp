@@ -20,4 +20,111 @@
         border-inline-end: 1px solid rgba(255, 255, 255, 0.1);
         box-shadow: 4px 0 12px -2px rgba(0, 0, 0, 0.4);
     }
+    
+    /* ── Table Spacing Enhancements ── */
+    .fi-ta-content table td.fi-ta-cell {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    /* ── Tabs Layout Redesign (Left-aligned above table) ── */
+    
+    /* Override Filament's default tab container wrapping and centering */
+    .fi-ta-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    
+    /* The actual wrapper that holds the tabs */
+    .fi-tabs {
+        display: flex !important;
+        justify-content: flex-start !important; /* Force Left Alignment */
+        width: 100% !important;
+        max-width: 100% !important;
+        gap: 0.5rem !important;
+        /* border-bottom: 2px solid #e2e8f0 !important; */
+        background: transparent !important;
+        padding: 0 !important;
+        margin-bottom: 0 !important; /* Sit flush above table */
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        ring: 0 !important;
+    }
+
+    /* Individual Tab Styling - Clean Text */
+    .fi-tabs-item {
+        background: transparent !important;
+        border-radius: 0 !important;
+        padding: 0.75rem 1rem !important;
+        margin: 0 !important;
+        color: #aaadb1ff !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+        position: relative;
+        transition: all 0.2s ease;
+        font-size: 16px !important;
+    }
+
+    /* Hover effect */
+    .fi-tabs-item:hover {
+        color: #1e293b !important;
+        background: #f8fafc !important;
+    }
+
+    /* Active Tab (Clear Indicator) */
+    .fi-tabs-item[aria-selected="true"] {
+        color: #4f46e5 !important; /* Theme Primary Color */
+        background: transparent !important;
+        /* Thick, distinct bottom border marker */
+        box-shadow: inset 0 -3px 0 0 #4f46e5 !important;
+        border-bottom: 2px solid #4f46e5 !important;
+    }
+
+    /* Ensure text inside active tab is also primary color */
+    .fi-tabs-item[aria-selected="true"] span {
+        color: #4f46e5 !important;
+        font-size: 20px !important;
+    }
+
+    /* Keep badges styled cleanly inside tabs */
+    .fi-tabs-item[aria-selected="true"] .fi-badge {
+        background: #e0e7ff !important;
+        color: #4f46e5 !important;
+    }
+
+    /* ── Wide Screen Maximum Width ── */
+    .fi-main {
+        max-width: 1600px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    /* ── Mobile Wizard Horizontal Icons-Only Layout ── */
+    @media (max-width: 768px) {
+        .fi-wi-header {
+            flex-direction: row !important;
+            justify-content: space-around !important;
+            align-items: center !important;
+            overflow: visible !important;
+        }
+        .fi-wi-header > li {
+            margin: 0 !important;
+            border: none !important;
+            padding-bottom: 0.5rem !important;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+        .fi-wi-step-title, .fi-wi-step-description {
+            display: none !important; /* Hide text, show only icons */
+        }
+    }
+
+    /* ── Mobile Dashboard Stats 2-Column Grid ──
+    @media (max-width: 640px) {
+        .fi-wi-stats-overview-stats-ctn {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+    } */
 </style>

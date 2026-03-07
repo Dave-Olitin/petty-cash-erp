@@ -71,10 +71,14 @@ class VoucherObserver
 
             // Threshold Check (AED 2000)
             if ($currentBalance < 2000) {
-                // Dispatch notifications (this already behaves asynchronously if notifications are queued)
-                $managers = \App\Models\User::permission('voucher.manage_float')->get();
-                foreach ($managers as $manager) {
-                    $manager->notify(new \App\Notifications\LowBalanceNotification($currentBalance));
+                // Dispatch notifications safely (prevents 500 crashes if mail server is offline)
+                try {
+                    $managers = \App\Models\User::permission('voucher.manage_float')->get();
+                    foreach ($managers as $manager) {
+                        $manager->notify(new \App\Notifications\LowBalanceNotification($currentBalance));
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error('Low Balance Notification Failed: ' . $e->getMessage());
                 }
             }
         }
