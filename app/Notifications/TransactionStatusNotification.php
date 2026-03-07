@@ -48,7 +48,10 @@ class TransactionStatusNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $actionUrl = url('/admin/transactions');
+        // In Filament v3, the default query string parameter for tabs is usually `activeTab`.
+        // However, if the user is already on the page, Livewire wire:navigate might swallow the query string update.
+        $tabName = $this->transaction->status ?? 'all';
+        $actionUrl = url("/admin/transactions?activeTab={$tabName}");
         
         $message = (new MailMessage)
             ->subject("Petty Cash: Transaction {$this->type}")
@@ -58,6 +61,8 @@ class TransactionStatusNotification extends Notification implements ShouldQueue
             $message->line("A new petty cash transaction has been submitted by {$this->transaction->user->name} and requires your review.")
                     ->line("Amount: AED {$this->transaction->amount}")
                     ->line("Payee: {$this->transaction->payee}");
+        } elseif ($this->transaction->type === 'REPLENISHMENT' && $this->type === 'approved' && $notifiable->branch_id === $this->transaction->branch_id) {
+            $message->line("Your branch has received a fund replenishment of AED {$this->transaction->amount}.");
         } else {
             $message->line("Your petty cash transaction of AED {$this->transaction->amount} for {$this->transaction->payee} has been {$this->type}.");
         }
@@ -72,10 +77,17 @@ class TransactionStatusNotification extends Notification implements ShouldQueue
      */
     public function toArray(object $notifiable): array
     {
-        $title = $this->type === 'created' ? 'New Transaction Submitted' : 'Transaction ' . ucfirst($this->type);
-        $body = $this->type === 'created' 
-            ? "{$this->transaction->user->name} submitted an expense for AED {$this->transaction->amount}." 
-            : "Your transaction for AED {$this->transaction->amount} has been {$this->type}.";
+        $isReplenishment = $this->transaction->type === 'REPLENISHMENT' && $this->type === 'approved' && $notifiable->branch_id === $this->transaction->branch_id;
+        
+        $title = $this->type === 'created' ? 'New Transaction Submitted' : ($isReplenishment ? 'Funds Received' : 'Transaction ' . ucfirst($this->type));
+        
+        if ($this->type === 'created') {
+            $body = "{$this->transaction->user->name} submitted an expense for AED {$this->transaction->amount}.";
+        } elseif ($isReplenishment) {
+            $body = "Your branch just received a replenishment of AED {$this->transaction->amount}.";
+        } else {
+            $body = "Your transaction for AED {$this->transaction->amount} has been {$this->type}.";
+        }
 
         return \Filament\Notifications\Notification::make()
             ->title($title)
@@ -85,7 +97,11 @@ class TransactionStatusNotification extends Notification implements ShouldQueue
             ->actions([
                 Action::make('view')
                     ->button()
-                    ->url('/admin/transactions')
+                    ->url(function() {
+                        $tabName = $this->transaction->status ?? 'all';
+                        return url("/admin/transactions?activeTab={$tabName}");
+                    })
+                    ->openUrlInNewTab() // Force actual browser navigation instead of SPA link check
                     ->markAsRead(),
             ])
             ->getDatabaseMessage();
@@ -96,16 +112,24 @@ class TransactionStatusNotification extends Notification implements ShouldQueue
      */
     public function toWebPush($notifiable, $notification)
     {
-        $title = $this->type === 'created' ? 'New Transaction' : 'Transaction ' . ucfirst($this->type);
-        $body = $this->type === 'created' 
-            ? "{$this->transaction->user->name} submitted an expense for AED {$this->transaction->amount}." 
-            : "Your transaction for AED {$this->transaction->amount} was {$this->type}.";
+        $isReplenishment = $this->transaction->type === 'REPLENISHMENT' && $this->type === 'approved' && $notifiable->branch_id === $this->transaction->branch_id;
+        
+        $title = $this->type === 'created' ? 'New Transaction' : ($isReplenishment ? 'Funds Received' : 'Transaction ' . ucfirst($this->type));
+        
+        if ($this->type === 'created') {
+            $body = "{$this->transaction->user->name} submitted an expense for AED {$this->transaction->amount}.";
+        } elseif ($isReplenishment) {
+            $body = "Your branch received a replenishment of AED {$this->transaction->amount}.";
+        } else {
+            $body = "Your transaction for AED {$this->transaction->amount} was {$this->type}.";
+        }
 
+        $tabName = $this->transaction->status ?? 'all';
         return (new WebPushMessage)
             ->title($title)
             ->icon('/images/icon-192.png')
             ->body($body)
-            ->action('View', url('/admin/transactions'))
+            ->action('View', url("/admin/transactions?activeTab={$tabName}"))
             ->vibrate([100, 50, 100]);
     }
 }

@@ -15,7 +15,7 @@ class ChartOfAccountResource extends Resource
     protected static ?string $model = AccountCode::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-book-open';
-    protected static ?string $navigationGroup = 'System Settings';
+    protected static ?string $cluster = \App\Filament\Clusters\Settings::class;
     protected static ?string $navigationLabel = 'Chart of Accounts';
     protected static ?string $modelLabel = 'Chart of Account';
     protected static ?string $pluralModelLabel = 'Chart of Accounts';

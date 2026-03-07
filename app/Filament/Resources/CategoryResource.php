@@ -18,7 +18,7 @@ class CategoryResource extends Resource
     protected static ?string $model = Category::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
-    protected static ?string $navigationGroup = 'System Settings';
+    protected static ?string $cluster = \App\Filament\Clusters\Settings::class;
     protected static ?string $navigationLabel = 'Transaction Categories';
     protected static ?string $modelLabel = 'Transaction Category';
     protected static ?string $pluralModelLabel = 'Transaction Categories';

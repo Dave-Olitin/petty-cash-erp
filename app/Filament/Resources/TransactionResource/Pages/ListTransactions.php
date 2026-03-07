@@ -8,7 +8,19 @@ use Filament\Resources\Pages\ListRecords;
 
 class ListTransactions extends ListRecords
 {
+    #[\Livewire\Attributes\Url]
+    public ?string $activeTab = null;
+
     protected static string $resource = TransactionResource::class;
+
+    public function mount(): void
+    {
+        if (request()->has('activeTab')) {
+            $this->activeTab = request()->query('activeTab');
+        }
+        
+        parent::mount();
+    }
 
     protected function getHeaderActions(): array
     {
@@ -92,9 +104,11 @@ class ListTransactions extends ListRecords
                 ->badgeColor('warning'),
             'approved' => \Filament\Resources\Components\Tab::make('Approved')
                 ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'approved'))
+                ->badge(TransactionResource::getEloquentQuery()->where('status', 'approved')->count())
                 ->badgeColor('success'),
             'rejected' => \Filament\Resources\Components\Tab::make('Rejected')
                 ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'rejected'))
+                ->badge(TransactionResource::getEloquentQuery()->where('status', 'rejected')->count())
                 ->badgeColor('danger'),
             'all' => \Filament\Resources\Components\Tab::make('All Transactions'),
         ];

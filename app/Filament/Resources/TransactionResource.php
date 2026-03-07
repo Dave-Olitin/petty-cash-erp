@@ -23,6 +23,18 @@ class TransactionResource extends Resource
     protected static ?string $navigationGroup = 'Finance';
     protected static ?int $navigationSort = 1;
 
+    public static function getNavigationBadge(): ?string
+    {
+        // Show the count of pending transactions in the sidebar
+        $count = static::getEloquentQuery()->where('status', 'pending')->count();
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
 public static function form(Form $form): Form
 {
     return $form
@@ -318,8 +330,9 @@ public static function form(Form $form): Form
 
 public static function table(Table $table): Table
 {
-    return $table
-        ->columns([
+        return $table
+            ->striped()
+            ->columns([
             Tables\Columns\TextColumn::make('created_at')
                 ->dateTime('M j, Y h:i A')
                 ->sortable(),
@@ -498,7 +511,8 @@ public static function table(Table $table): Table
                 // Accounting Specs Action Removed
 
                 Tables\Actions\EditAction::make()
-                    ->slideOver(),
+                    ->slideOver()
+                    ->visible(fn (\App\Models\Transaction $record) => auth()->user()->can('update', $record)),
                 Tables\Actions\DeleteAction::make()
                     ->label('Void')
                     ->modalHeading('Void Transaction')

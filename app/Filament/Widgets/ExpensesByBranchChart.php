@@ -10,9 +10,9 @@ class ExpensesByBranchChart extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected static ?string $heading = 'Expenses by Branch';
+    protected static ?string $heading = 'Top 5 Branch Expenses';
     protected static ?int $sort = 4;
-    protected static ?string $maxHeight = '400px'; // Taller to accommodate many branches
+    protected static ?string $maxHeight = '300px';
 
     public static function canView(): bool
     {
@@ -47,17 +47,11 @@ class ExpensesByBranchChart extends ChartWidget
             ];
         }
 
-        // Cap visible bars at 12 — collapse rest into "Others"
-        $top    = $data->take(12);
-        $others = $data->skip(12);
+        // Cap visible bars at 5
+        $top = $data->take(5);
 
         $labels = $top->pluck('branch_name')->toArray();
         $totals = $top->pluck('total')->map(fn($v) => round((float) $v, 2))->toArray();
-
-        if ($others->isNotEmpty()) {
-            $labels[] = 'Others (' . $others->count() . ')';
-            $totals[] = round($others->sum('total'), 2);
-        }
 
         // Dynamic bar height: 32px per bar, min 200px
         $barCount  = count($labels);
