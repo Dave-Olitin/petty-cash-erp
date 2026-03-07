@@ -20,6 +20,7 @@ class UserResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-users';
     protected static ?string $cluster = \App\Filament\Clusters\Settings::class;
     protected static ?int $navigationSort = 2;
+    protected static \Filament\Pages\SubNavigationPosition $subNavigationPosition = \Filament\Pages\SubNavigationPosition::Top;
 
 public static function form(Form $form): Form
 {

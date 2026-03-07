@@ -20,6 +20,7 @@ class ChartOfAccountResource extends Resource
     protected static ?string $modelLabel = 'Chart of Account';
     protected static ?string $pluralModelLabel = 'Chart of Accounts';
     protected static ?int $navigationSort = 5;
+    protected static \Filament\Pages\SubNavigationPosition $subNavigationPosition = \Filament\Pages\SubNavigationPosition::Top;
 
     public static function form(Form $form): Form
     {

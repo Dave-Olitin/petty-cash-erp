@@ -45,7 +45,13 @@ class Dashboard extends BaseDashboard
     // Export Action Removed
     protected function getHeaderActions(): array
     {
-        return [];
+        return [
+            \Filament\Actions\Action::make('create_transaction')
+                ->label('Create Transaction')
+                ->icon('heroicon-o-plus-circle')
+                ->color('primary')
+                ->url(fn (): string => \App\Filament\Resources\TransactionResource::getUrl('create')),
+        ];
     }
     
     public function getColumns(): int | string | array

@@ -363,24 +363,28 @@ public static function table(Table $table): Table
                 ->money('AED')
                 ->extraAttributes(['class' => 'privacy-mask']),
             Tables\Columns\TextColumn::make('payee')
-                ->searchable(),
+                ->searchable()
+                ->toggleable(),
             Tables\Columns\TextColumn::make('supplier')
                 ->label('Supplier')
                 ->searchable()
                 ->toggleable(isToggledHiddenByDefault: true),
             Tables\Columns\TextColumn::make('reference_number')
                 ->label('Ref #')
-                ->searchable(),
+                ->searchable()
+                ->toggleable(),
             Tables\Columns\IconColumn::make('receipt_path')
                 ->label('Receipt')
                 ->boolean()
                 ->trueIcon('heroicon-o-document-check')
                 ->falseIcon('heroicon-o-x-mark')
-                ->color(fn ($state) => $state ? 'success' : 'gray'),
+                ->color(fn ($state) => $state ? 'success' : 'gray')
+                ->toggleable(),
             Tables\Columns\TextColumn::make('branch.name')
                 ->label('Branch')
                 ->placeholder('Head Office')
-                ->sortable(),
+                ->sortable()
+                ->toggleable(),
         ])
         ->defaultSort('created_at', 'desc')
         ->filters([
@@ -419,7 +423,64 @@ public static function table(Table $table): Table
             Tables\Actions\ViewAction::make()
                 ->slideOver() // Nice preview effect
                 ->color('info')
-                ->icon('heroicon-o-eye'),
+                ->icon('heroicon-o-eye')
+                ->extraModalFooterActions(fn (Transaction $record): array => [
+                    // Approve Action wrapped for Modal Footer
+                    Tables\Actions\Action::make('approve_modal')
+                        ->label('Approve')
+                        ->icon('heroicon-o-check')
+                        ->color('success')
+                        ->visible(fn () => $record->status === 'pending' && auth()->user()->branch_id === null)
+                        ->action(function () use ($record) {
+                            $record->update(['status' => 'approved']);
+                            \Filament\Notifications\Notification::make()
+                                ->title('Transaction Approved')
+                                ->success()
+                                ->send();
+                        }),
+
+                    // Reject Action wrapped for Modal Footer
+                    Tables\Actions\Action::make('reject_modal')
+                        ->label('Reject')
+                        ->icon('heroicon-o-x-mark')
+                        ->color('danger')
+                        ->visible(fn () => in_array($record->status, ['pending', 'approved']) && auth()->user()->branch_id === null)
+                        ->requiresConfirmation()
+                        ->form([
+                            Forms\Components\Textarea::make('rejection_reason')
+                                ->label('Reason for Rejection')
+                                ->required()
+                                ->maxLength(65535),
+                        ])
+                        ->action(function (array $data) use ($record) {
+                            $originalData = $record->fresh()->toArray();
+                            $record->update([
+                                'status'           => 'rejected',
+                                'rejection_reason' => $data['rejection_reason'],
+                            ]);
+
+                            \App\Models\TransactionHistory::create([
+                                'transaction_id' => $record->id,
+                                'user_id'        => auth()->id(),
+                                'reason'         => 'Transaction Rejected: ' . $data['rejection_reason'],
+                                'original_data'  => $originalData,
+                                'modified_data'  => $record->fresh()->toArray(),
+                            ]);
+
+                            \Filament\Notifications\Notification::make()
+                                ->title('Transaction Rejected')
+                                ->danger()
+                                ->send();
+                        }),
+                        
+                    // Print Voucher inside Modal Footer
+                    Tables\Actions\Action::make('print_modal')
+                        ->label('Print Voucher')
+                        ->icon('heroicon-o-printer')
+                        ->color('gray')
+                        ->url(fn (): string => route('transaction.print', $record))
+                        ->openUrlInNewTab(),
+                ]),
             Tables\Actions\ActionGroup::make([
                 Tables\Actions\Action::make('approve')
                     ->label('Approve')

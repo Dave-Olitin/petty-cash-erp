@@ -47,7 +47,10 @@
         transition: all 0.2s ease;
         font-size: 16px !important;
     }
-
+.fi-sidebar-nav {
+    border-inline-end: 1px solid #00000014;
+    box-shadow: 4px 0 12px -2px rgba(0, 0, 0, 0.06);
+}
     /* Hover effect */
     .fi-tabs-item:hover {
         color: #1e293b !important;

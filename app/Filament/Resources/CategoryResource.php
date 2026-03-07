@@ -23,6 +23,7 @@ class CategoryResource extends Resource
     protected static ?string $modelLabel = 'Transaction Category';
     protected static ?string $pluralModelLabel = 'Transaction Categories';
     protected static ?int $navigationSort = 4;
+    protected static \Filament\Pages\SubNavigationPosition $subNavigationPosition = \Filament\Pages\SubNavigationPosition::Top;
 
     public static function form(Form $form): Form
     {

@@ -20,6 +20,7 @@ class BranchResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-building-office';
     protected static ?string $cluster = \App\Filament\Clusters\Settings::class;
     protected static ?int $navigationSort = 1;
+    protected static \Filament\Pages\SubNavigationPosition $subNavigationPosition = \Filament\Pages\SubNavigationPosition::Top;
 
     public static function form(Form $form): Form
 {
