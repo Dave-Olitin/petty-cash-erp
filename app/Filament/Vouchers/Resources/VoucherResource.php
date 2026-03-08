@@ -82,11 +82,11 @@ class VoucherResource extends Resource
 
     public static function form(Form $form): Form
     {
-        $getPreview = fn(string $name) => Forms\Components\Group::make()->schema([
+        $previewSection = Forms\Components\Group::make()->schema([
             Forms\Components\Section::make('Live Preview')
                 ->extraAttributes(['class' => 'preview-section-no-padding', 'style' => 'padding:0!important; margin:0!important; position: sticky; top: 1rem;'])
                 ->schema([
-                    Forms\Components\Placeholder::make($name)
+                    Forms\Components\Placeholder::make('live_preview')
                         ->label('')
                         ->content(fn (Forms\Get $get) => view('filament.forms.components.voucher-preview', ['get' => $get])),
                 ])
@@ -96,14 +96,14 @@ class VoucherResource extends Resource
 
         return $form
             ->schema([
-                Forms\Components\Wizard::make([
-                    // ── VOUCHER HEADER ───────────────────────────────────────
-                    Forms\Components\Wizard\Step::make('Voucher & Payment Details')
-                        ->icon('heroicon-o-document-text')
-                        ->description('Select the company template and fill in voucher and payment information.')
-                        ->schema([
-                            Forms\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([
-                                Forms\Components\Group::make()->schema([
+                Forms\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([
+                    Forms\Components\Group::make()->schema([
+                        Forms\Components\Wizard::make([
+                            // ── VOUCHER HEADER ───────────────────────────────────────
+                            Forms\Components\Wizard\Step::make('Voucher & Payment Details')
+                                ->icon('heroicon-o-document-text')
+                                ->description('STEP 1')
+                                ->schema([
                                     Forms\Components\Group::make()->schema([
                                         Forms\Components\Select::make('type')
                                             ->options([
@@ -183,19 +183,13 @@ class VoucherResource extends Resource
                                                 ->maxLength(100)
                                                 ->placeholder('e.g. Emirates NBD'),
                                         ])->columns(['default' => 1, 'md' => 3]),
-                                ])->columnSpan(['default' => 'full', 'lg' => 2]),
-
-                                $getPreview('preview_1'),
-                            ]),
                         ]),
 
                     // ── LEDGER ENTRIES ────────────────────────────────────────
                     Forms\Components\Wizard\Step::make('Ledger Entries')
                         ->icon('heroicon-o-table-cells')
-                        ->description('Add debit and credit entries. Total auto-calculates from debit amounts.')
+                        ->description('STEP 2')
                         ->schema([
-                            Forms\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([
-                                Forms\Components\Group::make()->schema([
                                     Forms\Components\Repeater::make('items')
                                         ->relationship()
                                         ->label('')
@@ -299,17 +293,13 @@ class VoucherResource extends Resource
                                             $set('amount', number_format($totalDebit, 2, '.', ''));
                                         })
                                         ->live(),
-                                ])->columnSpan(['default' => 'full', 'lg' => 2]),
-
-                                $getPreview('preview_2'),
-                            ]),
                         ]),
 
                     // ── SUMMARY & ATTACHMENTS ─────────────────────────────────
                     Forms\Components\Wizard\Step::make('Summary & Attachments')
                         ->icon('heroicon-o-calculator')
+                        ->description('STEP 3')
                         ->schema([
-                            Forms\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([
                                 Forms\Components\Group::make()->schema([
                                     Forms\Components\TextInput::make('amount')
                                         ->label('Total Amount')
@@ -339,13 +329,13 @@ class VoucherResource extends Resource
                                         ->label('Invoices & Receipts')
                                         ->helperText('Upload receipts, invoices, or supporting documents (JPG, PNG, PDF, max 10MB each).')
                                         ->columnSpanFull(),
-                                ])->columns(['default' => 1, 'md' => 2])
-                                  ->columnSpan(['default' => 'full', 'lg' => 2]),
-
-                                $getPreview('preview_3'),
-                            ]),
+                                ])->columns(['default' => 1, 'md' => 2]),
                         ]),
-                ])->skippable()->contained(false)->columnSpan('full'),
+                ])->skippable()->contained(false),
+                    ])->columnSpan(['default' => 'full', 'lg' => 2]),
+
+                    $previewSection,
+                ]),
             ]);
     }
 

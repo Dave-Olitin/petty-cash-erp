@@ -23,7 +23,7 @@ class FloatReplenishmentsTable extends BaseWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(FloatReplenishment::query())
+            ->query(FloatReplenishment::query()->with('creator'))
             ->heading('Head Office Float Replenishments')
             ->description('Manage deposits and transfers into the main petty cash float.')
             ->defaultSort('date', 'desc')

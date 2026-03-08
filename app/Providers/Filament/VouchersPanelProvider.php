@@ -162,6 +162,10 @@ class VouchersPanelProvider extends PanelProvider
             ->databaseNotifications()
             ->databaseNotificationsPolling('10s')
             ->renderHook(
+                \Filament\View\PanelsRenderHook::SIDEBAR_NAV_END,
+                fn () => view('filament.hooks.vouchers-sidebar-quick-actions')
+            )
+            ->renderHook(
                 'panels::head.end',
                 fn () => view('filament.hooks.custom-styles')
             )

@@ -19,14 +19,20 @@ class HeadOfficeFloatWidget extends BaseWidget
 
     protected function getStats(): array
     {
-        $totalReplenishing = FloatReplenishment::sum('amount');
-        
-        // Sum paid petty cash vouchers
-        $totalSpent = Voucher::where('type', 'petty_cash')
-            ->where('status', 'paid')
-            ->sum('amount');
+        $data = \Illuminate\Support\Facades\Cache::remember('head_office_float_widget_stats', 60, function () {
+            $totalReplenishing = FloatReplenishment::sum('amount');
             
-        $currentBalance = $totalReplenishing - $totalSpent;
+            // Sum paid petty cash vouchers
+            $totalSpent = Voucher::where('type', 'petty_cash')
+                ->where('status', 'paid')
+                ->sum('amount');
+                
+            $currentBalance = $totalReplenishing - $totalSpent;
+            
+            return compact('totalReplenishing', 'totalSpent', 'currentBalance');
+        });
+
+        extract($data);
         
         // Determine alert status
         $color = 'success';

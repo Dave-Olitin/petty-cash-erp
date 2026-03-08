@@ -63,6 +63,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->font('Cairo')
             ->renderHook(
+                \Filament\View\PanelsRenderHook::SIDEBAR_NAV_END,
+                fn () => view('filament.hooks.admin-sidebar-quick-actions')
+            )
+            ->renderHook(
                 'panels::head.end',
                 fn () => view('filament.hooks.custom-styles')
             )
