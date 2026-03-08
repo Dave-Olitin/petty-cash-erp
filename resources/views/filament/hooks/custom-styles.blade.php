@@ -103,21 +103,44 @@
     /* ── Mobile Wizard Horizontal Icons-Only Layout ── */
     @media (max-width: 768px) {
         .fi-wi-header {
+            display: flex !important;
             flex-direction: row !important;
-            justify-content: space-around !important;
-            align-items: center !important;
-            overflow: visible !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            overflow-x: auto !important;
+            gap: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
         }
         .fi-wi-header > li {
             margin: 0 !important;
             border: none !important;
-            padding-bottom: 0.5rem !important;
-            flex: 1;
+            padding-bottom: 0 !important;
+            flex: 1 1 0;
             display: flex;
             justify-content: center;
         }
-        .fi-wi-step-title, .fi-wi-step-description {
-            display: none !important; /* Hide text, show only icons */
+        /* Target the button inside the li */
+        .fi-wi-header > li > button {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 0.25rem !important;
+            text-align: center !important;
+            padding: 0 !important;
+        }
+        .fi-wi-step-title {
+            display: block !important;
+            font-size: 0.75rem !important; /* Smaller font for mobile */
+            white-space: normal !important;
+            line-height: 1.1 !important;
+        }
+        .fi-wi-step-description {
+            display: none !important; /* Hide description */
+        }
+        /* Optional: Hide the separator line between steps on mobile if it exists */
+        .fi-wi-header > li > div[role="separator"],
+        .fi-wi-header > li::after {
+            display: none !important;
         }
     }
 
