@@ -92,7 +92,7 @@ public static function form(Form $form): Form
                                 ->getOptionLabelFromRecordUsing(
                                     fn ($record) => "{$record->code} – {$record->name}"
                                 )
-                                ->searchable()
+                                ->searchable(['code', 'name'])
                                 ->preload()
                                 ->nullable()
                                 ->placeholder('Select account...')

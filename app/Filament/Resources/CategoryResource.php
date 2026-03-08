@@ -47,7 +47,7 @@ class CategoryResource extends Resource
                     ->label('Chart of Account')
                     ->relationship('accountCode', 'name')
                     ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->code} – {$record->name}")
-                    ->searchable()
+                    ->searchable(['code', 'name'])
                     ->preload()
                     ->placeholder('Not assigned')
                     ->helperText('Link this category to a GL account code for reporting purposes.')
