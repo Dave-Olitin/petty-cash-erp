@@ -414,11 +414,7 @@ class VoucherResource extends Resource
                         'petty_cash' => 'Petty Cash',
                         'payment' => 'Payment',
                     ]),
-                Tables\Filters\SelectFilter::make('category_id')
-                    ->label('Category')
-                    ->relationship('category', 'name')
-                    ->searchable()
-                    ->preload(),
+
                 Tables\Filters\SelectFilter::make('user_id')
                     ->label('Requester')
                     ->relationship('user', 'name')
@@ -629,7 +625,7 @@ class VoucherResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->with(['approvals.user.roles', 'items.category', 'template']);
+            ->with(['approvals.user.roles', 'items', 'template']);
             
         $user = auth()->user();
 
@@ -703,8 +699,9 @@ class VoucherResource extends Resource
                             ->weight(\Filament\Support\Enums\FontWeight::Bold),
                         \Filament\Infolists\Components\TextEntry::make('type')
                             ->formatStateUsing(fn ($state) => $state === 'petty_cash' ? 'Petty Cash' : 'Payment Voucher'),
-                        \Filament\Infolists\Components\TextEntry::make('category.name')
-                            ->label('Category'),
+                        \Filament\Infolists\Components\TextEntry::make('account_codes')
+                            ->label('Account Code(s)')
+                            ->getStateUsing(fn ($record) => $record->items->pluck('account_code')->unique()->implode(', ') ?: '—'),
                         \Filament\Infolists\Components\TextEntry::make('payee')
                             ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
                         \Filament\Infolists\Components\TextEntry::make('amount')

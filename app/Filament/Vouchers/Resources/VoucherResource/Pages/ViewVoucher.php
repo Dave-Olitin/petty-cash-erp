@@ -80,7 +80,7 @@ class ViewVoucher extends ViewRecord
                         $lockedRecord->load('user');
 
                         $firstStep = \App\Models\ApprovalWorkflow::getApproverAtStep(1);
-                        if ($firstStep) {
+                        if ($firstStep && $firstStep->user) {
                             $firstStep->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'checked'));
                         } else {
                             User::role('Approver')->get()->each->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'checked'));
@@ -151,7 +151,7 @@ class ViewVoucher extends ViewRecord
                             $lockedRecord->update(['current_approval_step' => $nextStep]);
 
                             $next = \App\Models\ApprovalWorkflow::getApproverAtStep($nextStep);
-                            if ($next) {
+                            if ($next && $next->user) {
                                 $next->user->notify(new \App\Notifications\VoucherStatusNotification($lockedRecord, 'checked'));
                             }
 

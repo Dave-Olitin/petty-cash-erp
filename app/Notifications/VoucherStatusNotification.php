@@ -62,23 +62,15 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             default           => "There is an update on your voucher.",
         };
 
-        $mail = (new MailMessage)
+        return (new MailMessage)
             ->subject($subject)
-            ->greeting("Hello, {$notifiable->name}!")
-            ->line($intro)
-            ->line("**Voucher:** {$this->voucher->voucher_number}")
-            ->line("**Payee:** {$this->voucher->payee}")
-            ->line("**Amount:** AED " . number_format($this->voucher->amount, 2))
-            ->line("**Requester:** {$this->voucher->user->name}");
-
-        if ($this->comments) {
-            $mail->line("**Comments:** {$this->comments}");
-        }
-
-        $mail->action('View Voucher', url('/vouchers/vouchers'))
-             ->line('This is an automated notification from the Petty Cash ERP system.');
-
-        return $mail;
+            ->view('emails.voucher-status', [
+                'user'     => $notifiable,
+                'voucher'  => $this->voucher,
+                'event'    => $this->event,
+                'comments' => $this->comments,
+                'intro'    => $intro,
+            ]);
     }
 
     public function toDatabase(object $notifiable): array

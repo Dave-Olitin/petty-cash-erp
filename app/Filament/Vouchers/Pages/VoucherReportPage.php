@@ -8,6 +8,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Number;
@@ -20,7 +21,7 @@ class VoucherReportPage extends Page implements HasForms
 
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
     protected static ?string $navigationLabel = 'Report';
-    protected static ?string $title = 'Petty Cash Usage Report';
+    protected static ?string $title = 'Vouchers Overview Report';
     protected static ?string $navigationGroup = null;
     protected static ?int $navigationSort = 10;
     protected static string $view = 'filament.vouchers.pages.voucher-report-page';
@@ -32,7 +33,7 @@ class VoucherReportPage extends Page implements HasForms
 
     public ?string $date_from = null;
     public ?string $date_to = null;
-    public ?string $category_id = null;
+    public ?string $account_code = null;
     public ?string $type = null;
 
     public function mount(): void
@@ -43,67 +44,100 @@ class VoucherReportPage extends Page implements HasForms
 
     public function updating($name)
     {
-        if (in_array($name, ['date_from', 'date_to', 'type', 'category_id'])) {
+        if (in_array($name, ['date_from', 'date_to', 'type', 'account_code'])) {
             $this->resetPage();
         }
     }
 
-    protected function getFormSchema(): array
+    public function form(Form $form): Form
     {
-        return [
-            DatePicker::make('date_from')->label('From')->required(),
-            DatePicker::make('date_to')->label('To')->required(),
-            Select::make('type')->options([
-                'petty_cash' => 'Petty Cash',
-                'payment'    => 'Payment Voucher',
-            ])->placeholder('All Types'),
-            Select::make('category_id')
-                ->label('Category')
-                ->options(Category::pluck('name', 'id')->toArray())
-                ->placeholder('All Categories'),
-        ];
+        return $form
+            ->schema([
+                DatePicker::make('date_from')
+                    ->label('From')
+                    ->required()
+                    ->live(),
+                DatePicker::make('date_to')
+                    ->label('To')
+                    ->required()
+                    ->live(),
+                Select::make('type')
+                    ->options([
+                        'petty_cash' => 'Petty Cash',
+                        'payment'    => 'Payment Voucher',
+                    ])
+                    ->placeholder('All Types')
+                    ->live(),
+                Select::make('account_code')
+                    ->label('Account Code')
+                    ->options(\App\Models\AccountCode::orderBy('name')->get()->mapWithKeys(fn ($acct) => [$acct->code => $acct->code . ' - ' . $acct->name])->toArray())
+                    ->placeholder('All Account Codes')
+                    ->searchable()
+                    ->live(),
+            ])
+            ->columns(['sm' => 2, 'xl' => 4]);
     }
 
-    /**
-     * The filtered voucher query (used in the view).
-     */
     public function getReportData(): array
     {
         $query = Voucher::query()
             ->where('status', 'paid')
-            ->with(['user', 'category'])
+            ->with(['user', 'category', 'items'])
             ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
 
         if ($this->type) {
             $query->where('type', $this->type);
         }
-        if ($this->category_id) {
-            $query->where('category_id', $this->category_id);
+        if ($this->account_code) {
+            $query->whereHas('items', function ($q) {
+                $q->where('account_code', $this->account_code);
+            });
         }
 
         $baseQuery = clone $query;
         $totalAmount = $baseQuery->sum('amount');
+        $totalPayment = (clone $baseQuery)->where('type', 'payment')->sum('amount');
+        $totalPettyCash = (clone $baseQuery)->where('type', 'petty_cash')->sum('amount');
         $totalCount = $baseQuery->count();
 
         $vouchers = $query->orderByDesc('created_at')->paginate(10);
 
-        // Calculate by category securely without loading everything into memory
-        $categoryData = (clone $baseQuery)->select('category_id', DB::raw('SUM(amount) as total_amount'))
-            ->withoutEagerLoads()
-            ->with('category')
-            ->groupBy('category_id')
+        // Group by account codes using voucher items
+        $byAccountData = DB::table('voucher_items')
+            ->join('vouchers', 'vouchers.id', '=', 'voucher_items.voucher_id')
+            ->whereNull('vouchers.deleted_at')
+            ->where('vouchers.status', 'paid')
+            ->where('voucher_items.entry_type', 'debit')
+            ->whereBetween('vouchers.created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
+
+        if ($this->type) {
+            $byAccountData->where('vouchers.type', $this->type);
+        }
+        if ($this->account_code) {
+            $byAccountData->where('voucher_items.account_code', $this->account_code);
+        }
+
+        $accountData = $byAccountData
+            ->select('voucher_items.account_code', DB::raw('SUM(voucher_items.amount) as total_amount'))
+            ->groupBy('voucher_items.account_code')
             ->get();
 
-        $byCategory = $categoryData->mapWithKeys(function ($item) {
-            $name = $item->category ? $item->category->name : 'Uncategorized';
-            return [$name => $item->total_amount];
+        $byAccount = $accountData->mapWithKeys(function ($item) {
+            if (!$item->account_code) {
+                return ['Uncategorized' => (float) $item->total_amount];
+            }
+            $account = \App\Models\AccountCode::where('code', $item->account_code)->first();
+            $name = $account ? "{$item->account_code} - " . \Illuminate\Support\Str::limit($account->name, 25) : $item->account_code;
+            return [$name => (float) $item->total_amount];
         })->sortDesc();
 
         return [
-            'vouchers'      => $vouchers,
-            'total_amount'  => $totalAmount,
-            'total_count'   => $totalCount,
-            'by_category'   => $byCategory,
+            'vouchers'         => $vouchers,
+            'total_amount'     => $totalAmount,
+            'total_payment'    => $totalPayment,
+            'total_petty_cash' => $totalPettyCash,
+            'total_count'      => $totalCount,
+            'by_category'      => $byAccount, // Kept the key name for blade compatibility
         ];
     }
 
@@ -117,8 +151,10 @@ class VoucherReportPage extends Page implements HasForms
         if ($this->type) {
             $query->where('type', $this->type);
         }
-        if ($this->category_id) {
-            $query->where('category_id', $this->category_id);
+        if ($this->account_code) {
+            $query->whereHas('items', function ($q) {
+                $q->where('account_code', $this->account_code);
+            });
         }
 
         $query->orderByDesc('created_at');

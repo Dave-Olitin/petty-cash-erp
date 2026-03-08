@@ -67,6 +67,13 @@ class FloatReplenishmentsTable extends BaseWidget
                     ])
                     ->successNotificationTitle('Replenishment updated successfully'),
                 Tables\Actions\DeleteAction::make(),
+                Tables\Actions\Action::make('print')
+                    ->label('Print')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->iconButton()
+                    ->url(fn (FloatReplenishment $record) => route('replenishment.pdf', $record))
+                    ->openUrlInNewTab(),
             ]);
     }
 }

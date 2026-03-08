@@ -74,6 +74,15 @@ Route::middleware(['auth'])->group(function () {
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.voucher', ['voucher' => $voucher])->stream($voucher->voucher_number . '.pdf');
     })->name('voucher.pdf');
 
+    Route::get('/admin/float-replenishments/{replenishment}/pdf', function (\App\Models\FloatReplenishment $replenishment) {
+        // Head Office or Accountant check
+        if (!auth()->user()->isHeadOffice() && !auth()->user()->hasRole('Accountant')) {
+            abort(403);
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.replenishment', ['replenishment' => $replenishment])->stream($replenishment->reference . '.pdf');
+    })->name('replenishment.pdf');
+
 });
 
 // Push Subscription Routes — accessible from any panel (admin or vouchers).
