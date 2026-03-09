@@ -45,7 +45,41 @@ class FloatReplenishmentsTable extends BaseWidget
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->headerActions([
-                // Moved to Dashboard header
+                Tables\Actions\Action::make('export_all')
+                    ->label('Export')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->button()
+                    ->action(function ($livewire) {
+                        $records = $livewire->getFilteredTableQuery()->get();
+                        $exportData = $records->map(function ($r) {
+                            return [
+                                'Date' => \Carbon\Carbon::parse($r->date)->format('Y-m-d'),
+                                'Reference' => $r->reference,
+                                'Amount (AED)' => $r->amount,
+                                'Recorded By' => $r->creator?->name,
+                                'Remarks' => $r->remarks,
+                                'Created At' => $r->created_at->format('Y-m-d H:i:s'),
+                            ];
+                        })->toArray();
+                        
+                        // Insert header row
+                        array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At']);
+
+                        return response()->streamDownload(function () use ($exportData) {
+                            $handle = fopen('php://output', 'w');
+                            foreach ($exportData as $row) {
+                                fputcsv($handle, $row);
+                            }
+                            fclose($handle);
+                        }, 'float_replenishments_all_' . now()->format('Ymd_His') . '.csv', [
+                            'Content-Type' => 'text/csv',
+                        ]);
+                    }),
+                Tables\Actions\ImportAction::make()
+                    ->importer(\App\Filament\Imports\FloatReplenishmentImporter::class)
+                    ->color('primary')
+                    ->button(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
@@ -74,6 +108,39 @@ class FloatReplenishmentsTable extends BaseWidget
                     ->iconButton()
                     ->url(fn (FloatReplenishment $record) => route('replenishment.pdf', $record))
                     ->openUrlInNewTab(),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('export_custom')
+                        ->label('Export Selected')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            $exportData = $records->map(function ($r) {
+                                return [
+                                    'Date' => \Carbon\Carbon::parse($r->date)->format('Y-m-d'),
+                                    'Reference' => $r->reference,
+                                    'Amount (AED)' => $r->amount,
+                                    'Recorded By' => $r->creator?->name,
+                                    'Remarks' => $r->remarks,
+                                    'Created At' => $r->created_at->format('Y-m-d H:i:s'),
+                                ];
+                            })->toArray();
+                            
+                            // Insert header row
+                            array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At']);
+
+                            return response()->streamDownload(function () use ($exportData) {
+                                $handle = fopen('php://output', 'w');
+                                foreach ($exportData as $row) {
+                                    fputcsv($handle, $row);
+                                }
+                                fclose($handle);
+                            }, 'float_replenishments_' . now()->format('Ymd_His') . '.csv', [
+                                'Content-Type' => 'text/csv',
+                            ]);
+                        }),
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
             ]);
     }
 }

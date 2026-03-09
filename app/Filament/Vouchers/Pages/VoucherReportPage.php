@@ -28,7 +28,7 @@ class VoucherReportPage extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return auth()->user()->hasAnyRole(['Admin', 'Super Admin']);
+        return auth()->user()->hasAnyRole(['Admin', 'Super Admin']) || auth()->user()->can('report.view');
     }
 
     public ?string $date_from = null;
