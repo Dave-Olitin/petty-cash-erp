@@ -30,8 +30,8 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
         // Only attempt to send an email if a real SMTP host has been configured.
         // This prevents the application from crashing if the .env file is incomplete, 
         // ensuring the in-app Notification Bell still successfully receives the DB alert.
-        $host = config('mail.mailers.smtp.host');
-        if ($host && $host !== '127.0.0.1' && $host !== 'your-smtp-host') {
+        $host = config('mail.mailers.smtp.host', '');
+        if (!empty($host) && !in_array($host, ['127.0.0.1', 'localhost', 'your-smtp-host'])) {
             $channels[] = 'mail';
         }
 
@@ -64,6 +64,7 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
 
         return (new MailMessage)
             ->subject($subject)
+            ->replyTo(config('mail.from.address'), config('mail.from.name'))
             ->view('emails.voucher-status', [
                 'user'     => $notifiable,
                 'voucher'  => $this->voucher,

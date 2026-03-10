@@ -306,8 +306,8 @@ class VoucherResource extends Resource
                                         ->numeric()
                                         ->prefix('AED')
                                         ->required()
-                                        ->live(debounce: 500)
-                                        ->helperText('Auto-calculated from debit entries. You can override this manually.')
+                                        ->readOnly()
+                                        ->helperText('Auto-calculated from debit entries above.')
                                         ->columnSpanFull(),
 
                                     Forms\Components\Textarea::make('transaction_summary')
