@@ -169,7 +169,13 @@
 
 <table class="ref-table">
     <tr>
-        <td><strong>P.V NO:</strong> {{ $transaction->branch_id ?? '3' }}-{{ $transaction->id }}</td>
+        <td>
+            @if($transaction->type === 'EXPENSE')
+                <strong>PCV NO:</strong> {{ $transaction->branch_id ?? '3' }}-{{ str_pad($transaction->id, 5, '0', STR_PAD_LEFT) }}
+            @else
+                <strong>P.V NO:</strong> {{ $transaction->branch_id ?? '3' }}-{{ $transaction->id }}
+            @endif
+        </td>
         <td style="text-align:right;"><strong>DATE:</strong> {{ $transaction->created_at->format('d/m/Y') }}</td>
     </tr>
 </table>

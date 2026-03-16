@@ -13,11 +13,15 @@ class VoucherObserver
     public function creating(Voucher $voucher): void
     {
         // Use template prefix if set, otherwise fall back to type-based prefix
-        if ($voucher->voucher_template_id) {
-            $template = \App\Models\VoucherTemplate::find($voucher->voucher_template_id);
-            $prefix = $template ? $template->prefix . '-' : ($voucher->type === 'petty_cash' ? 'PCV-' : 'PAY-');
+        if ($voucher->type === 'petty_cash') {
+            $prefix = 'PCV NO:' . date('y') . '-';
         } else {
-            $prefix = $voucher->type === 'petty_cash' ? 'PCV-' : 'PAY-';
+            if ($voucher->voucher_template_id) {
+                $template = \App\Models\VoucherTemplate::find($voucher->voucher_template_id);
+                $prefix = $template ? $template->prefix . '-' : 'PAY-';
+            } else {
+                $prefix = 'PAY-';
+            }
         }
 
         $lock = \Illuminate\Support\Facades\Cache::lock('voucher_number_generation', 5);
@@ -32,10 +36,15 @@ class VoucherObserver
                 if ($latest) {
                     $number = intval(substr($latest->voucher_number, strlen($prefix))) + 1;
                 } else {
-                    $number = 1;
+                    if ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO:')) {
+                        $number = 4001; // Starts at 04001
+                    } else {
+                        $number = 1;
+                    }
                 }
 
-                $voucher->voucher_number = $prefix . str_pad($number, 4, '0', STR_PAD_LEFT);
+                $padLength = ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO:')) ? 5 : 4;
+                $voucher->voucher_number = $prefix . str_pad($number, $padLength, '0', STR_PAD_LEFT);
             });
         } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
             throw \Illuminate\Validation\ValidationException::withMessages([

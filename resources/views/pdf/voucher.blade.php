@@ -199,7 +199,13 @@
 
 <table class="ref-table">
     <tr>
-        <td><strong>P.V NO:</strong> {{ $voucher->voucher_number }}</td>
+        <td>
+            @if($voucher->type === 'petty_cash')
+                <strong>{{ $voucher->voucher_number }}</strong>
+            @else
+                <strong>P.V NO:</strong> {{ $voucher->voucher_number }}
+            @endif
+        </td>
         <td style="text-align:right;"><strong>DATE:</strong> {{ $voucher->created_at->format('d/m/Y') }}</td>
     </tr>
 </table>
