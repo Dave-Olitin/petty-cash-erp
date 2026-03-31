@@ -14,7 +14,7 @@ class VoucherObserver
     {
         // Use template prefix if set, otherwise fall back to type-based prefix
         if ($voucher->type === 'petty_cash') {
-            $prefix = 'PCV NO:' . date('y') . '-';
+            $prefix = 'PCV NO: ' . date('y') . '-';
         } else {
             if ($voucher->voucher_template_id) {
                 $template = \App\Models\VoucherTemplate::find($voucher->voucher_template_id);
@@ -36,14 +36,14 @@ class VoucherObserver
                 if ($latest) {
                     $number = intval(substr($latest->voucher_number, strlen($prefix))) + 1;
                 } else {
-                    if ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO:')) {
+                    if ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO: ')) {
                         $number = 4001; // Starts at 04001
                     } else {
                         $number = 1;
                     }
                 }
 
-                $padLength = ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO:')) ? 5 : 4;
+                $padLength = ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO: ')) ? 5 : 4;
                 $voucher->voucher_number = $prefix . str_pad($number, $padLength, '0', STR_PAD_LEFT);
             });
         } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {

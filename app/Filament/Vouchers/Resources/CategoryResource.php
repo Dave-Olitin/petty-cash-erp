@@ -23,7 +23,7 @@ class CategoryResource extends Resource
     protected static ?string $modelLabel = 'Transaction Category';
     protected static ?string $pluralModelLabel = 'Transaction Categories';
     protected static ?int $navigationSort = 4;
-    protected static bool $shouldRegisterNavigation = false;
+    protected static bool $shouldRegisterNavigation = true;
 
     public static function form(Form $form): Form
     {

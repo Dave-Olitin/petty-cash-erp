@@ -109,6 +109,7 @@ class VoucherResource extends Resource
                                             ->options([
                                                 'petty_cash' => 'Petty Cash Request',
                                                 'payment' => 'Payment Voucher',
+                                                'receipt' => 'Receipt Voucher',
                                             ])
                                             ->required()
                                             ->default('payment')
@@ -148,6 +149,30 @@ class VoucherResource extends Resource
                                                     }
                                                 }
                                             }),
+
+                                        Forms\Components\Select::make('department')
+                                            ->label('Department')
+                                            ->options(\App\Models\Department::active()->pluck('name', 'name')->toArray())
+                                            ->searchable()
+                                            ->createOptionForm([
+                                                Forms\Components\TextInput::make('name')
+                                                    ->label('New Department Name')
+                                                    ->required()
+                                                    ->maxLength(100),
+                                            ])
+                                            ->createOptionUsing(function (array $data) {
+                                                \App\Models\Department::firstOrCreate(
+                                                    ['name' => $data['name']],
+                                                    ['is_active' => true]
+                                                );
+                                                return $data['name'];
+                                            }),
+
+                                        Forms\Components\Select::make('category_id')
+                                            ->label('Trans Cat (Category)')
+                                            ->relationship('category', 'name')
+                                            ->searchable()
+                                            ->preload(),
 
                                         Forms\Components\TextInput::make('payee')
                                             ->label('Paid To')
@@ -311,9 +336,9 @@ class VoucherResource extends Resource
                                         ->columnSpanFull(),
 
                                     Forms\Components\Textarea::make('transaction_summary')
-                                        ->label('Transaction Summary')
+                                        ->label('Remarks')
                                         ->rows(3)
-                                        ->helperText('Optional manual text to print on the voucher summary at the bottom.')
+                                        ->helperText('Optional notes or remarks to print on the voucher at the bottom.')
                                         ->live(debounce: 500)
                                         ->columnSpanFull(),
 
@@ -339,6 +364,7 @@ class VoucherResource extends Resource
             ]);
     }
 
+
     public static function table(Table $table): Table
     {
         return $table
@@ -352,7 +378,14 @@ class VoucherResource extends Resource
                     ->color(fn (string $state): string => match ($state) {
                         'petty_cash' => 'info',
                         'payment' => 'warning',
+                        'receipt' => 'success',
                         default => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'petty_cash' => 'Petty Cash',
+                        'payment' => 'Payment',
+                        'receipt' => 'Receipt',
+                        default => ucwords(str_replace('_', ' ', $state)),
                     }),
                 Tables\Columns\TextColumn::make('user.name')
                     ->label('Requester')
@@ -403,6 +436,7 @@ class VoucherResource extends Resource
                     ->options([
                         'petty_cash' => 'Petty Cash',
                         'payment' => 'Payment',
+                        'receipt' => 'Receipt',
                     ]),
 
                 Tables\Filters\SelectFilter::make('user_id')
@@ -563,19 +597,84 @@ class VoucherResource extends Resource
                     }),
 
                 Tables\Actions\Action::make('mark_paid')
-                    ->label('Mark as Paid')
+                    ->label(fn (Voucher $record) => $record->type === 'receipt' ? 'Collect Funds' : 'Disburse Funds')
                     ->icon('heroicon-m-banknotes')
                     ->color('success')
                     ->iconButton()
-                    ->requiresConfirmation()
+                    ->modalHeading(fn (Voucher $record) => $record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations')
+                    ->modalSubmitActionLabel('Process & Mark Paid')
+                    ->form([
+                        Forms\Components\Section::make('Cash Handover / Collection')
+                            ->description(fn (Voucher $record) => new \Illuminate\Support\HtmlString("Target Amount to Match: <strong>AED " . number_format((float) $record->amount, 2) . "</strong>"))
+                            ->schema([
+                                Forms\Components\Grid::make(3)->schema([
+                                    Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('bill_500')->label('500 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('bill_200')->label('200 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('bill_100')->label('100 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('bill_50')->label('50 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('bill_20')->label('20 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('bill_10')->label('10 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('bill_5')->label('5 Bills')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('coin_1')->label('1 Coins')->numeric()->default(0)->live()->minValue(0),
+                                    Forms\Components\TextInput::make('coin_0_50')->label('0.50 Coins')->numeric()->default(0)->live()->step('1')->minValue(0),
+                                    Forms\Components\TextInput::make('coin_0_25')->label('0.25 Coins')->numeric()->default(0)->live()->step('1')->minValue(0),
+                                    Forms\Components\Placeholder::make('total_sum')
+                                        ->label('Calculated Total')
+                                        ->content(function (Forms\Get $get) {
+                                            $total = ($get('bill_1000') * 1000) + ($get('bill_500') * 500) + ($get('bill_200') * 200) + ($get('bill_100') * 100) + ($get('bill_50') * 50) + ($get('bill_20') * 20) + ($get('bill_10') * 10) + ($get('bill_5') * 5) + ($get('coin_1') * 1) + ($get('coin_0_50') * 0.50) + ($get('coin_0_25') * 0.25);
+                                            return "AED " . number_format((float) $total, 2);
+                                        }),
+                                ])
+                            ])
+                    ])
                     ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
-                    ->action(function (Voucher $record) {
+                    ->action(function (Voucher $record, array $data) {
+                        $total = ($data['bill_1000'] * 1000) 
+                            + ($data['bill_500'] * 500)
+                            + ($data['bill_200'] * 200)
+                            + ($data['bill_100'] * 100)
+                            + ($data['bill_50'] * 50)
+                            + ($data['bill_20'] * 20)
+                            + ($data['bill_10'] * 10)
+                            + ($data['bill_5'] * 5)
+                            + ($data['coin_1'] * 1)
+                            + ($data['coin_0_50'] * 0.50)
+                            + ($data['coin_0_25'] * 0.25);
+
+                        if (round((float) $total, 2) !== round((float) $record->amount, 2)) {
+                            Notification::make()
+                                ->title('Denomination validation failed')
+                                ->danger()
+                                ->body('The total cash denominations (AED ' . number_format((float) $total, 2) . ') must exactly match the voucher amount (AED ' . number_format((float) $record->amount, 2) . ').')
+                                ->send();
+                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                'bill_1000' => 'Denomination sum mismatch. Provided: ' . number_format((float) $total, 2) . '. Required: ' . number_format((float) $record->amount, 2)
+                            ]);
+                        }
+
+                        // Save denominations securely
+                        $record->denominations()->create([
+                            'bill_1000' => $data['bill_1000'] ?: 0,
+                            'bill_500' => $data['bill_500'] ?: 0,
+                            'bill_200' => $data['bill_200'] ?: 0,
+                            'bill_100' => $data['bill_100'] ?: 0,
+                            'bill_50' => $data['bill_50'] ?: 0,
+                            'bill_20' => $data['bill_20'] ?: 0,
+                            'bill_10' => $data['bill_10'] ?: 0,
+                            'bill_5' => $data['bill_5'] ?: 0,
+                            'coin_1' => $data['coin_1'] ?: 0,
+                            'coin_0_50' => $data['coin_0_50'] ?: 0,
+                            'coin_0_25' => $data['coin_0_25'] ?: 0,
+                            'total_amount' => $total,
+                        ]);
+
                         $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
                         if ($error) {
                             Notification::make()->title($error)->danger()->send();
                             return;
                         }
-                        Notification::make()->title('Voucher marked as paid')->success()->send();
+                        Notification::make()->title($record->type === 'receipt' ? 'Receipt funds safely collected' : 'Voucher funds safely disbursed')->success()->send();
                         $record->refresh();
                     }),
             ])
@@ -688,10 +787,20 @@ class VoucherResource extends Resource
                             ->iconColor('primary')
                             ->weight(\Filament\Support\Enums\FontWeight::Bold),
                         \Filament\Infolists\Components\TextEntry::make('type')
-                            ->formatStateUsing(fn ($state) => $state === 'petty_cash' ? 'Petty Cash' : 'Payment Voucher'),
+                            ->formatStateUsing(fn ($state) => match($state) {
+                                'petty_cash' => 'Petty Cash',
+                                'receipt' => 'Receipt Voucher',
+                                default => 'Payment Voucher'
+                            }),
                         \Filament\Infolists\Components\TextEntry::make('account_codes')
                             ->label('Account Code(s)')
                             ->getStateUsing(fn ($record) => $record->items->pluck('account_code')->unique()->implode(', ') ?: '—'),
+                        \Filament\Infolists\Components\TextEntry::make('department')
+                            ->label('Department')
+                            ->placeholder('—'),
+                        \Filament\Infolists\Components\TextEntry::make('category.name')
+                            ->label('Trans Cat')
+                            ->placeholder('—'),
                         \Filament\Infolists\Components\TextEntry::make('payee')
                             ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
                         \Filament\Infolists\Components\TextEntry::make('amount')
@@ -700,6 +809,10 @@ class VoucherResource extends Resource
                         \Filament\Infolists\Components\TextEntry::make('description')
                             ->columnSpanFull()
                             ->placeholder('No description provided'),
+                        \Filament\Infolists\Components\TextEntry::make('transaction_summary')
+                            ->label('Remarks')
+                            ->columnSpanFull()
+                            ->placeholder('—'),
 
                         \Filament\Infolists\Components\TextEntry::make('cheque_no')
                             ->label('Cheque #')
@@ -717,6 +830,37 @@ class VoucherResource extends Resource
                             ->html()
                             ->listWithLineBreaks(),
                     ])->columns(4),
+
+                // ── CASH DENOMINATIONS: Displayed if filled ──────────────────────
+                \Filament\Infolists\Components\Section::make('Cash Denominations breakdown')
+                    ->icon('heroicon-o-banknotes')
+                    ->visible(fn ($record) => $record->denominations !== null)
+                    ->collapsed()
+                    ->schema(function () {
+                        $denoms = [
+                            'bill_1000' => 1000, 'bill_500' => 500, 'bill_200' => 200,
+                            'bill_100' => 100, 'bill_50' => 50, 'bill_20' => 20,
+                            'bill_10' => 10, 'bill_5' => 5, 'coin_1' => 1,
+                            'coin_0_50' => 0.50, 'coin_0_25' => 0.25
+                        ];
+                        
+                        $fields = [];
+                        foreach ($denoms as $col => $val) {
+                            $fields[] = \Filament\Infolists\Components\TextEntry::make("denominations.{$col}")
+                                ->label(str_contains($col, 'coin') ? "AED " . number_format($val, 2) . " (Coin)" : "AED {$val} (Bill)")
+                                ->formatStateUsing(fn ($state) => "{$state} qty = AED " . number_format($state * $val, 2))
+                                ->visible(fn ($record) => optional($record->denominations)->{$col} > 0);
+                        }
+                        
+                        $fields[] = \Filament\Infolists\Components\TextEntry::make('denominations.total_amount')
+                                ->label('Total Cash')
+                                ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                ->color('success')
+                                ->money('AED')
+                                ->columnSpanFull();
+
+                        return $fields;
+                    })->columns(['sm' => 2, 'md' => 4]),
 
                 // ── ACTIVITY LOG: Full width chronological timeline ──────────────────────
                 \Filament\Infolists\Components\Section::make('Activity Log')

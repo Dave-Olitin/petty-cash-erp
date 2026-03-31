@@ -35,6 +35,7 @@ class VoucherReportPage extends Page implements HasForms
     public ?string $date_to = null;
     public ?string $account_code = null;
     public ?string $type = null;
+    public int $perPage = 10;
 
     public function mount(): void
     {
@@ -44,7 +45,7 @@ class VoucherReportPage extends Page implements HasForms
 
     public function updating($name)
     {
-        if (in_array($name, ['date_from', 'date_to', 'type', 'account_code'])) {
+        if (in_array($name, ['date_from', 'date_to', 'type', 'account_code', 'perPage'])) {
             $this->resetPage();
         }
     }
@@ -65,6 +66,7 @@ class VoucherReportPage extends Page implements HasForms
                     ->options([
                         'petty_cash' => 'Petty Cash',
                         'payment'    => 'Payment Voucher',
+                        'receipt'    => 'Receipt Voucher',
                     ])
                     ->placeholder('All Types')
                     ->live(),
@@ -95,12 +97,15 @@ class VoucherReportPage extends Page implements HasForms
         }
 
         $baseQuery = clone $query;
-        $totalAmount = $baseQuery->sum('amount');
+        // We consider Petty Cash and Payments as expenses, Receipts as income
         $totalPayment = (clone $baseQuery)->where('type', 'payment')->sum('amount');
         $totalPettyCash = (clone $baseQuery)->where('type', 'petty_cash')->sum('amount');
+        $totalReceipt = (clone $baseQuery)->where('type', 'receipt')->sum('amount');
+        
+        $netExpenditure = ($totalPayment + $totalPettyCash) - $totalReceipt;
         $totalCount = $baseQuery->count();
 
-        $vouchers = $query->orderByDesc('created_at')->paginate(10);
+        $vouchers = $query->orderByDesc('created_at')->paginate($this->perPage);
 
         // Group by account codes using voucher items
         $byAccountData = DB::table('voucher_items')
@@ -133,9 +138,10 @@ class VoucherReportPage extends Page implements HasForms
 
         return [
             'vouchers'         => $vouchers,
-            'total_amount'     => $totalAmount,
             'total_payment'    => $totalPayment,
             'total_petty_cash' => $totalPettyCash,
+            'total_receipt'    => $totalReceipt,
+            'net_expenditure'  => $netExpenditure,
             'total_count'      => $totalCount,
             'by_category'      => $byAccount, // Kept the key name for blade compatibility
         ];
@@ -162,6 +168,61 @@ class VoucherReportPage extends Page implements HasForms
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Exports\VouchersExport($query),
             'petty_cash_report_' . $this->date_from . '_to_' . $this->date_to . '.xlsx'
+        );
+    }
+
+    public function exportPdf()
+    {
+        $data = $this->getReportData();
+
+        // Convert paginator back into a solid collection for the PDF export so we 
+        // don't just export page 1 if there are 50 records
+        $query = Voucher::query()
+            ->where('status', 'paid')
+            ->with(['user', 'category', 'items'])
+            ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59'])
+            ->orderByDesc('created_at');
+
+        if ($this->type) {
+            $query->where('type', $this->type);
+        }
+        if ($this->account_code) {
+            $query->whereHas('items', function ($q) {
+                $q->where('account_code', $this->account_code);
+            });
+        }
+
+        $allVouchers = $query->get();
+        $data['vouchers_all'] = $allVouchers;
+        $data['date_from']    = $this->date_from;
+        $data['date_to']      = $this->date_to;
+        $data['pdf_template'] = \App\Models\VoucherTemplate::first(); // Grab a template for logo/header
+
+        return response()->streamDownload(function () use ($data) {
+            echo \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.report', $data)
+                ->setPaper('A4', 'landscape')
+                ->output();
+        }, 'vouchers_report_' . $this->date_from . '_to_' . $this->date_to . '.pdf');
+    }
+
+    public function exportDenominationsExcel()
+    {
+        $query = Voucher::query()
+            ->where('status', 'paid')
+            ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
+
+        if ($this->type) {
+            $query->where('type', $this->type);
+        }
+        if ($this->account_code) {
+            $query->whereHas('items', function ($q) {
+                $q->where('account_code', $this->account_code);
+            });
+        }
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\DenominationsExport($query, $this->date_from, $this->date_to),
+            'denominations_report_' . $this->date_from . '_to_' . $this->date_to . '.xlsx'
         );
     }
 }

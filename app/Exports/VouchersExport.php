@@ -27,7 +27,7 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
     public function collection()
     {
         // Get all vouchers that match the filtered query with their items
-        $vouchers = $this->query->with(['items', 'template'])->get();
+        $vouchers = $this->query->with(['items', 'template', 'category'])->get();
         $exportRows = new Collection();
         
         foreach ($vouchers as $voucher) {
@@ -56,6 +56,9 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
             'SOURCE',
             'DATE',
             'TRN',
+            'DEPARTMENT',
+            'TRANS CAT',
+            'REMARKS',
             'PAYEE',
             'P.O. NO.',
             'INVOICE NO.',
@@ -82,6 +85,9 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
                 $voucher->type === 'petty_cash' ? 'Petty Cash' : 'Payment',
                 $voucher->created_at ? $voucher->created_at->format('Y-m-d') : '',
                 '', // TRN
+                $voucher->department ?? '', // DEPARTMENT
+                $voucher->category ? $voucher->category->name : '', // TRANS CAT
+                $voucher->transaction_summary ?? '', // REMARKS
                 $voucher->payee ?? '',
                 '', // P.O. NO.
                 $voucher->cheque_no ?? '', // INVOICE NO.
@@ -109,6 +115,9 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $voucher->type === 'petty_cash' ? 'Petty Cash' : 'Payment',
             $voucher->created_at ? $voucher->created_at->format('Y-m-d') : '',
             $voucher->template ? $voucher->template->trn : '', // TRN
+            $voucher->department ?? '', // DEPARTMENT
+            $voucher->category ? $voucher->category->name : '', // TRANS CAT
+            $voucher->transaction_summary ?? '', // REMARKS
             $voucher->payee ?? '',
             '', // P.O. NO.
             '', // INVOICE NO.

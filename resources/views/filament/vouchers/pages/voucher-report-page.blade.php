@@ -16,7 +16,7 @@
         </x-filament::section>
 
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
 
             <x-filament::section>
                 <div class="flex items-center gap-4">
@@ -24,8 +24,8 @@
                         <x-heroicon-o-currency-dollar class="h-5 w-5 text-info-600 dark:text-info-400" />
                     </div>
                     <div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold tracking-wider">Petty Cash (PCV)</p>
-                        <p class="text-xl font-bold text-gray-950 dark:text-white mt-0.5">
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Petty Cash (Exp)</p>
+                        <p class="text-lg font-bold text-gray-950 dark:text-white mt-0.5">
                             AED {{ number_format($data['total_petty_cash'], 2) }}
                         </p>
                     </div>
@@ -38,9 +38,23 @@
                         <x-heroicon-o-credit-card class="h-5 w-5 text-warning-600 dark:text-warning-400" />
                     </div>
                     <div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold tracking-wider">Payment (PV)</p>
-                        <p class="text-xl font-bold text-gray-950 dark:text-white mt-0.5">
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Payment (Exp)</p>
+                        <p class="text-lg font-bold text-gray-950 dark:text-white mt-0.5">
                             AED {{ number_format($data['total_payment'], 2) }}
+                        </p>
+                    </div>
+                </div>
+            </x-filament::section>
+
+            <x-filament::section>
+                <div class="flex items-center gap-4">
+                    <div class="rounded-full bg-success-50 dark:bg-success-950 p-2.5 ring-1 ring-success-200 dark:ring-success-800">
+                        <x-heroicon-o-arrow-down-tray class="h-5 w-5 text-success-600 dark:text-success-400" />
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Receipts (Inc)</p>
+                        <p class="text-lg font-bold text-gray-950 dark:text-white mt-0.5">
+                            AED {{ number_format($data['total_receipt'], 2) }}
                         </p>
                     </div>
                 </div>
@@ -52,9 +66,9 @@
                         <x-heroicon-o-banknotes class="h-5 w-5 text-primary-600 dark:text-primary-400" />
                     </div>
                     <div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold tracking-wider">Overall Total</p>
-                        <p class="text-xl font-bold text-gray-950 dark:text-white mt-0.5">
-                            AED {{ number_format($data['total_amount'], 2) }}
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Net Expense</p>
+                        <p class="text-lg font-bold text-gray-950 dark:text-white mt-0.5">
+                            AED {{ number_format($data['net_expenditure'], 2) }}
                         </p>
                     </div>
                 </div>
@@ -62,12 +76,12 @@
 
             <x-filament::section>
                 <div class="flex items-center gap-4">
-                    <div class="rounded-full bg-success-50 dark:bg-success-950 p-2.5 ring-1 ring-success-200 dark:ring-success-800">
-                        <x-heroicon-o-document-check class="h-5 w-5 text-success-600 dark:text-success-400" />
+                    <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-2.5 ring-1 ring-gray-200 dark:ring-gray-700">
+                        <x-heroicon-o-document-check class="h-5 w-5 text-gray-600 dark:text-gray-400" />
                     </div>
                     <div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold tracking-wider">Vouchers Paid</p>
-                        <p class="text-xl font-bold text-gray-950 dark:text-white mt-0.5">
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Vouchers Paid</p>
+                        <p class="text-lg font-bold text-gray-950 dark:text-white mt-0.5">
                             {{ $data['total_count'] }}
                         </p>
                     </div>
@@ -95,6 +109,7 @@
                     </div>
                 @else
                     <div 
+                        wire:key="chart-{{ md5(json_encode($data['by_category'])) }}"
                         data-series="{{ json_encode(array_values($data['by_category']->toArray())) }}"
                         data-labels="{{ json_encode(array_keys($data['by_category']->toArray())) }}"
                         x-data="{
@@ -164,12 +179,6 @@
                                 this.chart.render();
                             }
                         }"
-                        x-init="
-                            $watch('$wire.date_from', () => setTimeout(() => renderChart(), 500));
-                            $watch('$wire.date_to', () => setTimeout(() => renderChart(), 500));
-                            $watch('$wire.account_code', () => setTimeout(() => renderChart(), 500));
-                            $watch('$wire.type', () => setTimeout(() => renderChart(), 500));
-                        "
                     >
                         <div x-ref="chart" class="w-full flex justify-center items-center"></div>
                     </div>
@@ -186,13 +195,29 @@
                         </div>
                     </x-slot>
                     <x-slot name="headerEnd">
-                        <x-filament::button
-                            wire:click="exportExcel"
-                            icon="heroicon-o-document-arrow-down"
-                            color="success"
-                            size="sm">
-                            Export Excel
-                        </x-filament::button>
+                        <div class="flex gap-2">
+                            <x-filament::button
+                                wire:click="exportExcel"
+                                icon="heroicon-o-document-arrow-down"
+                                color="success"
+                                size="sm">
+                                Export Excel
+                            </x-filament::button>
+                            <x-filament::button
+                                wire:click="exportPdf"
+                                icon="heroicon-o-document-arrow-down"
+                                color="danger"
+                                size="sm">
+                                Export PDF
+                            </x-filament::button>
+                            <x-filament::button
+                                wire:click="exportDenominationsExcel"
+                                icon="heroicon-o-banknotes"
+                                color="info"
+                                size="sm">
+                                Export Denominations
+                            </x-filament::button>
+                        </div>
                     </x-slot>
 
                     @if($data['vouchers']->isEmpty())
@@ -207,6 +232,7 @@
                                 <thead>
                                         <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Date</th>
                                         <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Voucher #</th>
+                                        <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Type</th>
                                         <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Payee</th>
                                         <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Account Code</th>
                                         <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Requester</th>
@@ -224,6 +250,15 @@
                                                     {{ $v->voucher_number }}
                                                 </span>
                                             </td>
+                                            <td class="px-6 py-3">
+                                                @if($v->type === 'receipt')
+                                                    <span class="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-success-50 dark:bg-success-900/30 text-success-700 dark:text-success-300">Receipt</span>
+                                                @elseif($v->type === 'payment')
+                                                    <span class="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-warning-50 dark:bg-warning-900/30 text-warning-700 dark:text-warning-300">Payment</span>
+                                                @else
+                                                    <span class="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-info-50 dark:bg-info-900/30 text-info-700 dark:text-info-300">Petty Cash</span>
+                                                @endif
+                                            </td>
                                             <td class="px-6 py-3 text-gray-700 dark:text-gray-300 font-medium">
                                                 {{ $v->payee }}
                                             </td>
@@ -235,26 +270,39 @@
                                             <td class="px-6 py-3 text-gray-500 dark:text-gray-400 text-xs">
                                                 {{ $v->user?->name ?? '—' }}
                                             </td>
-                                            <td class="px-6 py-3 text-right font-bold text-gray-950 dark:text-white whitespace-nowrap">
-                                                AED {{ number_format($v->amount, 2) }}
+                                            <td class="px-6 py-3 text-right font-bold whitespace-nowrap {{ $v->type === 'receipt' ? 'text-success-600 dark:text-success-400' : 'text-gray-950 dark:text-white' }}">
+                                                {{ $v->type === 'receipt' ? '-' : '' }} AED {{ number_format($v->amount, 2) }}
                                             </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
                                 <tfoot>
                                     <tr class="border-t-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50">
-                                        <td colspan="5" class="px-6 py-3 text-sm font-bold text-gray-700 dark:text-gray-200">
+                                        <td colspan="6" class="px-6 py-3 text-sm font-bold text-gray-700 dark:text-gray-200">
                                             Total ({{ $data['total_count'] }} vouchers)
                                         </td>
                                         <td class="px-6 py-3 text-right text-base font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap">
-                                            AED {{ number_format($data['total_amount'], 2) }}
+                                            AED {{ number_format($data['net_expenditure'], 2) }}
                                         </td>
                                     </tr>
                                 </tfoot>
                             </table>
-                            </table>
-                            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 border-x border-b rounded-b-xl border-t-0 filament-report-pagination">
-                                {{ $data['vouchers']->links() }}
+                            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 border-x border-b rounded-b-xl border-t-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div class="flex items-center gap-2">
+                                    <label for="perPage" class="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                                        Per page
+                                    </label>
+                                    <select wire:model.live="perPage" id="perPage" class="block w-20 rounded-lg border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:border-primary-500">
+                                        <option value="5">5</option>
+                                        <option value="10">10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                </div>
+                                <div class="w-full sm:w-auto overflow-x-auto filament-report-pagination">
+                                    {{ $data['vouchers']->links() }}
+                                </div>
                             </div>
                         </div>
                     @endif

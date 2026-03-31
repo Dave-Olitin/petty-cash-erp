@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class FloatReplenishment extends Model
@@ -29,5 +30,10 @@ class FloatReplenishment extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function denominations(): MorphOne
+    {
+        return $this->morphOne(Denomination::class, 'denominatable');
     }
 }

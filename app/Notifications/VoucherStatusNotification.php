@@ -40,26 +40,28 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        $isReceipt = $this->voucher->type === 'receipt';
+
         $subject = match ($this->event) {
-            'submitted'       => "New Voucher Submitted: {$this->voucher->voucher_number}",
-            'checked'         => "Voucher Checked & Forwarded: {$this->voucher->voucher_number}",
-            'approved'        => "✅ Voucher Approved: {$this->voucher->voucher_number}",
-            'rejected'        => "❌ Voucher Rejected: {$this->voucher->voucher_number}",
-            'paid'            => "💰 Voucher Paid: {$this->voucher->voucher_number}",
-            'reminder_checker' => "⏰ Action Required: Voucher {$this->voucher->voucher_number} Awaiting Check",
-            'reminder_approver' => "⏰ Action Required: Voucher {$this->voucher->voucher_number} Awaiting Approval",
-            default           => "Voucher Update: {$this->voucher->voucher_number}",
+            'submitted'       => "New " . ($isReceipt ? "Receipt Voucher" : "Voucher") . " Submitted: {$this->voucher->voucher_number}",
+            'checked'         => ($isReceipt ? "Receipt" : "Voucher") . " Checked & Forwarded: {$this->voucher->voucher_number}",
+            'approved'        => "✅ " . ($isReceipt ? "Receipt" : "Voucher") . " Approved: {$this->voucher->voucher_number}",
+            'rejected'        => "❌ " . ($isReceipt ? "Receipt" : "Voucher") . " Rejected: {$this->voucher->voucher_number}",
+            'paid'            => "💰 " . ($isReceipt ? "Receipt Collected" : "Voucher Paid") . ": {$this->voucher->voucher_number}",
+            'reminder_checker' => "⏰ Action Required: " . ($isReceipt ? "Receipt" : "Voucher") . " {$this->voucher->voucher_number} Awaiting Check",
+            'reminder_approver' => "⏰ Action Required: " . ($isReceipt ? "Receipt" : "Voucher") . " {$this->voucher->voucher_number} Awaiting Approval",
+            default           => ($isReceipt ? "Receipt" : "Voucher") . " Update: {$this->voucher->voucher_number}",
         };
 
         $intro = match ($this->event) {
-            'submitted'       => "A new voucher has been submitted for checking.",
-            'checked'         => "A voucher has been checked by the accountant and is awaiting final approval.",
-            'approved'        => "Your voucher has been approved and will be processed for payment.",
-            'rejected'        => "Your voucher has been returned with comments. Please review and resubmit.",
-            'paid'            => "Your voucher has been marked as paid.",
-            'reminder_checker' => "⏰ Reminder: This voucher has been pending your review for over 24 hours. Please take action.",
-            'reminder_approver' => "⏰ Reminder: This voucher has been pending your approval for over 24 hours. Please take action.",
-            default           => "There is an update on your voucher.",
+            'submitted'       => "A new " . ($isReceipt ? "receipt voucher" : "voucher") . " has been submitted for checking.",
+            'checked'         => "A " . ($isReceipt ? "receipt voucher" : "voucher") . " has been checked by the accountant and is awaiting final approval.",
+            'approved'        => "Your " . ($isReceipt ? "receipt voucher" : "voucher") . " has been approved and will be processed.",
+            'rejected'        => "Your " . ($isReceipt ? "receipt voucher" : "voucher") . " has been returned with comments. Please review and resubmit.",
+            'paid'            => "Your " . ($isReceipt ? "receipt voucher has been officially collected." : "voucher has been marked as paid."),
+            'reminder_checker' => "⏰ Reminder: This " . ($isReceipt ? "receipt voucher" : "voucher") . " has been pending your review for over 24 hours. Please take action.",
+            'reminder_approver' => "⏰ Reminder: This " . ($isReceipt ? "receipt voucher" : "voucher") . " has been pending your approval for over 24 hours. Please take action.",
+            default           => "There is an update on your " . ($isReceipt ? "receipt voucher" : "voucher") . ".",
         };
 
         return (new MailMessage)

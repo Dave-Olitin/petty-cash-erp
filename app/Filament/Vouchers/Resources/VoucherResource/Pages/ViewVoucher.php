@@ -213,18 +213,93 @@ class ViewVoucher extends ViewRecord
                 }),
 
             Actions\Action::make('mark_paid_page')
-                ->label('Mark as Paid')
+                ->label($record->type === 'receipt' ? 'Collect Funds' : 'Disburse Funds')
                 ->icon('heroicon-m-banknotes')
                 ->color('success')
-                ->requiresConfirmation()
+                ->modalHeading($record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations')
+                ->modalSubmitActionLabel('Process & Mark Paid')
+                ->form([
+                    Forms\Components\Section::make('Cash Handover / Collection')
+                        ->description(new \Illuminate\Support\HtmlString("Target Amount to Match: <strong>AED " . number_format((float) $record->amount, 2) . "</strong>"))
+                        ->schema([
+                            Forms\Components\Grid::make(3)->schema([
+                                Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('bill_500')->label('500 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('bill_200')->label('200 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('bill_100')->label('100 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('bill_50')->label('50 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('bill_20')->label('20 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('bill_10')->label('10 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('bill_5')->label('5 Bills')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('coin_1')->label('1 Coins')->numeric()->default(0)->live()->minValue(0),
+                                Forms\Components\TextInput::make('coin_0_50')->label('0.50 Coins')->numeric()->default(0)->live()->step('1')->minValue(0),
+                                Forms\Components\TextInput::make('coin_0_25')->label('0.25 Coins')->numeric()->default(0)->live()->step('1')->minValue(0),
+                                Forms\Components\Placeholder::make('total_sum')
+                                    ->label('Calculated Total')
+                                    ->content(function (Forms\Get $get) {
+                                        $total = ((float)$get('bill_1000') * 1000)
+                                            + ((float)$get('bill_500') * 500)
+                                            + ((float)$get('bill_200') * 200)
+                                            + ((float)$get('bill_100') * 100)
+                                            + ((float)$get('bill_50') * 50)
+                                            + ((float)$get('bill_20') * 20)
+                                            + ((float)$get('bill_10') * 10)
+                                            + ((float)$get('bill_5') * 5)
+                                            + ((float)$get('coin_1') * 1)
+                                            + ((float)$get('coin_0_50') * 0.50)
+                                            + ((float)$get('coin_0_25') * 0.25);
+                                        return 'AED ' . number_format((float) $total, 2);
+                                    }),
+                            ])
+                        ])
+                ])
                 ->visible(fn (): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
-                ->action(function () use ($record) {
+                ->action(function (array $data) use ($record) {
+                    $total = ((float)$data['bill_1000'] * 1000)
+                        + ((float)$data['bill_500'] * 500)
+                        + ((float)$data['bill_200'] * 200)
+                        + ((float)$data['bill_100'] * 100)
+                        + ((float)$data['bill_50'] * 50)
+                        + ((float)$data['bill_20'] * 20)
+                        + ((float)$data['bill_10'] * 10)
+                        + ((float)$data['bill_5'] * 5)
+                        + ((float)$data['coin_1'] * 1)
+                        + ((float)$data['coin_0_50'] * 0.50)
+                        + ((float)$data['coin_0_25'] * 0.25);
+
+                    if (round((float) $total, 2) !== round((float) $record->amount, 2)) {
+                        Notification::make()
+                            ->title('Denomination validation failed')
+                            ->danger()
+                            ->body('The total cash denominations (AED ' . number_format((float) $total, 2) . ') must exactly match the voucher amount (AED ' . number_format((float) $record->amount, 2) . ').')
+                            ->send();
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'bill_1000' => 'Denomination sum mismatch. Provided: ' . number_format((float) $total, 2) . '. Required: ' . number_format((float) $record->amount, 2)
+                        ]);
+                    }
+
+                    // Save denominations securely
+                    $record->denominations()->create([
+                        'bill_1000' => $data['bill_1000'] ?: 0,
+                        'bill_500' => $data['bill_500'] ?: 0,
+                        'bill_200' => $data['bill_200'] ?: 0,
+                        'bill_100' => $data['bill_100'] ?: 0,
+                        'bill_50' => $data['bill_50'] ?: 0,
+                        'bill_20' => $data['bill_20'] ?: 0,
+                        'bill_10' => $data['bill_10'] ?: 0,
+                        'bill_5' => $data['bill_5'] ?: 0,
+                        'coin_1' => $data['coin_1'] ?: 0,
+                        'coin_0_50' => $data['coin_0_50'] ?: 0,
+                        'coin_0_25' => $data['coin_0_25'] ?: 0,
+                        'total_amount' => $total,
+                    ]);
+
                     $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
                     if ($error) {
                         Notification::make()->title($error)->danger()->send();
                         return;
                     }
-                    Notification::make()->title('Voucher marked as paid')->success()->send();
+                    Notification::make()->title($record->type === 'receipt' ? 'Receipt funds safely collected' : 'Voucher funds safely disbursed')->success()->send();
                     $record->refresh();
                 }),
                 

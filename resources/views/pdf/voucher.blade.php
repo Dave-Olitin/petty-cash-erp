@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ $voucher->type === 'petty_cash' ? 'Petty Cash Voucher' : 'Payment Voucher' }}</title>
+    <title>{{ match($voucher->type) { 'petty_cash' => 'Petty Cash Voucher', 'receipt' => 'Receipt Voucher', default => 'Payment Voucher' } }}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -194,7 +194,7 @@
 </table>
 
 <div class="title-box">
-    {{ $voucher->type === 'petty_cash' ? 'PETTY CASH VOUCHER' : 'PAYMENT VOUCHER' }}
+    {{ match($voucher->type) { 'petty_cash' => 'PETTY CASH VOUCHER', 'receipt' => 'RECEIPT VOUCHER', default => 'PAYMENT VOUCHER' } }}
 </div>
 
 <table class="ref-table">
@@ -303,8 +303,30 @@
 
 @if($voucher->transaction_summary)
 <div style="margin-top: 30px; border-top: 1px dashed #000; padding-top: 10px; font-size: 10px;">
-    <strong>TRANSACTION SUMMARY:</strong><br>
+    <strong>REMARKS:</strong><br>
     {!! nl2br(e($voucher->transaction_summary)) !!}
+</div>
+@endif
+
+@if($voucher->denominations)
+<div style="margin-top: 15px; border-top: 1px dashed #000; padding-top: 10px; font-size: 10px;">
+    <strong>CASH DENOMINATIONS:</strong><br>
+    @php
+        $denoms = [
+            'bill_1000' => 1000, 'bill_500' => 500, 'bill_200' => 200,
+            'bill_100' => 100, 'bill_50' => 50, 'bill_20' => 20,
+            'bill_10' => 10, 'bill_5' => 5, 'coin_1' => 1,
+            'coin_0_50' => 0.50, 'coin_0_25' => 0.25
+        ];
+        $str = [];
+        foreach ($denoms as $key => $val) {
+            if ($qty = $voucher->denominations->$key) {
+                $str[] = "AED ".number_format($val, str_contains($key, 'coin') ? 2 : 0)." x $qty = <b>" . number_format($val * $qty, 2) . "</b>";
+            }
+        }
+    @endphp
+    {!! implode(' &nbsp;&bull;&nbsp; ', $str) !!}
+    <br><strong>Total Cash: AED {{ number_format($voucher->denominations->total_amount, 2) }}</strong>
 </div>
 @endif
 

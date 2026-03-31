@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use App\Observers\VoucherObserver;
 use Spatie\MediaLibrary\HasMedia;
@@ -22,6 +23,7 @@ class Voucher extends Model implements HasMedia
 
     protected $fillable = [
         'type',
+        'department',
         'voucher_number',
         'amount',
         'payee',
@@ -70,6 +72,11 @@ class Voucher extends Model implements HasMedia
     public function items(): HasMany
     {
         return $this->hasMany(VoucherItem::class)->orderBy('sort_order');
+    }
+
+    public function denominations(): MorphOne
+    {
+        return $this->morphOne(Denomination::class, 'denominatable');
     }
 
     public function getTotalDebitAttribute(): float

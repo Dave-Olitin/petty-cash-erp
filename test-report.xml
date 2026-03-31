@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="C:\Users\davem\Documents\GitHub\petty-cash-erp\phpunit.xml" tests="9" assertions="4" errors="7" failures="0" skipped="0" time="0.400207">
+    <testsuite name="Unit" tests="1" assertions="1" errors="0" failures="0" skipped="0" time="0.003613">
+      <testsuite name="Tests\Unit\ExampleTest" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Unit\ExampleTest.php" tests="1" assertions="1" errors="0" failures="0" skipped="0" time="0.003613">
+        <testcase name="test_that_true_is_true" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Unit\ExampleTest.php" line="12" class="Tests\Unit\ExampleTest" classname="Tests.Unit.ExampleTest" assertions="1" time="0.003613"/>
+      </testsuite>
+    </testsuite>
+    <testsuite name="Feature" tests="8" assertions="3" errors="7" failures="0" skipped="0" time="0.396594">
+      <testsuite name="Tests\Feature\ExampleTest" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\ExampleTest.php" tests="1" assertions="3" errors="0" failures="0" skipped="0" time="0.396594">
+        <testcase name="test_the_application_returns_a_successful_response" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\ExampleTest.php" line="13" class="Tests\Feature\ExampleTest" classname="Tests.Feature.ExampleTest" assertions="3" time="0.396594"/>
+      </testsuite>
+      <testsuite name="Tests\Feature\TransactionObserverTest" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" tests="7" assertions="0" errors="7" failures="0" skipped="0" time="0.000000">
+        <testcase name="creating_an_expense_decrements_branch_balance" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" line="41" class="Tests\Feature\TransactionObserverTest" classname="Tests.Feature.TransactionObserverTest" assertions="0" time="0.000000">
+          <error type="Illuminate\Database\QueryException">Tests\Feature\TransactionObserverTest::creating_an_expense_decrements_branch_balance&#13;
+Illuminate\Database\QueryException: SQLSTATE[HY000]: General error: 1 near "MODIFY": syntax error (Connection: sqlite, Database: :memory:, SQL: ALTER TABLE vouchers MODIFY COLUMN type ENUM('petty_cash', 'payment', 'receipt') DEFAULT 'payment')
+&#13;
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:573
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+C:\Users\davem\Documents\GitHub\petty-cash-erp\database\migrations\2026_03_30_115428_add_receipt_type_to_vouchers_table.php:14
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:517
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:442
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:41
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:814
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:138
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:116
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:671
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:109
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:88
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:68
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:29
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\FreshCommand.php:81
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:1079
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:356
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:195
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Application.php:165
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:447
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:675
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithConsole.php:87
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:119
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:84
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:25
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:217
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:101
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\TestCase.php:63
+C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php:21</error>
+        </testcase>
+        <testcase name="creating_a_replenishment_increments_branch_balance" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" line="56" class="Tests\Feature\TransactionObserverTest" classname="Tests.Feature.TransactionObserverTest" assertions="0" time="0.000000">
+          <error type="Illuminate\Database\QueryException">Tests\Feature\TransactionObserverTest::creating_a_replenishment_increments_branch_balance&#13;
+Illuminate\Database\QueryException: SQLSTATE[HY000]: General error: 1 near "MODIFY": syntax error (Connection: sqlite, Database: :memory:, SQL: ALTER TABLE vouchers MODIFY COLUMN type ENUM('petty_cash', 'payment', 'receipt') DEFAULT 'payment')
+&#13;
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:573
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+C:\Users\davem\Documents\GitHub\petty-cash-erp\database\migrations\2026_03_30_115428_add_receipt_type_to_vouchers_table.php:14
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:517
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:442
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:41
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:814
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:138
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:116
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:671
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:109
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:88
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:68
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:29
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\FreshCommand.php:81
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:1079
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:356
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:195
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Application.php:165
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:447
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:675
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithConsole.php:87
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:119
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:84
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:25
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:217
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:101
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\TestCase.php:63
+C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php:21</error>
+        </testcase>
+        <testcase name="voiding_a_pending_expense_restores_balance" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" line="71" class="Tests\Feature\TransactionObserverTest" classname="Tests.Feature.TransactionObserverTest" assertions="0" time="0.000000">
+          <error type="Illuminate\Database\QueryException">Tests\Feature\TransactionObserverTest::voiding_a_pending_expense_restores_balance&#13;
+Illuminate\Database\QueryException: SQLSTATE[HY000]: General error: 1 near "MODIFY": syntax error (Connection: sqlite, Database: :memory:, SQL: ALTER TABLE vouchers MODIFY COLUMN type ENUM('petty_cash', 'payment', 'receipt') DEFAULT 'payment')
+&#13;
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:573
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+C:\Users\davem\Documents\GitHub\petty-cash-erp\database\migrations\2026_03_30_115428_add_receipt_type_to_vouchers_table.php:14
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:517
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:442
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:41
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:814
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:138
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:116
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:671
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:109
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:88
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:68
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:29
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\FreshCommand.php:81
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:1079
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:356
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:195
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Application.php:165
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:447
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:675
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithConsole.php:87
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:119
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:84
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:25
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:217
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:101
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\TestCase.php:63
+C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php:21</error>
+        </testcase>
+        <testcase name="voiding_a_rejected_expense_does_not_change_balance" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" line="88" class="Tests\Feature\TransactionObserverTest" classname="Tests.Feature.TransactionObserverTest" assertions="0" time="0.000000">
+          <error type="Illuminate\Database\QueryException">Tests\Feature\TransactionObserverTest::voiding_a_rejected_expense_does_not_change_balance&#13;
+Illuminate\Database\QueryException: SQLSTATE[HY000]: General error: 1 near "MODIFY": syntax error (Connection: sqlite, Database: :memory:, SQL: ALTER TABLE vouchers MODIFY COLUMN type ENUM('petty_cash', 'payment', 'receipt') DEFAULT 'payment')
+&#13;
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:573
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+C:\Users\davem\Documents\GitHub\petty-cash-erp\database\migrations\2026_03_30_115428_add_receipt_type_to_vouchers_table.php:14
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:517
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:442
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:41
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:814
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:138
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:116
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:671
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:109
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:88
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:68
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:29
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\FreshCommand.php:81
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:1079
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:356
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:195
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Application.php:165
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:447
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:675
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithConsole.php:87
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:119
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:84
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:25
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:217
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:101
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\TestCase.php:63
+C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php:21</error>
+        </testcase>
+        <testcase name="rejecting_a_transaction_reverses_balance" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" line="110" class="Tests\Feature\TransactionObserverTest" classname="Tests.Feature.TransactionObserverTest" assertions="0" time="0.000000">
+          <error type="Illuminate\Database\QueryException">Tests\Feature\TransactionObserverTest::rejecting_a_transaction_reverses_balance&#13;
+Illuminate\Database\QueryException: SQLSTATE[HY000]: General error: 1 near "MODIFY": syntax error (Connection: sqlite, Database: :memory:, SQL: ALTER TABLE vouchers MODIFY COLUMN type ENUM('petty_cash', 'payment', 'receipt') DEFAULT 'payment')
+&#13;
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:573
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+C:\Users\davem\Documents\GitHub\petty-cash-erp\database\migrations\2026_03_30_115428_add_receipt_type_to_vouchers_table.php:14
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:517
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:442
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:41
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:814
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:138
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:116
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:671
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:109
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:88
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:68
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:29
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\FreshCommand.php:81
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:1079
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:356
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:195
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Application.php:165
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:447
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:675
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithConsole.php:87
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:119
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:84
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:25
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:217
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:101
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\TestCase.php:63
+C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php:21</error>
+        </testcase>
+        <testcase name="restoring_a_voided_transaction_re_applies_balance" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" line="129" class="Tests\Feature\TransactionObserverTest" classname="Tests.Feature.TransactionObserverTest" assertions="0" time="0.000000">
+          <error type="Illuminate\Database\QueryException">Tests\Feature\TransactionObserverTest::restoring_a_voided_transaction_re_applies_balance&#13;
+Illuminate\Database\QueryException: SQLSTATE[HY000]: General error: 1 near "MODIFY": syntax error (Connection: sqlite, Database: :memory:, SQL: ALTER TABLE vouchers MODIFY COLUMN type ENUM('petty_cash', 'payment', 'receipt') DEFAULT 'payment')
+&#13;
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:573
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+C:\Users\davem\Documents\GitHub\petty-cash-erp\database\migrations\2026_03_30_115428_add_receipt_type_to_vouchers_table.php:14
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:517
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:442
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:41
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:814
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:138
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:116
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:671
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:109
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:88
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:68
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:29
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\FreshCommand.php:81
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:1079
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:356
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:195
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Application.php:165
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:447
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:675
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithConsole.php:87
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:119
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:84
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:25
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:217
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:101
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\TestCase.php:63
+C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php:21</error>
+        </testcase>
+        <testcase name="editing_amount_of_pending_expense_correctly_adjusts_balance" file="C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php" line="148" class="Tests\Feature\TransactionObserverTest" classname="Tests.Feature.TransactionObserverTest" assertions="0" time="0.000000">
+          <error type="Illuminate\Database\QueryException">Tests\Feature\TransactionObserverTest::editing_amount_of_pending_expense_correctly_adjusts_balance&#13;
+Illuminate\Database\QueryException: SQLSTATE[HY000]: General error: 1 near "MODIFY": syntax error (Connection: sqlite, Database: :memory:, SQL: ALTER TABLE vouchers MODIFY COLUMN type ENUM('petty_cash', 'payment', 'receipt') DEFAULT 'payment')
+&#13;
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Connection.php:573
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+C:\Users\davem\Documents\GitHub\petty-cash-erp\database\migrations\2026_03_30_115428_add_receipt_type_to_vouchers_table.php:14
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:517
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:442
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:41
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:814
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:253
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:138
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:116
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:671
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:109
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:88
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:68
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Concerns\CallsCommands.php:29
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\FreshCommand.php:81
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Util.php:43
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:96
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:35
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Container\Container.php:799
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Command\Command.php:341
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Command.php:180
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:1079
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:356
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\symfony\console\Application.php:195
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Console\Application.php:165
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:447
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:451
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Testing\PendingCommand.php:675
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithConsole.php:87
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:119
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:84
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\RefreshDatabase.php:25
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:217
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\Concerns\InteractsWithTestCaseLifecycle.php:101
+C:\Users\davem\Documents\GitHub\petty-cash-erp\vendor\laravel\framework\src\Illuminate\Foundation\Testing\TestCase.php:63
+C:\Users\davem\Documents\GitHub\petty-cash-erp\tests\Feature\TransactionObserverTest.php:21</error>
+        </testcase>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>
