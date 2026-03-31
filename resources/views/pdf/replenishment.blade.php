@@ -128,6 +128,50 @@
     </tr>
 </table>
 
+@if($replenishment->denominations)
+<div class="title-box" style="margin-top: 20px; font-size: 11px; padding: 4px; letter-spacing: 2px;">
+    CASH DENOMINATION BREAKDOWN
+</div>
+<table class="details-table" style="margin-top: 5px; margin-bottom: 20px; width: 60%;">
+    <tr>
+        <th style="width: 50%;">BILLS & COINS</th>
+        <th style="width: 50%; text-align: right;">AMOUNT (AED)</th>
+    </tr>
+    @php
+    $denoms = [
+        '1000 Bills' => ['col' => 'bill_1000', 'val' => 1000],
+        '500 Bills'  => ['col' => 'bill_500',  'val' => 500],
+        '200 Bills'  => ['col' => 'bill_200',  'val' => 200],
+        '100 Bills'  => ['col' => 'bill_100',  'val' => 100],
+        '50 Bills'   => ['col' => 'bill_50',   'val' => 50],
+        '20 Bills'   => ['col' => 'bill_20',   'val' => 20],
+        '10 Bills'   => ['col' => 'bill_10',   'val' => 10],
+        '5 Bills'    => ['col' => 'bill_5',    'val' => 5],
+        '1 Coins'    => ['col' => 'coin_1',    'val' => 1],
+        '0.50 Coins' => ['col' => 'coin_0_50', 'val' => 0.50],
+        '0.25 Coins' => ['col' => 'coin_0_25', 'val' => 0.25],
+    ];
+    @endphp
+    @foreach($denoms as $label => $data)
+        @if($replenishment->denominations->{$data['col']} > 0)
+        <tr>
+            <td style="border-bottom: 1px dotted #ccc; padding: 4px 10px;">{{ $label }} ({{ $replenishment->denominations->{$data['col']} }})</td>
+            <td style="border-bottom: 1px dotted #ccc; padding: 4px 10px; text-align: right;">{{ number_format($data['val'] * $replenishment->denominations->{$data['col']}, 2) }}</td>
+        </tr>
+        @endif
+    @endforeach
+    <tr>
+        <td style="font-weight: bold; padding: 6px 10px;">TOTAL CASH</td>
+        <td style="font-weight: bold; text-align: right; padding: 6px 10px;">AED {{ number_format($replenishment->denominations->total_amount, 2) }}</td>
+    </tr>
+</table>
+@if($replenishment->denominations->remarks)
+<div style="font-size: 10px; margin-bottom: 20px;">
+    <strong>Remarks on Denominations:</strong> {{ $replenishment->denominations->remarks }}
+</div>
+@endif
+@endif
+
 <div class="words-section">
     <div class="words-label">AMOUNT IN WORDS</div>
     <div class="words-value">{{ $words }}</div>

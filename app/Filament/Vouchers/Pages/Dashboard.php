@@ -37,7 +37,8 @@ class Dashboard extends \Filament\Pages\Dashboard
                     Forms\Components\TextInput::make('amount')
                         ->required()
                         ->numeric()
-                        ->prefix('AED'),
+                        ->prefix('AED')
+                        ->live(),
                     Forms\Components\DatePicker::make('date')
                         ->required()
                         ->default(now()),
@@ -50,8 +51,56 @@ class Dashboard extends \Filament\Pages\Dashboard
                         ->columnSpanFull(),
                     Forms\Components\Hidden::make('created_by')
                         ->default(fn () => auth()->id()),
+
+                    // ── DENOMINATION BREAKDOWN ──────────────────────────
+                    Forms\Components\Section::make('Cash Denomination Breakdown')
+                        ->icon('heroicon-o-banknotes')
+                        ->description('Optional: record the exact bills/coins being deposited.')
+                        ->collapsed()
+                        ->schema([
+                            Forms\Components\Grid::make(3)->schema([
+                                Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('bill_500')->label('500 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('bill_200')->label('200 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('bill_100')->label('100 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('bill_50')->label('50 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('bill_20')->label('20 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('bill_10')->label('10 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('bill_5')->label('5 Bills')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('coin_1')->label('1 Coins')->numeric()->default(0)->minValue(0),
+                                Forms\Components\TextInput::make('coin_0_50')->label('0.50 Coins')->numeric()->default(0)->step('1')->minValue(0),
+                                Forms\Components\TextInput::make('coin_0_25')->label('0.25 Coins')->numeric()->default(0)->step('1')->minValue(0),
+                            ]),
+                        ]),
                 ])
                 ->mutateFormDataUsing(function (array $data): array {
+                    $denomKeys = ['bill_1000', 'bill_500', 'bill_200', 'bill_100', 'bill_50',
+                                  'bill_20', 'bill_10', 'bill_5', 'coin_1', 'coin_0_50', 'coin_0_25'];
+                    
+                    $hasAny = collect($denomKeys)->contains(fn ($f) => (int) ($data[$f] ?? 0) > 0);
+                    if ($hasAny) {
+                        $total = ((int) ($data['bill_1000'] ?? 0) * 1000) + ((int) ($data['bill_500'] ?? 0) * 500) + ((int) ($data['bill_200'] ?? 0) * 200)
+                            + ((int) ($data['bill_100'] ?? 0) * 100) + ((int) ($data['bill_50'] ?? 0) * 50) + ((int) ($data['bill_20'] ?? 0) * 20)
+                            + ((int) ($data['bill_10'] ?? 0) * 10) + ((int) ($data['bill_5'] ?? 0) * 5) + ((int) ($data['coin_1'] ?? 0) * 1)
+                            + ((int) ($data['coin_0_50'] ?? 0) * 0.50) + ((int) ($data['coin_0_25'] ?? 0) * 0.25);
+                        
+                        if (round((float) $total, 2) !== round((float) $data['amount'], 2)) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Denomination validation failed')
+                                ->danger()
+                                ->body('The cash breakdown (AED ' . number_format($total, 2) . ') must exactly match the replenishment amount (AED ' . number_format((float) $data['amount'], 2) . ').')
+                                ->send();
+                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                'bill_1000' => 'Breakdown mismatch. Provided: ' . number_format($total, 2) . '. Required: ' . number_format((float) $data['amount'], 2),
+                            ]);
+                        }
+                    }
+
+                    session()->put('_pending_denom', array_intersect_key($data, array_flip($denomKeys)));
+                    foreach ($denomKeys as $key) {
+                        unset($data[$key]);
+                    }
+
                     $lock = \Illuminate\Support\Facades\Cache::lock('replenishment_ref_generation', 5);
 
                     try {
@@ -71,7 +120,40 @@ class Dashboard extends \Filament\Pages\Dashboard
                     
                     return $data;
                 })
+                ->after(function (\App\Models\FloatReplenishment $record) {
+                    // Pull denomination data that was stashed in session by mutateFormDataUsing
+                    $denom = session()->pull('_pending_denom', []);
+
+                    $denomFields = ['bill_1000', 'bill_500', 'bill_200', 'bill_100', 'bill_50',
+                                    'bill_20', 'bill_10', 'bill_5', 'coin_1', 'coin_0_50', 'coin_0_25'];
+
+                    $hasAny = collect($denomFields)->contains(fn ($f) => (int) ($denom[$f] ?? 0) > 0);
+
+                    if ($hasAny) {
+                        $total = ((int) ($denom['bill_1000'] ?? 0) * 1000) + ((int) ($denom['bill_500'] ?? 0) * 500) + ((int) ($denom['bill_200'] ?? 0) * 200)
+                            + ((int) ($denom['bill_100'] ?? 0) * 100) + ((int) ($denom['bill_50'] ?? 0) * 50) + ((int) ($denom['bill_20'] ?? 0) * 20)
+                            + ((int) ($denom['bill_10'] ?? 0) * 10) + ((int) ($denom['bill_5'] ?? 0) * 5) + ((int) ($denom['coin_1'] ?? 0) * 1)
+                            + ((int) ($denom['coin_0_50'] ?? 0) * 0.50) + ((int) ($denom['coin_0_25'] ?? 0) * 0.25);
+
+                        $record->denominations()->create([
+                            'bill_1000'    => $denom['bill_1000'] ?: 0,
+                            'bill_500'     => $denom['bill_500'] ?: 0,
+                            'bill_200'     => $denom['bill_200'] ?: 0,
+                            'bill_100'     => $denom['bill_100'] ?: 0,
+                            'bill_50'      => $denom['bill_50'] ?: 0,
+                            'bill_20'      => $denom['bill_20'] ?: 0,
+                            'bill_10'      => $denom['bill_10'] ?: 0,
+                            'bill_5'       => $denom['bill_5'] ?: 0,
+                            'coin_1'       => $denom['coin_1'] ?: 0,
+                            'coin_0_50'    => $denom['coin_0_50'] ?: 0,
+                            'coin_0_25'    => $denom['coin_0_25'] ?: 0,
+                            'total_amount' => $total,
+                            'change_given' => 0,
+                        ]);
+                    }
+                })
                 ->successNotificationTitle('Fund Voucher recorded successfully'),
+
         ];
     }
 }

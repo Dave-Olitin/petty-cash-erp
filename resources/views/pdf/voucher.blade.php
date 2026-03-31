@@ -200,10 +200,12 @@
 <table class="ref-table">
     <tr>
         <td>
-            @if($voucher->type === 'petty_cash')
+            @if($voucher->type === 'receipt')
+                <strong>{{ $voucher->voucher_number }}</strong>
+            @elseif($voucher->type === 'petty_cash')
                 <strong>{{ $voucher->voucher_number }}</strong>
             @else
-                <strong>P.V NO:</strong> {{ $voucher->voucher_number }}
+                <strong>P.V NO:</strong> {{ str_replace(['PV NO: ', 'P.V NO: '], '', trim($voucher->voucher_number)) }}
             @endif
         </td>
         <td style="text-align:right;"><strong>DATE:</strong> {{ $voucher->created_at->format('d/m/Y') }}</td>

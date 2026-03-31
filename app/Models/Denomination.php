@@ -23,23 +23,28 @@ class Denomination extends Model
         'coin_0_50',
         'coin_0_25',
         'total_amount',
+        'change_given',
+        'is_change_received',
+        'remarks',
     ];
 
     protected function casts(): array
     {
         return [
-            'total_amount' => 'decimal:2',
-            'bill_1000'    => 'integer',
-            'bill_500'     => 'integer',
-            'bill_200'     => 'integer',
-            'bill_100'     => 'integer',
-            'bill_50'      => 'integer',
-            'bill_20'      => 'integer',
-            'bill_10'      => 'integer',
-            'bill_5'       => 'integer',
-            'coin_1'       => 'integer',
-            'coin_0_50'    => 'integer',
-            'coin_0_25'    => 'integer',
+            'total_amount'       => 'decimal:2',
+            'change_given'       => 'decimal:2',
+            'is_change_received' => 'boolean',
+            'bill_1000'          => 'integer',
+            'bill_500'           => 'integer',
+            'bill_200'           => 'integer',
+            'bill_100'           => 'integer',
+            'bill_50'            => 'integer',
+            'bill_20'            => 'integer',
+            'bill_10'            => 'integer',
+            'bill_5'             => 'integer',
+            'coin_1'             => 'integer',
+            'coin_0_50'          => 'integer',
+            'coin_0_25'          => 'integer',
         ];
     }
 

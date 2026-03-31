@@ -15,12 +15,14 @@ class VoucherObserver
         // Use template prefix if set, otherwise fall back to type-based prefix
         if ($voucher->type === 'petty_cash') {
             $prefix = 'PCV NO: ' . date('y') . '-';
+        } elseif ($voucher->type === 'receipt') {
+            $prefix = 'RV NO: ';
         } else {
             if ($voucher->voucher_template_id) {
                 $template = \App\Models\VoucherTemplate::find($voucher->voucher_template_id);
-                $prefix = $template ? $template->prefix . '-' : 'PAY-';
+                $prefix = $template ? $template->prefix . '-' : 'PV NO: ';
             } else {
-                $prefix = 'PAY-';
+                $prefix = 'PV NO: ';
             }
         }
 
@@ -37,13 +39,28 @@ class VoucherObserver
                     $number = intval(substr($latest->voucher_number, strlen($prefix))) + 1;
                 } else {
                     if ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO: ')) {
-                        $number = 4001; // Starts at 04001
+                        $number = 4001; // Starts at PCV NO: 26-04001
+                    } elseif ($voucher->type === 'receipt' && str_starts_with($prefix, 'RV NO: ')) {
+                        $number = 776;  // Starts at RV NO: 0776
+                    } elseif (str_contains($prefix, 'ETC-')) {
+                        $number = 1246; // Starts at PV NO: ETC-1246
+                    } elseif (str_contains($prefix, 'SB-')) {
+                        $number = 216;  // Starts at PV NO: SB-0216
+                    } elseif (str_contains($prefix, 'TG-')) {
+                        $number = 564;  // Starts at PV NO: TG-0564
+                    } elseif (str_contains($prefix, 'IC-')) {
+                        $number = 376;  // Starts at PV NO: IC-0376
                     } else {
                         $number = 1;
                     }
                 }
 
-                $padLength = ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO: ')) ? 5 : 4;
+                if ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO: ')) {
+                    $padLength = 5;
+                } else {
+                    $padLength = 4;
+                }
+                
                 $voucher->voucher_number = $prefix . str_pad($number, $padLength, '0', STR_PAD_LEFT);
             });
         } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
