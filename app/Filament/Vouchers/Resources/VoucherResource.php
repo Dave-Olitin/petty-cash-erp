@@ -170,9 +170,38 @@ class VoucherResource extends Resource
 
                                         Forms\Components\Select::make('category_id')
                                             ->label('Trans Cat (Category)')
-                                            ->relationship('category', 'name')
+                                            ->relationship('category', 'name', fn ($query) => $query->where('is_active', true))
                                             ->searchable()
-                                            ->preload(),
+                                            ->getSearchResultsUsing(fn (string $search) =>
+                                                \App\Models\Category::where('is_active', true)
+                                                    ->where('name', 'like', "%{$search}%")
+                                                    ->limit(20)
+                                                    ->pluck('name', 'id')
+                                                    ->toArray()
+                                            )
+                                            ->createOptionForm([
+                                                Forms\Components\TextInput::make('name')
+                                                    ->label('Category Name')
+                                                    ->required()
+                                                    ->unique('categories', 'name'),
+                                                Forms\Components\Select::make('type')
+                                                    ->label('Type')
+                                                    ->options([
+                                                        'expense'        => 'Expense',
+                                                        'replenishment'  => 'Replenishment',
+                                                        'petty_cash'     => 'Petty Cash',
+                                                    ])
+                                                    ->required()
+                                                    ->default('expense'),
+                                            ])
+                                            ->createOptionUsing(function (array $data) {
+                                                $cat = \App\Models\Category::create([
+                                                    'name'      => $data['name'],
+                                                    'type'      => $data['type'],
+                                                    'is_active' => true,
+                                                ]);
+                                                return $cat->id;
+                                            }),
 
                                         Forms\Components\TextInput::make('payee')
                                             ->label('Paid To')
