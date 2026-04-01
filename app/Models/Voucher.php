@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use App\Observers\VoucherObserver;
@@ -38,6 +39,8 @@ class Voucher extends Model implements HasMedia
         'cheque_date',
         'bank',
         'transaction_summary',
+        'invoice_breakdown',
+        'liquidation_status',
     ];
 
     protected function casts(): array
@@ -46,6 +49,8 @@ class Voucher extends Model implements HasMedia
             'amount' => 'decimal:2',
             'attachment_paths' => 'array',
             'cheque_date' => 'date',
+            'invoice_breakdown' => 'array',
+            'liquidation_status' => 'string',
         ];
     }
 
@@ -77,6 +82,11 @@ class Voucher extends Model implements HasMedia
     public function denominations(): MorphOne
     {
         return $this->morphOne(Denomination::class, 'denominatable');
+    }
+
+    public function liquidation(): HasOne
+    {
+        return $this->hasOne(Liquidation::class);
     }
 
     public function getTotalDebitAttribute(): float
@@ -116,6 +126,20 @@ class Voucher extends Model implements HasMedia
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(fn(string $eventName) => "This voucher has been {$eventName}");
+    }
+
+    public function scopePendingLiquidation($query)
+    {
+        return $query->where('type', 'petty_cash')
+                     ->where('status', 'paid')
+                     ->where('liquidation_status', 'pending');
+    }
+
+    public function scopeOverdueLiquidation($query)
+    {
+        return $query->where('type', 'petty_cash')
+                     ->where('status', 'paid')
+                     ->where('liquidation_status', 'overdue');
     }
 
     public function scopeActionRequired($query, User $user)

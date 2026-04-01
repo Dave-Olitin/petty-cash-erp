@@ -25,6 +25,28 @@ class ViewVoucher extends ViewRecord
         if (! $record) return [];
 
         return [
+            Actions\Action::make('file_liquidation')
+                ->label('File Liquidation')
+                ->icon('heroicon-m-clipboard-document-check')
+                ->color('warning')
+                ->url(fn () => \App\Filament\Vouchers\Resources\LiquidationResource::getUrl('create') . '?voucher_id=' . $record->id)
+                ->visible(fn () => $record->type === 'petty_cash'
+                    && $record->status === 'paid'
+                    && in_array($record->liquidation_status, ['pending', 'overdue'])
+                ),
+
+            Actions\Action::make('view_liquidation')
+                ->label('View Liquidation')
+                ->icon('heroicon-m-check-badge')
+                ->color('success')
+                ->url(fn () => $record->liquidation
+                    ? \App\Filament\Vouchers\Resources\LiquidationResource::getUrl('view', ['record' => $record->liquidation->id])
+                    : null)
+                ->visible(fn () => $record->type === 'petty_cash'
+                    && $record->liquidation_status === 'liquidated'
+                    && $record->liquidation !== null
+                ),
+
             Actions\Action::make('submit_page')
                 ->label('Submit for Checking')
                 ->icon('heroicon-m-paper-airplane')
@@ -216,15 +238,37 @@ class ViewVoucher extends ViewRecord
                 ->label(fn () => $record->type === 'receipt' ? 'Collect Funds' : 'Disburse Funds')
                 ->icon('heroicon-m-banknotes')
                 ->color('success')
-                ->modalHeading(fn () => $record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations')
+                ->modalHeading(fn () => $record->type === 'payment' ? 'Disburse via Cheque / Bank' : ($record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations'))
                 ->modalSubmitActionLabel('Process & Mark Paid')
                 ->mountUsing(function (Forms\Form $form) use ($record) {
-                    $form->fill(['voucher_amount' => $record->amount]);
+                    $form->fill([
+                        'voucher_amount' => $record->amount,
+                        'cheque_no'      => $record->cheque_no,
+                        'cheque_date'    => $record->cheque_date,
+                        'bank'           => $record->bank,
+                    ]);
                 })
                 ->form([
                     Forms\Components\Hidden::make('voucher_amount'),
+                    
+                    Forms\Components\Section::make('Cheque / Bank Transfer Details')
+                        ->description('Confirm the final payment references for this voucher.')
+                        ->visible(fn () => $record->type === 'payment')
+                        ->schema([
+                            Forms\Components\TextInput::make('cheque_no')
+                                ->label('Cheque / Ref No.')
+                                ->maxLength(50),
+                            Forms\Components\DatePicker::make('cheque_date')
+                                ->label('Cheque Date')
+                                ->native(false),
+                            Forms\Components\TextInput::make('bank')
+                                ->label('Bank Name')
+                                ->maxLength(100),
+                        ])->columns(3),
+
                     Forms\Components\Section::make('Cash Handover / Collection')
                         ->description(fn () => new \Illuminate\Support\HtmlString("Voucher Amount: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Enter the bills/coins you hand over. Change back is auto-calculated."))
+                        ->visible(fn () => $record->type !== 'payment')
                         ->schema([
                             Forms\Components\Grid::make(3)->schema([
                                 Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->live()->minValue(0)
@@ -285,6 +329,23 @@ class ViewVoucher extends ViewRecord
                 ])
                 ->visible(fn (): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
                 ->action(function (array $data) use ($record) {
+                    if ($record->type === 'payment') {
+                        $record->update([
+                            'cheque_no' => $data['cheque_no'] ?? null,
+                            'cheque_date' => $data['cheque_date'] ?? null,
+                            'bank' => $data['bank'] ?? null,
+                        ]);
+                        
+                        $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
+                        if ($error) {
+                            Notification::make()->title($error)->danger()->send();
+                            return;
+                        }
+                        Notification::make()->title('Payment Voucher successfully disbursed')->success()->send();
+                        $record->refresh();
+                        return;
+                    }
+
                     $tendered = ((int) ($data['bill_1000'] ?? 0) * 1000) 
                         + ((int) ($data['bill_500'] ?? 0) * 500)
                         + ((int) ($data['bill_200'] ?? 0) * 200)
@@ -342,6 +403,7 @@ class ViewVoucher extends ViewRecord
                     Notification::make()->title($record->type === 'receipt' ? 'Receipt funds safely collected' : 'Voucher funds safely disbursed')->success()->send();
                     $record->refresh();
                 }),
+                
             Actions\Action::make('log_change_returned')
                 ->label('Log Change Returned')
                 ->icon('heroicon-m-hand-raised')
@@ -350,6 +412,9 @@ class ViewVoucher extends ViewRecord
                 ->modalHeading('Confirm Change Received')
                 ->modalDescription('Confirm that the exact change for this voucher has been securely placed into the petty cash box.')
                 ->visible(function () use ($record) {
+                    // Only show for Payment Vouchers, because Petty Cash uses the Liquidation flow for change, and Receipts don't give change back to the company.
+                    if ($record->type === 'petty_cash') return false;
+                    
                     $denom = $record->denominations()->first();
                     return $denom && $denom->change_given > 0 && !$denom->is_change_received && auth()->user()->can('voucher.pay');
                 })
@@ -361,7 +426,6 @@ class ViewVoucher extends ViewRecord
                     }
                     $record->refresh();
                 }),
-                
             Actions\Action::make('override_denominations')
                 ->label('Edit / Override')
                 ->icon('heroicon-m-exclamation-triangle')

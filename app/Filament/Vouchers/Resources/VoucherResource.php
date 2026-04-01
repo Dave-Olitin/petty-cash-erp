@@ -387,6 +387,45 @@ class VoucherResource extends Resource
                                         ->live(debounce: 500)
                                         ->columnSpanFull(),
 
+                                    Forms\Components\Repeater::make('invoice_breakdown')
+                                        ->label('Invoice / PO Breakdown (Optional)')
+                                        ->schema([
+                                            Forms\Components\Grid::make(2)->schema([
+                                                Forms\Components\TextInput::make('category')->label('Category'),
+                                                Forms\Components\TextInput::make('vendor_staff')->label('Vendor / Staff'),
+                                            ]),
+                                            Forms\Components\Grid::make(3)->schema([
+                                                Forms\Components\TextInput::make('lpo_number')->label('PO #'),
+                                                Forms\Components\TextInput::make('invoice_number')->label('Invoice #'),
+                                                Forms\Components\TextInput::make('total_amount')->label('Total Amount')->numeric()->prefix('AED')->live(debounce: 500),
+                                            ]),
+                                            Forms\Components\TextInput::make('description')->label('Description')->columnSpanFull(),
+                                        ])
+                                        ->default([])
+                                        ->collapsible()
+                                        ->collapsed()
+                                        ->itemLabel(fn (array $state): ?string => 
+                                            ($state['invoice_number'] ? 'INV# ' . $state['invoice_number'] : 'New breakdown item') . 
+                                            ($state['total_amount'] ? ' — AED ' . number_format((float) $state['total_amount'], 2) : '')
+                                        )
+                                        ->live()
+                                        ->hint(function (Forms\Get $get) {
+                                            $items = $get('invoice_breakdown') ?? [];
+                                            if (count($items) === 0) return null;
+                                            
+                                            $sum = collect($items)->sum(fn($i) => (float)($i['total_amount'] ?? 0));
+                                            $master = (float)($get('amount') ?? 0);
+                                            
+                                            if ($sum > 0) {
+                                                if (abs($sum - $master) <= 0.01) {
+                                                    return new \Illuminate\Support\HtmlString('<span class="text-success-600 font-bold dark:text-success-400">✅ Breakdown matches Master Total (AED ' . number_format($sum, 2) . ')</span>');
+                                                }
+                                                return new \Illuminate\Support\HtmlString('<span class="text-danger-600 font-bold dark:text-danger-400">⚠️ Breakdown sum (AED ' . number_format($sum, 2) . ') differs from Master</span>');
+                                            }
+                                            return null;
+                                        })
+                                        ->columnSpanFull(),
+
                                     Forms\Components\FileUpload::make('attachment_paths')
                                         ->multiple()
                                         ->preserveFilenames()

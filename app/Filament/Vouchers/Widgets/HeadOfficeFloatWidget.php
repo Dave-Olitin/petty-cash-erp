@@ -27,9 +27,12 @@ class HeadOfficeFloatWidget extends BaseWidget
                 ->where('status', 'paid')
                 ->sum('amount');
                 
-            $currentBalance = $totalReplenishing - $totalSpent;
+            // Sum cash returned during liquidation settlements
+            $totalReturned = \App\Models\Liquidation::sum('amount_returned');
+
+            $currentBalance = $totalReplenishing - $totalSpent + $totalReturned;
             
-            return compact('totalReplenishing', 'totalSpent', 'currentBalance');
+            return compact('totalReplenishing', 'totalSpent', 'totalReturned', 'currentBalance');
         });
 
         extract($data);

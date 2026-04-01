@@ -310,6 +310,42 @@
 </div>
 @endif
 
+@if(!empty($voucher->invoice_breakdown))
+<div style="margin-top: 20px; font-size: 10px;">
+    <strong>INVOICE / PO BREAKDOWN:</strong>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 5px; border: 1px solid #000;">
+        <thead>
+            <tr style="border-bottom: 1px solid #000; background-color: #f8f8f8;">
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Category</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Vendor/Staff</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">PO #</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">INV #</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Description</th>
+                <th style="padding: 4px; text-align: right;">Amount (AED)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @php $bdTotal = 0; @endphp
+            @foreach($voucher->invoice_breakdown as $bd)
+                @php $bdTotal += (float) ($bd['total_amount'] ?? 0); @endphp
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $bd['category'] ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $bd['vendor_staff'] ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $bd['lpo_number'] ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $bd['invoice_number'] ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ strtoupper($bd['description'] ?? '—') }}</td>
+                    <td style="padding: 4px; text-align: right;">{{ number_format((float) ($bd['total_amount'] ?? 0), 2) }}</td>
+                </tr>
+            @endforeach
+            <tr style="border-top: 1px solid #000;">
+                <td colspan="5" style="padding: 4px; font-weight: bold; text-align: right; border-right: 1px solid #000;">TOTAL BREAKDOWN:</td>
+                <td style="padding: 4px; text-align: right; font-weight: bold;">{{ number_format($bdTotal, 2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+@endif
+
 @if($voucher->denominations)
 <div style="margin-top: 15px; border-top: 1px dashed #000; padding-top: 10px; font-size: 10px;">
     <strong>CASH DENOMINATIONS:</strong><br>

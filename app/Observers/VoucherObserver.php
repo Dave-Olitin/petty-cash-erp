@@ -83,29 +83,57 @@ class VoucherObserver
      */
     public function updated(Voucher $voucher): void
     {
-        // If a petty cash voucher was just marked as paid, check the head-office float balance.
-        if ($voucher->type === 'petty_cash' && $voucher->wasChanged('status') && $voucher->status === VoucherStatus::Paid->value) {
+        if ($voucher->wasChanged('status') && $voucher->status === VoucherStatus::Paid->value) {
 
-            // Calculate balance directly without a nested transaction in the observer event cycle
-            // which can cause issues or deadlock if the caller is already in a transaction.
-            $totalReplenishing = \App\Models\FloatReplenishment::sum('amount');
-            $totalSpent = \App\Models\Voucher::where('type', 'petty_cash')
-                ->where('status', VoucherStatus::Paid->value)
-                ->sum('amount');
+            // ── Petty Cash: low balance check + liquidation trigger ────────────
+            if ($voucher->type === 'petty_cash') {
+                $totalReplenishing = \App\Models\FloatReplenishment::sum('amount');
+                $totalSpent = \App\Models\Voucher::where('type', 'petty_cash')
+                    ->where('status', VoucherStatus::Paid->value)
+                    ->sum('amount');
 
-            $currentBalance = (float) $totalReplenishing - (float) $totalSpent;
+                $currentBalance = (float) $totalReplenishing - (float) $totalSpent;
 
-            // Threshold Check (AED 2000)
-            if ($currentBalance < 2000) {
-                // Dispatch notifications safely (prevents 500 crashes if mail server is offline)
-                try {
-                    $managers = \App\Models\User::permission('voucher.manage_float')->get();
-                    foreach ($managers as $manager) {
-                        $manager->notify(new \App\Notifications\LowBalanceNotification($currentBalance));
+                if ($currentBalance < 2000) {
+                    try {
+                        $managers = \App\Models\User::permission('voucher.manage_float')->get();
+                        foreach ($managers as $manager) {
+                            $manager->notify(new \App\Notifications\LowBalanceNotification($currentBalance));
+                        }
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::error('Low Balance Notification Failed: ' . $e->getMessage());
                     }
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::error('Low Balance Notification Failed: ' . $e->getMessage());
                 }
+
+                // ── Auto-trigger liquidation ───────────────────────────────────
+                $threshold = (float) config('liquidation.minimum_amount', 0);
+                if ((float) $voucher->amount >= $threshold) {
+                    $deadlineDays = config('liquidation.deadline_days');
+                    $dueDate = $deadlineDays ? now()->addDays((int) $deadlineDays)->toDateString() : null;
+
+                    $voucher->updateQuietly(['liquidation_status' => 'pending']);
+
+                    \App\Models\Liquidation::create([
+                        'voucher_id'      => $voucher->id,
+                        'liquidated_by'   => $voucher->user_id, // pre-assigns to voucher creator; custodian will update
+                        'amount_spent'    => 0,
+                        'amount_returned' => 0,
+                        'amount_short'    => (float) $voucher->amount,
+                        'status'          => 'pending',
+                        'due_date'        => $dueDate,
+                    ]);
+                }
+            }
+        }
+
+        // ── Mark overdue liquidations ──────────────────────────────────────────
+        // This is a passive check: if the liquidation exists and is past due,
+        // sync the voucher's liquidation_status to 'overdue'.
+        if ($voucher->type === 'petty_cash' && $voucher->liquidation_status === 'pending') {
+            $liq = $voucher->liquidation;
+            if ($liq && $liq->due_date && \Carbon\Carbon::parse($liq->due_date)->isPast() && $liq->status === 'pending') {
+                $voucher->updateQuietly(['liquidation_status' => 'overdue']);
+                $liq->updateQuietly(['status' => 'pending']); // keep as pending, just the voucher reflects overdue
             }
         }
     }

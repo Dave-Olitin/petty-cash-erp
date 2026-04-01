@@ -23,6 +23,7 @@
     $voucher->voucher_number = 'VCH-NEW';
     $voucher->created_at = now();
     $voucher->cheque_date = null;
+    $voucher->invoice_breakdown = $get('invoice_breakdown') ?? [];
 
     // Fake relationships
     $voucher->setRelation('user', auth()->user());
