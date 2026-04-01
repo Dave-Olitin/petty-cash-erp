@@ -36,7 +36,11 @@ class LiquidationResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->hasAnyRole(['Super Admin', 'Admin', 'Accountant', 'Head Office', 'Cashier']) ?? false;
+        $user = auth()->user();
+        if (!$user) return false;
+        
+        return $user->hasAnyRole(['Super Admin', 'Admin', 'Accountant', 'Head Office', 'Cashier']) 
+            || $user->can('report.view');
     }
 
     public static function form(Form $form): Form

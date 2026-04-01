@@ -685,15 +685,37 @@ class VoucherResource extends Resource
                     ->icon('heroicon-m-banknotes')
                     ->color('success')
                     ->iconButton()
-                    ->modalHeading(fn (Voucher $record) => $record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations')
+                    ->modalHeading(fn (Voucher $record) => $record->type === 'payment' ? 'Disburse via Cheque / Bank' : ($record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations'))
                     ->modalSubmitActionLabel('Process & Mark Paid')
                     ->mountUsing(function (Forms\Form $form, Voucher $record) {
-                        $form->fill(['voucher_amount' => $record->amount]);
+                        $form->fill([
+                            'voucher_amount' => $record->amount,
+                            'cheque_no'      => $record->cheque_no,
+                            'cheque_date'    => $record->cheque_date,
+                            'bank'           => $record->bank,
+                        ]);
                     })
                     ->form([
                         Forms\Components\Hidden::make('voucher_amount'),
+                        
+                        Forms\Components\Section::make('Cheque / Bank Transfer Details')
+                            ->description('Confirm the final payment references for this voucher.')
+                            ->visible(fn (Voucher $record) => $record->type === 'payment')
+                            ->schema([
+                                Forms\Components\TextInput::make('cheque_no')
+                                    ->label('Cheque / Ref No.')
+                                    ->maxLength(50),
+                                Forms\Components\DatePicker::make('cheque_date')
+                                    ->label('Cheque Date')
+                                    ->native(false),
+                                Forms\Components\TextInput::make('bank')
+                                    ->label('Bank Name')
+                                    ->maxLength(100),
+                            ])->columns(3),
+
                         Forms\Components\Section::make('Cash Handover / Collection')
                             ->description(fn (Voucher $record) => new \Illuminate\Support\HtmlString("Voucher Amount: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Enter the bills/coins you hand over. Change back is auto-calculated."))
+                            ->visible(fn (Voucher $record) => $record->type !== 'payment')
                             ->schema([
                                 Forms\Components\Grid::make(3)->schema([
                                     Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->live()->minValue(0)
@@ -754,6 +776,23 @@ class VoucherResource extends Resource
                     ])
                     ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
                     ->action(function (Voucher $record, array $data) {
+                        if ($record->type === 'payment') {
+                            $record->update([
+                                'cheque_no' => $data['cheque_no'] ?? null,
+                                'cheque_date' => $data['cheque_date'] ?? null,
+                                'bank' => $data['bank'] ?? null,
+                            ]);
+                            
+                            $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
+                            if ($error) {
+                                Notification::make()->title($error)->danger()->send();
+                                return;
+                            }
+                            Notification::make()->title('Payment Voucher successfully disbursed')->success()->send();
+                            $record->refresh();
+                            return;
+                        }
+
                         $tendered = ((int) ($data['bill_1000'] ?? 0) * 1000) 
                             + ((int) ($data['bill_500'] ?? 0) * 500)
                             + ((int) ($data['bill_200'] ?? 0) * 200)
