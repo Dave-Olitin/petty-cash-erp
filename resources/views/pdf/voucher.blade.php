@@ -237,7 +237,8 @@
         <tr>
             <th class="col-branch" style="width: 8%;">BRANCH</th>
             <th class="col-acct" style="width: 10%;">ACCT<br>CODE</th>
-            <th class="col-detail" style="width: 42%;">ACCOUNT DETAILS</th>
+            <th class="col-trn" style="width: 12%;">TRN</th>
+            <th class="col-detail" style="width: 30%;">ACCOUNT DETAILS</th>
             <th class="col-dr" style="width: 20%;">DR</th>
             <th class="col-cr" style="width: 20%;">CR</th>
         </tr>
@@ -247,24 +248,25 @@
         <tr>
             <td class="col-branch">{{ strtoupper($item->branch_code ?? ($template?->branch_code ?? 'HQ')) }}</td>
             <td class="col-acct">{{ $item->account_code ?? '—' }}</td>
+            <td class="col-trn">{{ $item->trn ?? '—' }}</td>
             <td class="col-detail">{{ strtoupper($item->description ?? ($item->category?->name ?? '')) }}</td>
             <td class="col-dr">{{ $item->entry_type === 'debit' ? number_format($item->amount, 2) : '' }}</td>
             <td class="col-cr">{{ $item->entry_type === 'credit' ? number_format($item->amount, 2) : '' }}</td>
         </tr>
         @empty
         <tr>
-            <td colspan="5" style="text-align:center; padding: 10px;">No ledger entries</td>
+            <td colspan="6" style="text-align:center; padding: 10px;">No ledger entries</td>
         </tr>
         @endforelse
         @if($voucher->items->count() < 5)
             @for($i = $voucher->items->count(); $i < 5; $i++)
-                <tr><td colspan="5" style="height: 22px;">&nbsp;</td></tr>
+                <tr><td colspan="6" style="height: 22px;">&nbsp;</td></tr>
             @endfor
         @endif
     </tbody>
     <tfoot>
         <tr class="total-row">
-            <th colspan="3" class="lbl">TOTAL</th>
+            <th colspan="4" class="lbl">TOTAL</th>
             <th class="col-dr">{{ number_format($totalDR, 2) }}</th>
             <th class="col-cr">{{ number_format($totalCR, 2) }}</th>
         </tr>

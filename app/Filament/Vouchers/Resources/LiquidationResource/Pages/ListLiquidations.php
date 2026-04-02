@@ -38,4 +38,10 @@ class ListLiquidations extends ListRecords
                 ->badgeColor('danger'),
         ];
     }
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            \App\Filament\Vouchers\Widgets\LiquidationSummaryWidget::class,
+        ];
+    }
 }

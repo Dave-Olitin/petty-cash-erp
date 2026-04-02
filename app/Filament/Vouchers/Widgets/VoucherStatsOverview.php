@@ -85,19 +85,19 @@ class VoucherStatsOverview extends BaseWidget
         $momColor  = $momDiff >= 0 ? 'danger' : 'success'; // More spending = warning; less = good
 
         return [
-            Stat::make('Pending Approvals', $pendingNow)
-                ->description('Vouchers awaiting check/approval')
+            Stat::make('Vouchers Waiting for Approval', $pendingNow)
+                ->description('Submitted vouchers not yet checked or signed off')
                 ->descriptionIcon('heroicon-m-clock')
                 ->chart($pendingTrend)
                 ->color($pendingNow > 5 ? 'danger' : ($pendingNow > 0 ? 'warning' : 'success')),
 
-            Stat::make('Ready to Pay', $readyToPay)
-                ->description('Vouchers approved but not paid')
+            Stat::make('Approved — Ready to Pay', $readyToPay)
+                ->description('Vouchers fully signed off, waiting for cash/cheque release')
                 ->descriptionIcon('heroicon-m-check-badge')
                 ->chart($readyTrend)
                 ->color($readyToPay > 0 ? 'info' : 'success'),
 
-            Stat::make('Paid This Month', 'AED ' . Number::format($paidThisMonth, 2))
+            Stat::make('Total Spent This Month', 'AED ' . Number::format($paidThisMonth, 2))
                 ->description($momLabel)
                 ->descriptionIcon($momDiff >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
                 ->chart($paidTrend)

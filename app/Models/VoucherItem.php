@@ -11,6 +11,7 @@ class VoucherItem extends Model
         'voucher_id',
         'entry_type',
         'account_code',
+        'trn',
         'description',
         'category_id',
         'branch_code',

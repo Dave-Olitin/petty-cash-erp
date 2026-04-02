@@ -39,16 +39,16 @@ class DenominationStatsOverview extends BaseWidget
         $balance = $totalIn - $payments;
 
         return [
-            Stat::make('Recorded Replenishments', 'AED ' . number_format($totalIn, 2))
-                ->description('Total cash entered into box via tracking')
+            Stat::make('Cash Added to Box (via Tracking)', 'AED ' . number_format($totalIn, 2))
+                ->description('Total cash physically deposited & tracked by denomination')
                 ->color('success')
                 ->icon('heroicon-o-arrow-path'),
-            Stat::make('Recorded Cash Disbursements', 'AED ' . number_format($payments, 2))
-                ->description('Total cash disbursed via tracking')
+            Stat::make('Cash Paid Out (via Tracking)', 'AED ' . number_format($payments, 2))
+                ->description('Total cash physically disbursed & tracked by denomination')
                 ->color('danger')
                 ->icon('heroicon-o-minus-circle'),
-            Stat::make('Tracked Box Balance', 'AED ' . number_format($balance, 2))
-                ->description('Calculated cash remaining')
+            Stat::make('Estimated Cash in Box Right Now', 'AED ' . number_format($balance, 2))
+                ->description('Based on tracked deposits minus tracked disbursements')
                 ->color('primary')
                 ->icon('heroicon-o-banknotes'),
         ];

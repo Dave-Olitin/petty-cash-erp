@@ -44,18 +44,27 @@ class VoucherPolicy
         return $user->can('voucher.create');
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
     public function update(User $user, Voucher $voucher): bool
     {
-        // Only draft vouchers can be edited by the creator
-        if ($voucher->status !== 'draft') {
+        // Paid vouchers can NEVER be edited, they are finalized.
+        if ($voucher->status === 'paid') {
             return false;
         }
 
-        if ($user->can('voucher.edit') && $voucher->user_id === $user->id) {
+        // Draft or rejected vouchers can be edited by the original creator
+        if (in_array($voucher->status, ['draft', 'rejected']) && $voucher->user_id === $user->id) {
             return true;
+        }
+
+        // Pending or Approved vouchers can be edited by Accountants, Head Office, Admins
+        if (in_array($voucher->status, ['pending_checker', 'pending_approver', 'approved'])) {
+            if ($user->hasAnyRole(['Accountant', 'Admin', 'Super Admin', 'Head Office'])) {
+                return true;
+            }
+            // Creator can also edit their own pending_checker vouchers before it reaches approver
+            if ($voucher->status === 'pending_checker' && $voucher->user_id === $user->id) {
+                return true;
+            }
         }
 
         return false;

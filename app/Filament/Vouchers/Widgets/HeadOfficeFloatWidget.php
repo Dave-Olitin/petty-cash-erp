@@ -53,18 +53,18 @@ class HeadOfficeFloatWidget extends BaseWidget
         }
 
         return [
-            Stat::make('Head Office Petty Cash Balance', 'AED ' . Number::format($currentBalance, 2))
+            Stat::make('Available Petty Cash Balance', 'AED ' . Number::format($currentBalance, 2))
                 ->description($description)
                 ->descriptionIcon($icon)
                 ->color($color),
                 
-            Stat::make('CASH IN', 'AED ' . Number::format($totalReplenishing, 2))
-                ->description('Total funds added to float')
+            Stat::make('Total Money Added to Float', 'AED ' . Number::format($totalReplenishing, 2))
+                ->description('All replenishments deposited since the start')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color('gray'),
                 
-            Stat::make('CASH OUT', 'AED ' . Number::format($totalSpent, 2))
-                ->description('Total petty cash paid out')
+            Stat::make('Total Money Spent from Float', 'AED ' . Number::format($totalSpent, 2))
+                ->description('All petty cash vouchers paid out so far')
                 ->descriptionIcon('heroicon-m-arrow-trending-down')
                 ->color('gray'),
         ];

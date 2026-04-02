@@ -105,12 +105,8 @@ class Dashboard extends \Filament\Pages\Dashboard
 
                     try {
                         $lock->block(5, function () use (&$data) {
-                            $latest = \App\Models\FloatReplenishment::where('reference', 'like', 'REF-%')
-                                ->orderBy('id', 'desc')
-                                ->first();
-
-                            $number = $latest ? intval(substr($latest->reference, 4)) + 1 : 1;
-                            $data['reference'] = 'REF-' . str_pad($number, 4, '0', STR_PAD_LEFT);
+                            $count = \App\Models\FloatReplenishment::count() + 1;
+                            $data['reference'] = 'CA_' . str_pad($count, 4, '0', STR_PAD_LEFT);
                         });
                     } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
                         throw \Illuminate\Validation\ValidationException::withMessages([
@@ -129,27 +125,33 @@ class Dashboard extends \Filament\Pages\Dashboard
 
                     $hasAny = collect($denomFields)->contains(fn ($f) => (int) ($denom[$f] ?? 0) > 0);
 
+                    // The FloatReplenishmentObserver already created a placeholder denomination on 'created'.
+                    // If the user entered a detailed cash breakdown, UPDATE that existing record
+                    // instead of creating a second one (which would cause duplicate entries in the Cash Log).
                     if ($hasAny) {
                         $total = ((int) ($denom['bill_1000'] ?? 0) * 1000) + ((int) ($denom['bill_500'] ?? 0) * 500) + ((int) ($denom['bill_200'] ?? 0) * 200)
                             + ((int) ($denom['bill_100'] ?? 0) * 100) + ((int) ($denom['bill_50'] ?? 0) * 50) + ((int) ($denom['bill_20'] ?? 0) * 20)
                             + ((int) ($denom['bill_10'] ?? 0) * 10) + ((int) ($denom['bill_5'] ?? 0) * 5) + ((int) ($denom['coin_1'] ?? 0) * 1)
                             + ((int) ($denom['coin_0_50'] ?? 0) * 0.50) + ((int) ($denom['coin_0_25'] ?? 0) * 0.25);
 
-                        $record->denominations()->create([
-                            'bill_1000'    => $denom['bill_1000'] ?: 0,
-                            'bill_500'     => $denom['bill_500'] ?: 0,
-                            'bill_200'     => $denom['bill_200'] ?: 0,
-                            'bill_100'     => $denom['bill_100'] ?: 0,
-                            'bill_50'      => $denom['bill_50'] ?: 0,
-                            'bill_20'      => $denom['bill_20'] ?: 0,
-                            'bill_10'      => $denom['bill_10'] ?: 0,
-                            'bill_5'       => $denom['bill_5'] ?: 0,
-                            'coin_1'       => $denom['coin_1'] ?: 0,
-                            'coin_0_50'    => $denom['coin_0_50'] ?: 0,
-                            'coin_0_25'    => $denom['coin_0_25'] ?: 0,
-                            'total_amount' => $total,
-                            'change_given' => 0,
-                        ]);
+                        $record->denominations()->updateOrCreate(
+                            [], // match on the morphable FK (already scoped)
+                            [
+                                'bill_1000'    => $denom['bill_1000'] ?: 0,
+                                'bill_500'     => $denom['bill_500'] ?: 0,
+                                'bill_200'     => $denom['bill_200'] ?: 0,
+                                'bill_100'     => $denom['bill_100'] ?: 0,
+                                'bill_50'      => $denom['bill_50'] ?: 0,
+                                'bill_20'      => $denom['bill_20'] ?: 0,
+                                'bill_10'      => $denom['bill_10'] ?: 0,
+                                'bill_5'       => $denom['bill_5'] ?: 0,
+                                'coin_1'       => $denom['coin_1'] ?: 0,
+                                'coin_0_50'    => $denom['coin_0_50'] ?: 0,
+                                'coin_0_25'    => $denom['coin_0_25'] ?: 0,
+                                'total_amount' => $total,
+                                'change_given' => 0,
+                            ]
+                        );
                     }
                 })
                 ->successNotificationTitle('Fund Voucher recorded successfully'),

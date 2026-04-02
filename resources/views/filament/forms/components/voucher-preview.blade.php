@@ -40,6 +40,7 @@
             'entry_type' => $data['entry_type'] ?? 'debit',
             'branch_code' => $data['branch_code'] ?? null,
             'account_code' => $data['account_code'] ?? null,
+            'trn' => $data['trn'] ?? null,
             'description' => $data['description'] ?? '',
             'amount' => (float)($data['amount'] ?? 0),
         ]);

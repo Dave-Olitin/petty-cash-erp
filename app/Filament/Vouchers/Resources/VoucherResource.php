@@ -330,6 +330,39 @@ class VoucherResource extends Resource
                                                     })
                                                     ->columnSpan(['default' => 1, 'md' => 12]),
 
+                                                Forms\Components\Select::make('trn')
+                                                    ->label('TRN (Optional)')
+                                                    ->searchable()
+                                                    ->allowHtml()
+                                                    ->getSearchResultsUsing(function (string $search) {
+                                                        return \App\Models\TaxRegistration::where('trn', 'like', "%{$search}%")
+                                                            ->orWhere('name', 'like', "%{$search}%")
+                                                            ->limit(30)
+                                                            ->get()
+                                                            ->mapWithKeys(fn ($tax) => [$tax->trn => $tax->trn . ' — <span class="text-xs text-gray-500">' . $tax->name . '</span>'])
+                                                            ->toArray();
+                                                    })
+                                                    ->getOptionLabelUsing(fn (?string $value) => $value
+                                                        ? (($tax = \App\Models\TaxRegistration::where('trn', $value)->first())
+                                                            ? "{$tax->trn} — {$tax->name}"
+                                                            : $value)
+                                                        : null
+                                                    )
+                                                    ->createOptionForm([
+                                                        Forms\Components\TextInput::make('trn')
+                                                            ->label('TRN Number')
+                                                            ->required()
+                                                            ->unique('tax_registrations', 'trn'),
+                                                        Forms\Components\TextInput::make('name')
+                                                            ->label('Vendor / Company Name')
+                                                            ->required(),
+                                                    ])
+                                                    ->createOptionUsing(function (array $data) {
+                                                        \App\Models\TaxRegistration::create($data);
+                                                        return $data['trn'];
+                                                    })
+                                                    ->columnSpan(['default' => 1, 'md' => 12]),
+
                                                 Forms\Components\TextInput::make('amount')
                                                     ->numeric()
                                                     ->required()

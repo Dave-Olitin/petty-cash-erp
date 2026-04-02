@@ -114,7 +114,7 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $voucher->voucher_number ?? '',
             $voucher->type === 'petty_cash' ? 'Petty Cash' : 'Payment',
             $voucher->created_at ? $voucher->created_at->format('Y-m-d') : '',
-            $voucher->template ? $voucher->template->trn : '', // TRN
+            $row->trn ?? ($voucher->template ? $voucher->template->trn : ''), // TRN (Item TRN prioritised over Template)
             $voucher->department ?? '', // DEPARTMENT
             $voucher->category ? $voucher->category->name : '', // TRANS CAT
             $voucher->transaction_summary ?? '', // REMARKS

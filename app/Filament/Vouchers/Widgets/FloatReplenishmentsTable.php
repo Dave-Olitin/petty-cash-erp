@@ -63,7 +63,6 @@ class FloatReplenishmentsTable extends BaseWidget
                             ];
                         })->toArray();
                         
-                        // Insert header row
                         array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At']);
 
                         return response()->streamDownload(function () use ($exportData) {
@@ -76,10 +75,6 @@ class FloatReplenishmentsTable extends BaseWidget
                             'Content-Type' => 'text/csv',
                         ]);
                     }),
-                Tables\Actions\ImportAction::make()
-                    ->importer(\App\Filament\Imports\FloatReplenishmentImporter::class)
-                    ->color('primary')
-                    ->button(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
