@@ -234,6 +234,41 @@ class ViewVoucher extends ViewRecord
                     });
                 }),
 
+            Actions\Action::make('update_attachments_page')
+                ->label('Manage Attachments & Notes')
+                ->icon('heroicon-o-paper-clip')
+                ->color('info')
+                ->visible(fn (): bool => $record->status === 'paid' && (auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Accountant', 'Approver']) || auth()->id() === $record->user_id))
+                ->fillForm(fn (): array => [
+                    'attachment_paths' => $record->attachment_paths,
+                    'description'      => $record->description,
+                ])
+                ->form([
+                    Forms\Components\FileUpload::make('attachment_paths')
+                        ->label('Upload Receipts / Invoices')
+                        ->multiple()
+                        ->directory('voucher-attachments')
+                        ->maxFiles(5)
+                        ->maxSize(10240),
+                    Forms\Components\Textarea::make('description')
+                        ->label('Description / Follow-up Notes')
+                        ->rows(3),
+                ])
+                ->action(function (array $data) use ($record) {
+                    $record->update([
+                        'attachment_paths' => $data['attachment_paths'] ?? null,
+                        'description'      => $data['description'] ?? null,
+                    ]);
+
+                    activity()
+                        ->performedOn($record)
+                        ->causedBy(auth()->user())
+                        ->log('Attachments and descriptions updated post-disbursement via View page');
+
+                    Notification::make()->title('Attachments and notes securely updated')->success()->send();
+                    $record->refresh();
+                }),
+
             Actions\Action::make('mark_paid_page')
                 ->label(fn () => $record->type === 'receipt' ? 'Collect Funds' : 'Disburse Funds')
                 ->icon('heroicon-m-banknotes')

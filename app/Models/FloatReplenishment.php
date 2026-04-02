@@ -20,6 +20,7 @@ class FloatReplenishment extends Model
         'reference',
         'remarks',
         'created_by',
+        'attachment_paths',
     ];
 
     protected function casts(): array
@@ -27,6 +28,7 @@ class FloatReplenishment extends Model
         return [
             'amount' => 'decimal:2',
             'date' => 'date',
+            'attachment_paths' => 'array',
         ];
     }
 

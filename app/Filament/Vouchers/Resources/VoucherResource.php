@@ -883,6 +883,42 @@ class VoucherResource extends Resource
                         Notification::make()->title($record->type === 'receipt' ? 'Receipt funds safely collected' : 'Voucher funds safely disbursed')->success()->send();
                         $record->refresh();
                     }),
+
+                Tables\Actions\Action::make('update_attachments')
+                    ->label('Manage Attachments')
+                    ->icon('heroicon-o-paper-clip')
+                    ->color('info')
+                    ->iconButton()
+                    ->tooltip('Add/update receipts and descriptions for this paid voucher')
+                    ->visible(fn (Voucher $record): bool => $record->status === 'paid' && (auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Accountant', 'Approver']) || auth()->id() === $record->user_id))
+                    ->fillForm(fn (Voucher $record): array => [
+                        'attachment_paths' => $record->attachment_paths,
+                        'description'      => $record->description,
+                    ])
+                    ->form([
+                        \Filament\Forms\Components\FileUpload::make('attachment_paths')
+                            ->label('Upload Receipts / Invoices')
+                            ->multiple()
+                            ->directory('voucher-attachments')
+                            ->maxFiles(5)
+                            ->maxSize(10240),
+                        \Filament\Forms\Components\Textarea::make('description')
+                            ->label('Description / Follow-up Notes')
+                            ->rows(3),
+                    ])
+                    ->action(function (array $data, Voucher $record): void {
+                        $record->update([
+                            'attachment_paths' => $data['attachment_paths'] ?? null,
+                            'description'      => $data['description'] ?? null,
+                        ]);
+
+                        activity()
+                            ->performedOn($record)
+                            ->causedBy(auth()->user())
+                            ->log('Attachments and descriptions updated post-disbursement');
+
+                        Notification::make()->title('Attachments and notes securely updated')->success()->send();
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

@@ -96,6 +96,34 @@ class FloatReplenishmentsTable extends BaseWidget
                     ])
                     ->successNotificationTitle('Replenishment updated successfully'),
                 Tables\Actions\DeleteAction::make(),
+                Tables\Actions\Action::make('update_attachments')
+                    ->label('Manage Attachments')
+                    ->icon('heroicon-o-paper-clip')
+                    ->color('info')
+                    ->iconButton()
+                    ->tooltip('Add/update receipts for this replenishment')
+                    ->fillForm(fn (FloatReplenishment $record): array => [
+                        'attachment_paths' => $record->attachment_paths,
+                        'remarks'          => $record->remarks,
+                    ])
+                    ->form([
+                        Forms\Components\FileUpload::make('attachment_paths')
+                            ->label('Upload Receipts / Bank Transfers')
+                            ->multiple()
+                            ->directory('replenishment-attachments')
+                            ->maxFiles(5)
+                            ->maxSize(10240),
+                        Forms\Components\Textarea::make('remarks')
+                            ->label('Remarks')
+                            ->rows(3),
+                    ])
+                    ->action(function (array $data, FloatReplenishment $record): void {
+                        $record->update([
+                            'attachment_paths' => $data['attachment_paths'] ?? null,
+                            'remarks'          => $data['remarks'] ?? null,
+                        ]);
+                        \Filament\Notifications\Notification::make()->title('Attachments and remarks securely updated')->success()->send();
+                    }),
                 Tables\Actions\Action::make('print')
                     ->label('Print')
                     ->icon('heroicon-o-printer')
