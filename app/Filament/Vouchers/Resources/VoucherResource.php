@@ -901,7 +901,10 @@ class VoucherResource extends Resource
                             ->multiple()
                             ->directory('voucher-attachments')
                             ->maxFiles(5)
-                            ->maxSize(10240),
+                            ->maxSize(10240)
+                            ->openable()
+                            ->downloadable()
+                            ->panelLayout('grid'),
                         \Filament\Forms\Components\Textarea::make('description')
                             ->label('Description / Follow-up Notes')
                             ->rows(3),

@@ -112,7 +112,10 @@ class FloatReplenishmentsTable extends BaseWidget
                             ->multiple()
                             ->directory('replenishment-attachments')
                             ->maxFiles(5)
-                            ->maxSize(10240),
+                            ->maxSize(10240)
+                            ->openable()
+                            ->downloadable()
+                            ->panelLayout('grid'),
                         Forms\Components\Textarea::make('remarks')
                             ->label('Remarks')
                             ->rows(3),
