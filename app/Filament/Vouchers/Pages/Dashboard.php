@@ -55,8 +55,7 @@ class Dashboard extends \Filament\Pages\Dashboard
                     // ── DENOMINATION BREAKDOWN ──────────────────────────
                     Forms\Components\Section::make('Cash Denomination Breakdown')
                         ->icon('heroicon-o-banknotes')
-                        ->description('Optional: record the exact bills/coins being deposited.')
-                        ->collapsed()
+                        ->description('Required: total must equal the replenishment amount above.')
                         ->schema([
                             Forms\Components\Grid::make(3)->schema([
                                 Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->minValue(0),
@@ -76,25 +75,25 @@ class Dashboard extends \Filament\Pages\Dashboard
                 ->mutateFormDataUsing(function (array $data): array {
                     $denomKeys = ['bill_1000', 'bill_500', 'bill_200', 'bill_100', 'bill_50',
                                   'bill_20', 'bill_10', 'bill_5', 'coin_1', 'coin_0_50', 'coin_0_25'];
-                    
-                    $hasAny = collect($denomKeys)->contains(fn ($f) => (int) ($data[$f] ?? 0) > 0);
-                    if ($hasAny) {
-                        $total = ((int) ($data['bill_1000'] ?? 0) * 1000) + ((int) ($data['bill_500'] ?? 0) * 500) + ((int) ($data['bill_200'] ?? 0) * 200)
-                            + ((int) ($data['bill_100'] ?? 0) * 100) + ((int) ($data['bill_50'] ?? 0) * 50) + ((int) ($data['bill_20'] ?? 0) * 20)
-                            + ((int) ($data['bill_10'] ?? 0) * 10) + ((int) ($data['bill_5'] ?? 0) * 5) + ((int) ($data['coin_1'] ?? 0) * 1)
-                            + ((int) ($data['coin_0_50'] ?? 0) * 0.50) + ((int) ($data['coin_0_25'] ?? 0) * 0.25);
-                        
-                        if (round((float) $total, 2) !== round((float) $data['amount'], 2)) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('Denomination validation failed')
-                                ->danger()
-                                ->body('The cash breakdown (AED ' . number_format($total, 2) . ') must exactly match the replenishment amount (AED ' . number_format((float) $data['amount'], 2) . ').')
-                                ->send();
-                            throw \Illuminate\Validation\ValidationException::withMessages([
-                                'bill_1000' => 'Breakdown mismatch. Provided: ' . number_format($total, 2) . '. Required: ' . number_format((float) $data['amount'], 2),
-                            ]);
-                        }
+
+                    // Always validate — denomination total must equal the replenishment amount
+                    $total = ((int) ($data['bill_1000'] ?? 0) * 1000) + ((int) ($data['bill_500'] ?? 0) * 500) + ((int) ($data['bill_200'] ?? 0) * 200)
+                        + ((int) ($data['bill_100'] ?? 0) * 100) + ((int) ($data['bill_50'] ?? 0) * 50) + ((int) ($data['bill_20'] ?? 0) * 20)
+                        + ((int) ($data['bill_10'] ?? 0) * 10) + ((int) ($data['bill_5'] ?? 0) * 5) + ((int) ($data['coin_1'] ?? 0) * 1)
+                        + ((int) ($data['coin_0_50'] ?? 0) * 0.50) + ((int) ($data['coin_0_25'] ?? 0) * 0.25);
+
+                    if (round((float) $total, 2) !== round((float) $data['amount'], 2)) {
+                        \Filament\Notifications\Notification::make()
+                            ->title('Denomination Mismatch')
+                            ->danger()
+                            ->body('The cash breakdown (AED ' . number_format($total, 2) . ') must exactly match the replenishment amount (AED ' . number_format((float) $data['amount'], 2) . ').')
+                            ->send();
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'bill_1000' => 'Breakdown total AED ' . number_format($total, 2) . ' does not match replenishment amount AED ' . number_format((float) $data['amount'], 2) . '.',
+                        ]);
                     }
+
+                    $hasAny = collect($denomKeys)->contains(fn ($f) => (int) ($data[$f] ?? 0) > 0);
 
                     session()->put('_pending_denom', array_intersect_key($data, array_flip($denomKeys)));
                     foreach ($denomKeys as $key) {
@@ -106,7 +105,7 @@ class Dashboard extends \Filament\Pages\Dashboard
                     try {
                         $lock->block(5, function () use (&$data) {
                             $count = \App\Models\FloatReplenishment::count() + 1;
-                            $data['reference'] = 'CA_' . str_pad($count, 4, '0', STR_PAD_LEFT);
+                            $data['reference'] = 'CI_' . str_pad($count, 4, '0', STR_PAD_LEFT);
                         });
                     } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
                         throw \Illuminate\Validation\ValidationException::withMessages([
@@ -156,6 +155,17 @@ class Dashboard extends \Filament\Pages\Dashboard
                 })
                 ->successNotificationTitle('Fund Voucher recorded successfully'),
 
+        ];
+    }
+
+    public function getWidgets(): array
+    {
+        return [
+            \App\Filament\Vouchers\Widgets\VoucherStatsOverview::class,
+            \App\Filament\Vouchers\Widgets\DenominationStatsOverview::class,
+            \App\Filament\Vouchers\Widgets\LiquidationSummaryWidget::class,
+            \App\Filament\Vouchers\Widgets\FloatReplenishmentsTable::class,
+            \App\Filament\Vouchers\Widgets\DenominationsTableWidget::class,
         ];
     }
 }

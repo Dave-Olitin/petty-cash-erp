@@ -43,6 +43,29 @@ class VoucherReportPage extends Page implements HasForms
         $this->date_to   = now()->toDateString();
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            \Filament\Actions\Action::make('downloadDailySummary')
+                ->label('Download Daily Cash Summary')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('success')
+                ->form([
+                    DatePicker::make('report_date')
+                        ->label('Select Date to Audit')
+                        ->default(today())
+                        ->required(),
+                ])
+                ->action(function (array $data) {
+                    $dateStr = \Carbon\Carbon::parse($data['report_date'])->format('Y-m-d');
+                    return \Maatwebsite\Excel\Facades\Excel::download(
+                        new \App\Exports\DailySummaryExport($dateStr), 
+                        "Daily_Cash_Summary_{$dateStr}.xlsx"
+                    );
+                }),
+        ];
+    }
+
     public function updating($name)
     {
         if (in_array($name, ['date_from', 'date_to', 'type', 'account_code', 'perPage'])) {

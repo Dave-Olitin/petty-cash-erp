@@ -42,6 +42,7 @@ class ListLiquidations extends ListRecords
     {
         return [
             \App\Filament\Vouchers\Widgets\LiquidationSummaryWidget::class,
+            \App\Filament\Vouchers\Widgets\TopUnliquidatedTableWidget::class,
         ];
     }
 }

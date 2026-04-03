@@ -19,6 +19,16 @@ class TaxRegistrationResource extends Resource
 
     protected static ?string $cluster = Settings::class;
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('manage_settings') ?? false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('manage_settings') ?? false;
+    }
+
     public static function form(Form $form): Form
     {
         return $form

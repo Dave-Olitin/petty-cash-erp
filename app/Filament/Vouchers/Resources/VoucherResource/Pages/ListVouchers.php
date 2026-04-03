@@ -55,4 +55,11 @@ class ListVouchers extends ListRecords
 
         return $tabs;
     }
+
+    protected function getFooterWidgets(): array
+    {
+        return [
+            \App\Filament\Vouchers\Widgets\RecentActivityWidget::class,
+        ];
+    }
 }

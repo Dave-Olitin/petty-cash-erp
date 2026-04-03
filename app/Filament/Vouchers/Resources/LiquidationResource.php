@@ -176,7 +176,7 @@ class LiquidationResource extends Resource
     {
         return $table
             ->query(
-                Liquidation::query()->with(['voucher.user'])
+                Liquidation::query()->with(['voucher.user', 'custodian'])
             )
             ->defaultSort('created_at', 'desc')
             ->columns([
@@ -298,10 +298,14 @@ class LiquidationResource extends Resource
                                 $days,
                                 $r->remarks ?? '—',
                                 $r->liquidated_at ? $r->liquidated_at->format('Y-m-d H:i:s') : '—',
+                                // Voucher attachments
+                                collect($r->voucher->attachment_paths ?? [])
+                                    ->map(fn ($p) => url('storage/' . $p))
+                                    ->join(', '),
                             ];
                         })->toArray();
 
-                        array_unshift($exportData, ['Voucher #', 'Payee', 'Original Amount', 'Spent', 'Returned', 'Variance', 'Status', 'Due Date', 'Days to Settle', 'Remarks', 'Liquidated At']);
+                        array_unshift($exportData, ['Voucher #', 'Payee', 'Original Amount', 'Spent', 'Returned', 'Variance', 'Status', 'Due Date', 'Days to Settle', 'Remarks', 'Liquidated At', 'Attachments']);
 
                         return response()->streamDownload(function () use ($exportData) {
                             $file = fopen('php://output', 'w');
@@ -317,7 +321,8 @@ class LiquidationResource extends Resource
                     ->label('Settle')
                     ->icon('heroicon-m-check-circle')
                     ->color('success')
-                    ->visible(fn ($record) => $record->status === 'pending')
+                    ->visible(fn ($record) => $record->status === 'pending'
+                        && ! auth()->user()->hasRole('Approver'))
                     ->url(fn ($record) => static::getUrl('edit', ['record' => $record])),
                 Tables\Actions\ViewAction::make(),
             ])

@@ -72,6 +72,7 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
             'CREDIT',
             'AMOUNT',
             'BRANCH',
+            'ATTACHMENTS',
         ];
     }
 
@@ -101,6 +102,7 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
                 '', // CREDIT
                 '', // AMOUNT
                 '', // BRANCH
+                $voucher->attachment_paths ? collect($voucher->attachment_paths)->map(fn($p) => url('storage/' . $p))->join(', ') : '',
             ];
         }
 
@@ -131,6 +133,7 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
             '', // CREDIT
             !$isDebit ? number_format((float) $row->amount, 2, '.', '') : '', // AMOUNT
             !$isDebit ? ($row->branch_code ?? '') : '', // BRANCH
+            $voucher->attachment_paths ? collect($voucher->attachment_paths)->map(fn($p) => url('storage/' . $p))->join(', ') : '',
         ];
     }
 

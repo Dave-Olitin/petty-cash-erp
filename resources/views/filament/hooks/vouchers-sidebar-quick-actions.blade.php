@@ -7,7 +7,7 @@
         tag="a"
         class="w-full justify-center"
     >
-        New Voucher
+        <span x-data="{}" x-show="$store.sidebar.isOpen" x-transition class="whitespace-nowrap">New Voucher</span>
     </x-filament::button>
 </div>
 @endif

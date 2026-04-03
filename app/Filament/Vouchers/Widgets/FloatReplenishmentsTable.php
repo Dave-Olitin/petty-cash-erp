@@ -60,10 +60,11 @@ class FloatReplenishmentsTable extends BaseWidget
                                 'Recorded By' => $r->creator?->name,
                                 'Remarks' => $r->remarks,
                                 'Created At' => $r->created_at->format('Y-m-d H:i:s'),
+                                'Attachments' => collect($r->attachment_paths ?? [])->map(fn($p) => url('storage/' . $p))->join(', '),
                             ];
                         })->toArray();
                         
-                        array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At']);
+                        array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At', 'Attachments']);
 
                         return response()->streamDownload(function () use ($exportData) {
                             $handle = fopen('php://output', 'w');
@@ -149,11 +150,12 @@ class FloatReplenishmentsTable extends BaseWidget
                                     'Recorded By' => $r->creator?->name,
                                     'Remarks' => $r->remarks,
                                     'Created At' => $r->created_at->format('Y-m-d H:i:s'),
+                                    'Attachments' => collect($r->attachment_paths ?? [])->map(fn($p) => url('storage/' . $p))->join(', '),
                                 ];
                             })->toArray();
                             
                             // Insert header row
-                            array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At']);
+                            array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At', 'Attachments']);
 
                             return response()->streamDownload(function () use ($exportData) {
                                 $handle = fopen('php://output', 'w');
