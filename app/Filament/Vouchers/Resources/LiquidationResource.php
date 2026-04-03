@@ -300,7 +300,7 @@ class LiquidationResource extends Resource
                                 $r->liquidated_at ? $r->liquidated_at->format('Y-m-d H:i:s') : '—',
                                 // Voucher attachments
                                 collect($r->voucher->attachment_paths ?? [])
-                                    ->map(fn ($p) => url('storage/' . $p))
+                                    ->map(fn ($p) => url('storage/' . implode('/', array_map('rawurlencode', explode('/', $p)))))
                                     ->join(', '),
                             ];
                         })->toArray();

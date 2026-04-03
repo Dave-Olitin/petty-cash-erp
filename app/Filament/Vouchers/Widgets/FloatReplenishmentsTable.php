@@ -60,7 +60,7 @@ class FloatReplenishmentsTable extends BaseWidget
                                 'Recorded By' => $r->creator?->name,
                                 'Remarks' => $r->remarks,
                                 'Created At' => $r->created_at->format('Y-m-d H:i:s'),
-                                'Attachments' => collect($r->attachment_paths ?? [])->map(fn($p) => url('storage/' . $p))->join(', '),
+                                'Attachments' => collect($r->attachment_paths ?? [])->map(fn($p) => url('storage/' . implode('/', array_map('rawurlencode', explode('/', $p)))))->join(', '),
                             ];
                         })->toArray();
                         
@@ -150,7 +150,7 @@ class FloatReplenishmentsTable extends BaseWidget
                                     'Recorded By' => $r->creator?->name,
                                     'Remarks' => $r->remarks,
                                     'Created At' => $r->created_at->format('Y-m-d H:i:s'),
-                                    'Attachments' => collect($r->attachment_paths ?? [])->map(fn($p) => url('storage/' . $p))->join(', '),
+                                    'Attachments' => collect($r->attachment_paths ?? [])->map(fn($p) => url('storage/' . implode('/', array_map('rawurlencode', explode('/', $p)))))->join(', '),
                                 ];
                             })->toArray();
                             

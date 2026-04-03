@@ -42,7 +42,7 @@ class DailySummaryExport implements FromView, ShouldAutoSize
                 'type'       => $v->type,
                 'amount'     => $v->amount,
                 'attachments' => collect($v->attachment_paths ?? [])
-                    ->map(fn ($p) => url('storage/' . $p))
+                    ->map(fn ($p) => url('storage/' . implode('/', array_map('rawurlencode', explode('/', $p)))))
                     ->join(', '),
             ];
         });
@@ -59,7 +59,7 @@ class DailySummaryExport implements FromView, ShouldAutoSize
                 'type'        => 'Replenishment',
                 'amount'      => $r->amount,
                 'attachments' => collect($r->attachment_paths ?? [])
-                    ->map(fn ($p) => url('storage/' . $p))
+                    ->map(fn ($p) => url('storage/' . implode('/', array_map('rawurlencode', explode('/', $p)))))
                     ->join(', '),
             ];
         });
