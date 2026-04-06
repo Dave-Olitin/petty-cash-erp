@@ -13,7 +13,9 @@ class EditVoucher extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->visible(fn ($record) => $record->status !== 'paid')
+                ->tooltip('Paid vouchers cannot be voided from here. Process via Liquidation for an audit trail.'),
         ];
     }
 
@@ -26,6 +28,18 @@ class EditVoucher extends EditRecord
         if (in_array($voucher->status, ['approved', 'pending_approver'])) {
             $data['status'] = 'pending_checker';
             $data['current_approval_step'] = 1;
+
+            // Notify everyone who already signed it about the reset
+            $previousApprovers = $voucher->approvals()->with('user')->get()->pluck('user')->filter()->unique('id');
+            foreach ($previousApprovers as $approver) {
+                if ($approver->id !== auth()->id()) {
+                    \Filament\Notifications\Notification::make()
+                        ->title('Voucher Edited & Reset')
+                        ->body("Voucher #{$voucher->voucher_number} was edited by " . auth()->user()->name . ". Your previous approval was cleared and it has returned to step 1.")
+                        ->warning()
+                        ->sendToDatabase($approver);
+                }
+            }
 
             $voucher->approvals()->delete();
 

@@ -65,6 +65,10 @@ class VoucherPolicy
             if ($voucher->status === 'pending_checker' && $voucher->user_id === $user->id) {
                 return true;
             }
+            // Explicit permission to edit own vouchers regardless of approval step (as long as it's not paid)
+            if ($user->can('voucher.edit_own_undisbursed') && $voucher->user_id === $user->id) {
+                return true;
+            }
         }
 
         return false;

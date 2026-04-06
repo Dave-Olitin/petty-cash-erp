@@ -121,8 +121,8 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $voucher->category ? $voucher->category->name : '', // TRANS CAT
             $voucher->transaction_summary ?? '', // REMARKS
             $voucher->payee ?? '',
-            '', // P.O. NO.
-            '', // INVOICE NO.
+            $row->po_number ?? '', // P.O. NO.
+            $row->invoice_number ?? '', // INVOICE NO.
             $row->description ?? '', // DESCRIPTION
             $row->account_code ?? '', // ACCOUNT CODE
             $accountName, // ACCOUNT NAME

@@ -232,15 +232,43 @@
     </tr>
 </table>
 
+@php
+    $hasPo = $voucher->items->contains(function($item) {
+        return !empty($item->po_number);
+    });
+    $hasInv = $voucher->items->contains(function($item) {
+        return !empty($item->invoice_number);
+    });
+    
+    $extraCols = ($hasPo ? 1 : 0) + ($hasInv ? 1 : 0);
+@endphp
+
 <table class="ledger-table">
     <thead>
         <tr>
             <th class="col-branch" style="width: 8%;">BRANCH</th>
-            <th class="col-acct" style="width: 10%;">ACCT<br>CODE</th>
-            <th class="col-trn" style="width: 12%;">TRN</th>
-            <th class="col-detail" style="width: 30%;">ACCOUNT DETAILS</th>
-            <th class="col-dr" style="width: 20%;">DR</th>
-            <th class="col-cr" style="width: 20%;">CR</th>
+            <th class="col-acct" style="width: 9%;">ACCT<br>CODE</th>
+            <th class="col-trn" style="width: 9%;">TRN</th>
+            @if($hasPo)
+                <th class="col-po" style="width: 9%;">PO #</th>
+            @endif
+            @if($hasInv)
+                <th class="col-inv" style="width: 9%;">INV #</th>
+            @endif
+            
+            @if($extraCols == 2)
+                <th class="col-detail" style="width: 22%;">ACCOUNT DETAILS</th>
+                <th class="col-dr" style="width: 17%;">DR</th>
+                <th class="col-cr" style="width: 17%;">CR</th>
+            @elseif($extraCols == 1)
+                <th class="col-detail" style="width: 26%;">ACCOUNT DETAILS</th>
+                <th class="col-dr" style="width: 19%;">DR</th>
+                <th class="col-cr" style="width: 19%;">CR</th>
+            @else
+                <th class="col-detail" style="width: 34%;">ACCOUNT DETAILS</th>
+                <th class="col-dr" style="width: 20%;">DR</th>
+                <th class="col-cr" style="width: 20%;">CR</th>
+            @endif
         </tr>
     </thead>
     <tbody>
@@ -249,24 +277,30 @@
             <td class="col-branch">{{ strtoupper($item->branch_code ?? ($template?->branch_code ?? 'HQ')) }}</td>
             <td class="col-acct">{{ $item->account_code ?? '—' }}</td>
             <td class="col-trn">{{ $item->trn ?? '—' }}</td>
+            @if($hasPo)
+                <td class="col-po">{{ $item->po_number ?? '—' }}</td>
+            @endif
+            @if($hasInv)
+                <td class="col-inv">{{ $item->invoice_number ?? '—' }}</td>
+            @endif
             <td class="col-detail">{{ strtoupper($item->description ?? ($item->category?->name ?? '')) }}</td>
             <td class="col-dr">{{ $item->entry_type === 'debit' ? number_format($item->amount, 2) : '' }}</td>
             <td class="col-cr">{{ $item->entry_type === 'credit' ? number_format($item->amount, 2) : '' }}</td>
         </tr>
         @empty
         <tr>
-            <td colspan="6" style="text-align:center; padding: 10px;">No ledger entries</td>
+            <td colspan="{{ 6 + $extraCols }}" style="text-align:center; padding: 10px;">No ledger entries</td>
         </tr>
         @endforelse
         @if($voucher->items->count() < 5)
             @for($i = $voucher->items->count(); $i < 5; $i++)
-                <tr><td colspan="6" style="height: 22px;">&nbsp;</td></tr>
+                <tr><td colspan="{{ 6 + $extraCols }}" style="height: 22px;">&nbsp;</td></tr>
             @endfor
         @endif
     </tbody>
     <tfoot>
         <tr class="total-row">
-            <th colspan="4" class="lbl">TOTAL</th>
+            <th colspan="{{ 4 + $extraCols }}" class="lbl">TOTAL</th>
             <th class="col-dr">{{ number_format($totalDR, 2) }}</th>
             <th class="col-cr">{{ number_format($totalCR, 2) }}</th>
         </tr>

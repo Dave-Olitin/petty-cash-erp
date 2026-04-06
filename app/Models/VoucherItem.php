@@ -17,6 +17,8 @@ class VoucherItem extends Model
         'branch_code',
         'amount',
         'sort_order',
+        'po_number',
+        'invoice_number',
     ];
 
     protected function casts(): array

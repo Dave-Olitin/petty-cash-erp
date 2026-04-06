@@ -88,6 +88,10 @@ class VoucherResource extends Resource
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
+        // Scenario 4: Prevent deletion of paid physical cash vouchers
+        if ($record->status === 'paid') {
+            return false;
+        }
         return true; // Delegation to Policy
     }
 
@@ -126,6 +130,7 @@ class VoucherResource extends Resource
                                                 'petty_cash' => 'Petty Cash Request',
                                                 'payment' => 'Payment Voucher',
                                                 'receipt' => 'Receipt Voucher',
+                                                'bank_encashment' => 'Bank Encashment',
                                             ])
                                             ->required()
                                             ->default('payment')
@@ -371,6 +376,18 @@ class VoucherResource extends Resource
                                                     ->live(debounce: 500)
                                                     ->columnSpan(['default' => 1, 'md' => 12]),
 
+                                                Forms\Components\TextInput::make('po_number')
+                                                    ->label('PO Number')
+                                                    ->maxLength(255)
+                                                    ->placeholder('Optional')
+                                                    ->columnSpan(['default' => 1, 'md' => 6]),
+
+                                                Forms\Components\TextInput::make('invoice_number')
+                                                    ->label('Invoice Number')
+                                                    ->maxLength(255)
+                                                    ->placeholder('Optional')
+                                                    ->columnSpan(['default' => 1, 'md' => 6]),
+
                                                 Forms\Components\Hidden::make('description'),
                                             ]),
                                         ])
@@ -496,12 +513,14 @@ class VoucherResource extends Resource
                         'petty_cash' => 'info',
                         'payment' => 'warning',
                         'receipt' => 'success',
+                        'bank_encashment' => 'primary',
                         default => 'gray',
                     })
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'petty_cash' => 'Petty Cash',
                         'payment' => 'Payment',
                         'receipt' => 'Receipt',
+                        'bank_encashment' => 'Bank Encashment',
                         default => ucwords(str_replace('_', ' ', $state)),
                     }),
                 Tables\Columns\TextColumn::make('user.name')
@@ -554,6 +573,7 @@ class VoucherResource extends Resource
                         'petty_cash' => 'Petty Cash',
                         'payment' => 'Payment',
                         'receipt' => 'Receipt',
+                        'bank_encashment' => 'Bank Encashment',
                     ]),
 
                 Tables\Filters\SelectFilter::make('user_id')
@@ -718,7 +738,7 @@ class VoucherResource extends Resource
                     ->icon('heroicon-m-banknotes')
                     ->color('success')
                     ->iconButton()
-                    ->modalHeading(fn (Voucher $record) => $record->type === 'payment' ? 'Disburse via Cheque / Bank' : ($record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations'))
+                    ->modalHeading(fn (Voucher $record) => in_array($record->type, ['payment', 'bank_encashment']) ? 'Disburse via Cheque / Bank' : ($record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations'))
                     ->modalSubmitActionLabel('Process & Mark Paid')
                     ->mountUsing(function (Forms\Form $form, Voucher $record) {
                         $form->fill([
@@ -733,7 +753,7 @@ class VoucherResource extends Resource
                         
                         Forms\Components\Section::make('Cheque / Bank Transfer Details')
                             ->description('Confirm the final payment references for this voucher.')
-                            ->visible(fn (Voucher $record) => $record->type === 'payment')
+                            ->visible(fn (Voucher $record) => in_array($record->type, ['payment', 'bank_encashment']))
                             ->schema([
                                 Forms\Components\TextInput::make('cheque_no')
                                     ->label('Cheque / Ref No.')
@@ -748,7 +768,7 @@ class VoucherResource extends Resource
 
                         Forms\Components\Section::make('Cash Handover / Collection')
                             ->description(fn (Voucher $record) => new \Illuminate\Support\HtmlString("Voucher Amount: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Enter the bills/coins you hand over. Change back is auto-calculated."))
-                            ->visible(fn (Voucher $record) => $record->type !== 'payment')
+                            ->visible(fn (Voucher $record) => !in_array($record->type, ['payment', 'bank_encashment']))
                             ->schema([
                                 Forms\Components\Grid::make(3)->schema([
                                     Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->live()->minValue(0)
@@ -809,7 +829,7 @@ class VoucherResource extends Resource
                     ])
                     ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
                     ->action(function (Voucher $record, array $data) {
-                        if ($record->type === 'payment') {
+                        if (in_array($record->type, ['payment', 'bank_encashment'])) {
                             $record->update([
                                 'cheque_no' => $data['cheque_no'] ?? null,
                                 'cheque_date' => $data['cheque_date'] ?? null,
@@ -821,7 +841,7 @@ class VoucherResource extends Resource
                                 Notification::make()->title($error)->danger()->send();
                                 return;
                             }
-                            Notification::make()->title('Payment Voucher successfully disbursed')->success()->send();
+                            Notification::make()->title('Cheque details successfully recorded')->success()->send();
                             $record->refresh();
                             return;
                         }
@@ -930,7 +950,7 @@ class VoucherResource extends Resource
                         ->icon('heroicon-o-arrow-down-tray')
                         ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
                             return \Maatwebsite\Excel\Facades\Excel::download(
-                                new \App\Exports\VouchersExport(\App\Models\Voucher::whereIn('vouchers.id', $records->pluck('id'))),
+                                new \App\Exports\VouchersExport(\App\Models\Voucher::query()->whereIn('vouchers.id', $records->pluck('id'))),
                                 'vouchers_selected_' . now()->format('Y-m-d_H-i-s') . '.xlsx'
                             );
                         }),
@@ -1035,11 +1055,20 @@ class VoucherResource extends Resource
                             ->formatStateUsing(fn ($state) => match($state) {
                                 'petty_cash' => 'Petty Cash',
                                 'receipt' => 'Receipt Voucher',
+                                'bank_encashment' => 'Bank Encashment',
                                 default => 'Payment Voucher'
                             }),
                         \Filament\Infolists\Components\TextEntry::make('account_codes')
                             ->label('Account Code(s)')
                             ->getStateUsing(fn ($record) => $record->items->pluck('account_code')->unique()->implode(', ') ?: '—'),
+                        \Filament\Infolists\Components\TextEntry::make('po_numbers')
+                            ->label('PO Number(s)')
+                            ->getStateUsing(fn ($record) => $record->items->pluck('po_number')->filter()->unique()->implode(', ') ?: '—')
+                            ->visible(fn ($record) => $record->items->pluck('po_number')->filter()->isNotEmpty()),
+                        \Filament\Infolists\Components\TextEntry::make('invoice_numbers')
+                            ->label('Invoice Number(s)')
+                            ->getStateUsing(fn ($record) => $record->items->pluck('invoice_number')->filter()->unique()->implode(', ') ?: '—')
+                            ->visible(fn ($record) => $record->items->pluck('invoice_number')->filter()->isNotEmpty()),
                         \Filament\Infolists\Components\TextEntry::make('department')
                             ->label('Department')
                             ->placeholder('—'),
