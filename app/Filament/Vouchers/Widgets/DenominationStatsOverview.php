@@ -39,12 +39,16 @@ class DenominationStatsOverview extends BaseWidget
         $balance = $totalIn - $payments;
 
         return [
-            Stat::make('Total Cash In (Replenishments + Receipts)', 'AED ' . number_format($totalIn, 2))
-                ->description('Total cash physically deposited & tracked by denomination')
+            Stat::make('Cash In: Replenishments', 'AED ' . number_format($replenished, 2))
+                ->description('Physical cash added via Float Replenishment vouchers')
                 ->color('success')
+                ->icon('heroicon-o-arrow-down-tray'),
+            Stat::make('Cash In: Receipt Vouchers', 'AED ' . number_format($receipts, 2))
+                ->description('Physical cash received via RV (e.g. liquidation returns)')
+                ->color('info')
                 ->icon('heroicon-o-arrow-path'),
-            Stat::make('Total Cash Out (Payments + Petty Cash)', 'AED ' . number_format($payments, 2))
-                ->description('Total cash physically disbursed & tracked by denomination')
+            Stat::make('Total Cash Out (Petty Cash)', 'AED ' . number_format($payments, 2))
+                ->description('Physical cash disbursed from the safe via denomination tracking')
                 ->color('danger')
                 ->icon('heroicon-o-minus-circle'),
             Stat::make('TOTAL CASH IN BOX (Grand Total)', 'AED ' . number_format($balance, 2))

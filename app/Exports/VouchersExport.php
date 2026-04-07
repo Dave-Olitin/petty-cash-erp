@@ -83,15 +83,19 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $voucher = $row->voucher;
             return [
                 $voucher->voucher_number ?? '',
-                $voucher->type === 'petty_cash' ? 'Petty Cash' : 'Payment',
+                match($voucher->type) {
+                'petty_cash' => 'Petty Cash',
+                'receipt' => 'Receipt Voucher',
+                default => 'Payment Voucher',
+            },
                 $voucher->created_at ? $voucher->created_at->format('Y-m-d') : '',
                 '', // TRN
                 $voucher->department ?? '', // DEPARTMENT
                 $voucher->category ? $voucher->category->name : '', // TRANS CAT
                 $voucher->transaction_summary ?? '', // REMARKS
                 $voucher->payee ?? '',
-                '', // P.O. NO.
-                $voucher->cheque_no ?? '', // INVOICE NO.
+                '', // P.O. NO. — no items on this row
+                '', // INVOICE NO. — no items on this row
                 $voucher->description ?? '', // DESCRIPTION
                 '', // ACCOUNT CODE
                 '', // ACCOUNT NAME
@@ -114,7 +118,11 @@ class VouchersExport implements FromCollection, WithHeadings, WithMapping, Shoul
 
         return [
             $voucher->voucher_number ?? '',
-            $voucher->type === 'petty_cash' ? 'Petty Cash' : 'Payment',
+            match($voucher->type) {
+                'petty_cash' => 'Petty Cash',
+                'receipt' => 'Receipt Voucher',
+                default => 'Payment Voucher',
+            },
             $voucher->created_at ? $voucher->created_at->format('Y-m-d') : '',
             $row->trn ?? ($voucher->template ? $voucher->template->trn : ''), // TRN (Item TRN prioritised over Template)
             $voucher->department ?? '', // DEPARTMENT

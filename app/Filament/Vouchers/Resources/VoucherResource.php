@@ -130,7 +130,6 @@ class VoucherResource extends Resource
                                                 'petty_cash' => 'Petty Cash Request',
                                                 'payment' => 'Payment Voucher',
                                                 'receipt' => 'Receipt Voucher',
-                                                'bank_encashment' => 'Bank Encashment',
                                             ])
                                             ->required()
                                             ->default('payment')
@@ -404,13 +403,18 @@ class VoucherResource extends Resource
                                         )
                                         ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
                                             $items = $get('items') ?? [];
-                                            $totalDebit = 0;
+                                            $type  = $get('type'); // e.g. 'receipt', 'petty_cash', 'payment'
+
+                                            // Receipt vouchers are credit-based; all others are debit-based.
+                                            $targetType = ($type === 'receipt') ? 'credit' : 'debit';
+
+                                            $total = 0;
                                             foreach ($items as $item) {
-                                                if (($item['entry_type'] ?? 'debit') === 'debit') {
-                                                    $totalDebit += (float) ($item['amount'] ?? 0);
+                                                if (($item['entry_type'] ?? 'debit') === $targetType) {
+                                                    $total += (float) ($item['amount'] ?? 0);
                                                 }
                                             }
-                                            $set('amount', number_format($totalDebit, 2, '.', ''));
+                                            $set('amount', number_format($total, 2, '.', ''));
                                         })
                                         ->live(),
                         ]),

@@ -79,6 +79,12 @@ class VoucherPolicy
      */
     public function delete(User $user, Voucher $voucher): bool
     {
+        // Paid vouchers can NEVER be deleted — the audit trail is immutable.
+        // Use a Liquidation settlement / Receipt Voucher to correct the float instead.
+        if ($voucher->status === 'paid') {
+            return false;
+        }
+
         if (!$user->can('voucher.delete')) {
             return false;
         }

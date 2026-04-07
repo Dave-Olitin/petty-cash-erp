@@ -124,6 +124,9 @@ class VoucherObserver
                     ]);
                 }
             }
+
+            // Bust the float widget cache on every paid status change
+            \Illuminate\Support\Facades\Cache::forget('head_office_float_widget_stats');
         }
 
         // ── Mark overdue liquidations ──────────────────────────────────────────

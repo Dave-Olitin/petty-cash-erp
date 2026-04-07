@@ -324,6 +324,16 @@ class LiquidationResource extends Resource
                     ->visible(fn ($record) => $record->status === 'pending'
                         && ! auth()->user()->hasRole('Approver'))
                     ->url(fn ($record) => static::getUrl('edit', ['record' => $record])),
+
+                Tables\Actions\Action::make('edit_settled')
+                    ->label('Edit Settlement')
+                    ->icon('heroicon-m-pencil-square')
+                    ->color('warning')
+                    ->tooltip('Override a settled liquidation (fully audited)')
+                    ->visible(fn ($record) => in_array($record->status, ['complete', 'excess', 'short'])
+                        && auth()->user()->can('liquidation.edit_settled'))
+                    ->url(fn ($record) => static::getUrl('edit', ['record' => $record])),
+
                 Tables\Actions\ViewAction::make(),
             ])
             ->bulkActions([]);

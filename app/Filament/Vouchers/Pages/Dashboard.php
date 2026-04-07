@@ -58,18 +58,52 @@ class Dashboard extends \Filament\Pages\Dashboard
                         ->description('Required: total must equal the replenishment amount above.')
                         ->schema([
                             Forms\Components\Grid::make(3)->schema([
-                                Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('bill_500')->label('500 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('bill_200')->label('200 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('bill_100')->label('100 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('bill_50')->label('50 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('bill_20')->label('20 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('bill_10')->label('10 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('bill_5')->label('5 Bills')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('coin_1')->label('1 Coins')->numeric()->default(0)->minValue(0),
-                                Forms\Components\TextInput::make('coin_0_50')->label('0.50 Coins')->numeric()->default(0)->step('1')->minValue(0),
-                                Forms\Components\TextInput::make('coin_0_25')->label('0.25 Coins')->numeric()->default(0)->step('1')->minValue(0),
+                                Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('bill_500')->label('500 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('bill_200')->label('200 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('bill_100')->label('100 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('bill_50')->label('50 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('bill_20')->label('20 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('bill_10')->label('10 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('bill_5')->label('5 Bills')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('coin_1')->label('1 Coins')->numeric()->default(0)->minValue(0)->live(),
+                                Forms\Components\TextInput::make('coin_0_50')->label('0.50 Coins')->numeric()->default(0)->step('1')->minValue(0)->live(),
+                                Forms\Components\TextInput::make('coin_0_25')->label('0.25 Coins')->numeric()->default(0)->step('1')->minValue(0)->live(),
                             ]),
+                            Forms\Components\Placeholder::make('denom_total')
+                                ->label('Live Cash Total')
+                                ->content(function (\Filament\Forms\Get $get) {
+                                    $total = ((int) ($get('bill_1000') ?: 0) * 1000)
+                                        + ((int) ($get('bill_500') ?: 0) * 500)
+                                        + ((int) ($get('bill_200') ?: 0) * 200)
+                                        + ((int) ($get('bill_100') ?: 0) * 100)
+                                        + ((int) ($get('bill_50') ?: 0) * 50)
+                                        + ((int) ($get('bill_20') ?: 0) * 20)
+                                        + ((int) ($get('bill_10') ?: 0) * 10)
+                                        + ((int) ($get('bill_5') ?: 0) * 5)
+                                        + ((int) ($get('coin_1') ?: 0) * 1)
+                                        + ((int) ($get('coin_0_50') ?: 0) * 0.50)
+                                        + ((int) ($get('coin_0_25') ?: 0) * 0.25);
+
+                                    $target = (float) ($get('amount') ?: 0);
+                                    
+                                    $diff = round($total - $target, 2);
+                                    $diffText = '';
+                                    
+                                    if ($target > 0) {
+                                        if ($diff === 0.0) {
+                                            $diffText = ' <span style="color: green;">(Matches Target ✅)</span>';
+                                        } elseif ($diff > 0) {
+                                            $diffText = ' <span style="color: orange;">(Over by AED ' . number_format($diff, 2) . ' ⚠️)</span>';
+                                        } else {
+                                            $diffText = ' <span style="color: red;">(Short by AED ' . number_format(abs($diff), 2) . ' ⚠️)</span>';
+                                        }
+                                    }
+
+                                    return new \Illuminate\Support\HtmlString(
+                                        '<strong style="font-size: 1.25rem;">AED ' . number_format($total, 2) . '</strong>' . $diffText
+                                    );
+                                }),
                         ]),
                 ])
                 ->mutateFormDataUsing(function (array $data): array {

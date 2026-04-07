@@ -22,17 +22,19 @@ class HeadOfficeFloatWidget extends BaseWidget
         $data = \Illuminate\Support\Facades\Cache::remember('head_office_float_widget_stats', 60, function () {
             $totalReplenishing = FloatReplenishment::sum('amount');
             
-            // Sum paid petty cash vouchers
+            // Sum paid petty cash vouchers (outgoing)
             $totalSpent = Voucher::where('type', 'petty_cash')
                 ->where('status', 'paid')
                 ->sum('amount');
                 
-            // Sum cash returned during liquidation settlements
-            $totalReturned = \App\Models\Liquidation::sum('amount_returned');
+            // Sum all paid receipt vouchers (incoming cash, including liquidation returns and manual receipts)
+            $totalReceipts = Voucher::where('type', 'receipt')
+                ->where('status', 'paid')
+                ->sum('amount');
 
-            $currentBalance = $totalReplenishing - $totalSpent + $totalReturned;
+            $currentBalance = $totalReplenishing - $totalSpent + $totalReceipts;
             
-            return compact('totalReplenishing', 'totalSpent', 'totalReturned', 'currentBalance');
+            return compact('totalReplenishing', 'totalSpent', 'totalReceipts', 'currentBalance');
         });
 
         extract($data);
