@@ -78,4 +78,8 @@
         background: #e0e7ff !important;
         color: #4f46e5 !important;
     }
+
+    .max-w-7xl {
+        max-width: 100% !important;
+    }
 </style>
