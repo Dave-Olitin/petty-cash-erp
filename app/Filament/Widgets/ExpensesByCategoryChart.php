@@ -12,6 +12,27 @@ class ExpensesByCategoryChart extends ChartWidget
     protected static ?string $heading = 'Expenses by Category';
     protected static ?int $sort = 3;
     protected static ?string $maxHeight = '320px';
+    protected static ?string $footer = 'Note: Amounts are shown in AED';
+
+    public function getDescription(): ?string
+    {
+        $user      = auth()->user();
+        $startDate = $this->filters['startDate'] ?? null;
+        $endDate   = $this->filters['endDate'] ?? null;
+        $branchId  = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
+
+        $total = \App\Models\TransactionItem::query()
+            ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->where('transactions.type', 'EXPENSE')
+            ->whereNull('transactions.deleted_at')
+            ->where('transactions.status', '!=', 'rejected')
+            ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
+            ->when($endDate,   fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
+            ->when($branchId,  fn($q) => $q->where('transactions.branch_id', $branchId))
+            ->sum('transaction_items.total_price');
+
+        return "Total Expenses: AED " . number_format($total, 2);
+    }
 
     protected function getData(): array
     {

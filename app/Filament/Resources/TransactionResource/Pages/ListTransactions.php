@@ -5,6 +5,7 @@ namespace App\Filament\Resources\TransactionResource\Pages;
 use App\Filament\Resources\TransactionResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
 
 class ListTransactions extends ListRecords
 {
@@ -97,20 +98,32 @@ class ListTransactions extends ListRecords
 
     public function getTabs(): array
     {
-        return [
-            'pending' => \Filament\Resources\Components\Tab::make('Pending')
-                ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'pending'))
-                ->badge(TransactionResource::getEloquentQuery()->where('status', 'pending')->count())
-                ->badgeColor('warning'),
-            'approved' => \Filament\Resources\Components\Tab::make('Approved')
-                ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'approved'))
-                ->badge(TransactionResource::getEloquentQuery()->where('status', 'approved')->count())
-                ->badgeColor('success'),
-            'rejected' => \Filament\Resources\Components\Tab::make('Rejected')
-                ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'rejected'))
-                ->badge(TransactionResource::getEloquentQuery()->where('status', 'rejected')->count())
-                ->badgeColor('danger'),
+        $tabs = [
             'all' => \Filament\Resources\Components\Tab::make('All Transactions'),
         ];
+
+        if (auth()->user()->isHeadOffice()) {
+            $tabs['unassigned'] = \Filament\Resources\Components\Tab::make('Unassigned')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('items', fn ($q) => $q->whereNull('account_code_id')))
+                ->badge(TransactionResource::getEloquentQuery()->whereHas('items', fn ($q) => $q->whereNull('account_code_id'))->count())
+                ->badgeColor('danger');
+        }
+
+        $tabs['pending'] = \Filament\Resources\Components\Tab::make('Pending')
+            ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'pending'))
+            ->badge(TransactionResource::getEloquentQuery()->where('status', 'pending')->count())
+            ->badgeColor('warning');
+
+        $tabs['approved'] = \Filament\Resources\Components\Tab::make('Approved')
+            ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'approved'))
+            ->badge(TransactionResource::getEloquentQuery()->where('status', 'approved')->count())
+            ->badgeColor('success');
+
+        $tabs['rejected'] = \Filament\Resources\Components\Tab::make('Rejected')
+            ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('status', 'rejected'))
+            ->badge(TransactionResource::getEloquentQuery()->where('status', 'rejected')->count())
+            ->badgeColor('danger');
+
+        return $tabs;
     }
 }

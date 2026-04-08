@@ -402,6 +402,17 @@ public static function table(Table $table): Table
                 ->searchable()
                 ->preload(),
 
+            Tables\Filters\TernaryFilter::make('account_assignment')
+                ->label('Account Assignment')
+                ->placeholder('All Transactions')
+                ->trueLabel('Unassigned Only')
+                ->falseLabel('Fully Assigned')
+                ->queries(
+                    true: fn (Builder $query) => $query->whereHas('items', fn ($q) => $q->whereNull('account_code_id')),
+                    false: fn (Builder $query) => $query->whereDoesntHave('items', fn ($q) => $q->whereNull('account_code_id')),
+                )
+                ->visible(fn () => auth()->user()->isHeadOffice()),
+
             Tables\Filters\Filter::make('created_at')
                 ->form([
                     Forms\Components\DatePicker::make('created_from'),
