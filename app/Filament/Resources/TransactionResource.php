@@ -87,34 +87,43 @@ public static function form(Form $form): Form
                                 ->preload()
                                 ->required()
                                 ->visible(fn () => auth()->user()->isHeadOffice()), // Only HO can see/set
-                            Forms\Components\TextInput::make('name')
-                                ->required(),
                             Forms\Components\TextInput::make('quantity')
+                                ->label('Qty')
                                 ->numeric()
                                 ->default(1)
                                 ->required()
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat'))),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat')))
+                                ->prefix('x')
+                                ->columnSpan(1),
                             Forms\Components\TextInput::make('unit_price')
+                                ->label('Unit Price')
                                 ->numeric()
                                 ->default(0)
                                 ->required()
                                 ->prefix('AED')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat'))),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat')))
+                                ->columnSpan(1)
+                                ->extraInputAttributes(['class' => 'font-mono']),
                             Forms\Components\TextInput::make('vat')
                                 ->label('VAT')
                                 ->numeric()
                                 ->default(0)
-                                ->prefix('AED')
+                                ->prefix('Σ')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state)),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state))
+                                ->columnSpan(1)
+                                ->extraInputAttributes(['class' => 'font-mono']),
                             Forms\Components\TextInput::make('total_price')
+                                ->label('Line Total')
                                 ->numeric()
                                 ->readOnly()
                                 ->prefix('AED')
                                 ->default(0)
-                                ->dehydrated(),
+                                ->dehydrated()
+                                ->columnSpan(1)
+                                ->extraInputAttributes(['class' => 'font-mono font-bold text-primary-600']),
                         ])
                         ->columns(['default' => 1, 'md' => 3, 'lg' => 6]) // Progressive breakpoints for mobile/tablet/desktop
                         ->columnSpanFull()
@@ -126,56 +135,19 @@ public static function form(Form $form): Form
                             $set('amount', $itemTotal + $globalVat);
                         }),
                     
-                    Forms\Components\Group::make()
+                    Forms\Components\Grid::make(3)
                         ->schema([
-                            Forms\Components\TextInput::make('vat')
-                                ->label('VAT (Receipt Level)')
-                                ->helperText('Use this if VAT is applied to the receipt total, not per item.')
-                                ->numeric()
-                                ->default(0)
-                                ->prefix('AED')
-                                ->live(onBlur: true)
-                                ->afterStateUpdated(function (callable $get, callable $set) {
-                                    $items = $get('items');
-                                    $itemTotal = collect($items)->sum(fn($item) => ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)) + (float) ($item['vat'] ?? 0));
-                                    $globalVat = (float) $get('vat');
-                                    $set('amount', $itemTotal + $globalVat);
-                                }),
-
-                            Forms\Components\TextInput::make('amount')
+                            Forms\Components\Placeholder::make('vat_placeholder')
+                                ->label('Receipt VAT')
+                                ->content(fn ($get) => new \Illuminate\Support\HtmlString('<div class="text-lg font-mono">' . number_format((float)$get('vat'), 2) . ' <span class="text-xs">AED</span></div>')),
+                            
+                            Forms\Components\Placeholder::make('amount_placeholder')
                                 ->label('Grand Total')
-                                ->numeric()
-                                ->prefix('AED')
-                                ->readOnly()
-                                ->required()
-                                ->live()
-                                ->default(0)
-                                ->dehydrated()
-                                ->rule(function (callable $get) {
-                                    return function (string $attribute, $value, \Closure $fail) use ($get) {
-                                        $type = $get('type');
-                                        $branchId = $get('branch_id') ?? auth()->user()->branch_id;
-                                        
-                                        if (!$branchId) return;
+                                ->content(fn ($get) => new \Illuminate\Support\HtmlString('<div class="text-3xl font-mono font-bold text-primary-600">' . number_format((float)$get('amount'), 2) . ' <span class="text-xs font-normal">AED</span></div>')),
 
-                                        $branch = \App\Models\Branch::find($branchId);
-
-                                        // Rule 1: Replenishment -> No limits
-                                        if ($type === 'REPLENISHMENT') return;
-
-                                        // Rule 2: Expense -> Check Balance
-                                        if ($value > $branch->current_balance) {
-                                            $fail("Insufficient funds! The branch only has AED {$branch->current_balance}.");
-                                        }
-
-                                        // Rule 3: Expense -> Check Transaction Limit
-                                        if ($branch->transaction_limit && $value > $branch->transaction_limit) {
-                                            $fail("Amount exceeds the branch transaction limit of AED {$branch->transaction_limit}.");
-                                        }
-                                    };
-                                }),
+                            Forms\Components\Hidden::make('vat')->default(0),
+                            Forms\Components\Hidden::make('amount')->default(0),
                         ])
-                        ->columns(2)
                         ->columnSpanFull(),
 
                     Forms\Components\Textarea::make('description')
@@ -276,16 +248,37 @@ public static function form(Form $form): Form
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('items')
                             ->schema([
-                                Infolists\Components\TextEntry::make('category.name')
-                                    ->label('Category')
-                                    ->default('N/A'),
-                                Infolists\Components\TextEntry::make('name')->label('Item'),
-                                Infolists\Components\TextEntry::make('quantity')->label('Qty'),
-                                Infolists\Components\TextEntry::make('unit_price')->money('AED')->label('Unit Price'),
-                                Infolists\Components\TextEntry::make('vat')->money('AED')->label('VAT'),
-                                Infolists\Components\TextEntry::make('total_price')->money('AED')->label('Total'),
+                                Infolists\Components\Grid::make(12)
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('category.name')
+                                            ->label('Category')
+                                            ->default('N/A')
+                                            ->columnSpan(2),
+                                        Infolists\Components\TextEntry::make('name')
+                                            ->label('Item')
+                                            ->columnSpan(3),
+                                        Infolists\Components\TextEntry::make('quantity')
+                                            ->label('Qty')
+                                            ->columnSpan(1),
+                                        Infolists\Components\TextEntry::make('unit_price')
+                                            ->label('Unit Price')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono text-gray-600'])
+                                            ->columnSpan(2),
+                                        Infolists\Components\TextEntry::make('vat')
+                                            ->label('VAT')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono text-gray-600 text-xs'])
+                                            ->columnSpan(2),
+                                        Infolists\Components\TextEntry::make('total_price')
+                                            ->label('Line Total')
+                                            ->money('AED')
+                                            ->weight('bold')
+                                            ->extraAttributes(['class' => 'font-mono text-primary-600'])
+                                            ->columnSpan(2),
+                                    ])
                             ])
-                            ->columns(5),
+                            ->columns(1),
                     ]),
 
                 Infolists\Components\Section::make('Receipt')
@@ -476,14 +469,9 @@ public static function table(Table $table): Table
                     ->action(function (Transaction $record) {
                         $path = $record->receipt_path;
                         
-                        // Check 'local' disk (New secure files)
+                        // Check 'local' disk (Secure files)
                         if (\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
                             return response()->download(\Illuminate\Support\Facades\Storage::disk('local')->path($path));
-                        }
-
-                        // Check 'public' disk (Legacy insecure files)
-                        if (\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
-                            return response()->download(\Illuminate\Support\Facades\Storage::disk('public')->path($path));
                         }
 
                         // File not found

@@ -23,6 +23,28 @@ class EditVoucher extends EditRecord
     {
         $voucher = $this->record;
 
+        // VAL: If this is an auto-generated RV from liquidation, its amount must perfectly match the liquidation return.
+        if ($voucher->type === 'receipt' && str_contains($voucher->description, 'LIQUIDATION OF')) {
+            preg_match('/LIQUIDATION OF (.*)$/', $voucher->description, $matches);
+            if (isset($matches[1])) {
+                $pcvNumber = rtrim($matches[1], '. ');
+                $pcv = \App\Models\Voucher::where('voucher_number', $pcvNumber)->first();
+                if ($pcv && $pcv->liquidation) {
+                    $expectedAmount = (float) $pcv->liquidation->amount_returned;
+                    $newAmount = (float) ($data['amount'] ?? 0);
+                    if (abs($expectedAmount - $newAmount) > 0.01) {
+                        \Filament\Notifications\Notification::make()
+                            ->title('Protection Triggered')
+                            ->body("This voucher is locked to the Liquidation of {$pcvNumber}. The amount MUST match the cash returned in the settlement (AED " . number_format($expectedAmount, 2) . "). If you need this changed, please edit the Liquidation instead.")
+                            ->danger()
+                            ->persistent()
+                            ->send();
+                        $this->halt();
+                    }
+                }
+            }
+        }
+
         // SCENARIO 1: Voucher was already APPROVED or mid-approver-chain.
         // Wipe all signatures and restart the approval chain.
         if (in_array($voucher->status, ['approved', 'pending_approver'])) {

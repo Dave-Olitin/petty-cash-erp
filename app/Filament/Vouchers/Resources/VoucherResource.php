@@ -298,96 +298,102 @@ class VoucherResource extends Resource
                                                     ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
                                                     ->columnSpan(['default' => 1, 'md' => 6]),
 
-                                                Forms\Components\Select::make('account_code')
-                                                    ->label('Account Code')
-                                                    ->searchable()
-                                                    ->allowHtml()
-                                                    ->getSearchResultsUsing(function (string $search) {
-                                                        return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
-                                                            ->orWhere('name', 'like', "%{$search}%")
-                                                            ->limit(30)
-                                                            ->get()
-                                                            ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
-                                                            ->toArray();
-                                                    })
-                                                    ->getOptionLabelUsing(fn (?string $value) => $value
-                                                        ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
-                                                            ? "{$ac->code} — {$ac->name}"
-                                                            : $value
-                                                        : null
-                                                    )
-                                                    ->createOptionForm([
-                                                        Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
-                                                        Forms\Components\TextInput::make('name')->required(),
-                                                    ])
-                                                    ->createOptionUsing(function (array $data) {
-                                                        \App\Models\AccountCode::create($data);
-                                                        return $data['code'];
-                                                    })
-                                                    ->live(debounce: 500)
-                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
-                                                        if (blank($state)) return;
-                                                        $account = \App\Models\AccountCode::where('code', $state)->first();
-                                                        if ($account) {
-                                                            $set('description', $account->name);
-                                                        }
-                                                    })
-                                                    ->columnSpan(['default' => 1, 'md' => 12]),
-
-                                                Forms\Components\Select::make('trn')
-                                                    ->label('TRN (Optional)')
-                                                    ->searchable()
-                                                    ->allowHtml()
-                                                    ->getSearchResultsUsing(function (string $search) {
-                                                        return \App\Models\TaxRegistration::where('trn', 'like', "%{$search}%")
-                                                            ->orWhere('name', 'like', "%{$search}%")
-                                                            ->limit(30)
-                                                            ->get()
-                                                            ->mapWithKeys(fn ($tax) => [$tax->trn => $tax->trn . ' — <span class="text-xs text-gray-500">' . $tax->name . '</span>'])
-                                                            ->toArray();
-                                                    })
-                                                    ->getOptionLabelUsing(fn (?string $value) => $value
-                                                        ? (($tax = \App\Models\TaxRegistration::where('trn', $value)->first())
-                                                            ? "{$tax->trn} — {$tax->name}"
-                                                            : $value)
-                                                        : null
-                                                    )
-                                                    ->createOptionForm([
-                                                        Forms\Components\TextInput::make('trn')
-                                                            ->label('TRN Number')
+                                                Forms\Components\Grid::make(12)
+                                                    ->schema([
+                                                        Forms\Components\Select::make('entry_type')
+                                                            ->label('Type')
+                                                            ->options(['debit' => 'DR', 'credit' => 'CR'])
                                                             ->required()
-                                                            ->unique('tax_registrations', 'trn'),
-                                                        Forms\Components\TextInput::make('name')
-                                                            ->label('Vendor / Company Name')
-                                                            ->required(),
-                                                    ])
-                                                    ->createOptionUsing(function (array $data) {
-                                                        \App\Models\TaxRegistration::create($data);
-                                                        return $data['trn'];
-                                                    })
-                                                    ->columnSpan(['default' => 1, 'md' => 12]),
-
-                                                Forms\Components\TextInput::make('amount')
-                                                    ->numeric()
-                                                    ->required()
-                                                    ->prefix('AED')
-                                                    ->default(0)
-                                                    ->live(debounce: 500)
-                                                    ->columnSpan(['default' => 1, 'md' => 12]),
-
-                                                Forms\Components\TextInput::make('po_number')
-                                                    ->label('PO Number')
-                                                    ->maxLength(255)
-                                                    ->placeholder('Optional')
-                                                    ->columnSpan(['default' => 1, 'md' => 6]),
-
-                                                Forms\Components\TextInput::make('invoice_number')
-                                                    ->label('Invoice Number')
-                                                    ->maxLength(255)
-                                                    ->placeholder('Optional')
-                                                    ->columnSpan(['default' => 1, 'md' => 6]),
-
-                                                Forms\Components\Hidden::make('description'),
+                                                            ->selectablePlaceholder(false)
+                                                            ->columnSpan(1),
+                                                        Forms\Components\Select::make('account_code')
+                                                            ->label('Account Code')
+                                                            ->searchable()
+                                                            ->allowHtml()
+                                                            ->getSearchResultsUsing(function (string $search) {
+                                                                return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
+                                                                    ->orWhere('name', 'like', "%{$search}%")
+                                                                    ->limit(30)
+                                                                    ->get()
+                                                                    ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
+                                                                    ->toArray();
+                                                            })
+                                                            ->getOptionLabelUsing(fn (?string $value) => $value
+                                                                ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                                                    ? "{$ac->code} — {$ac->name}"
+                                                                    : $value
+                                                                : null
+                                                            )
+                                                            ->createOptionForm([
+                                                                Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
+                                                                Forms\Components\TextInput::make('name')->required(),
+                                                            ])
+                                                            ->createOptionUsing(function (array $data) {
+                                                                \App\Models\AccountCode::create($data);
+                                                                return $data['code'];
+                                                            })
+                                                            ->live(debounce: 500)
+                                                            ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
+                                                                if (blank($state)) return;
+                                                                $account = \App\Models\AccountCode::where('code', $state)->first();
+                                                                if ($account) {
+                                                                    $set('description', $account->name);
+                                                                }
+                                                            })
+                                                            ->columnSpan(5),
+                                                        Forms\Components\Select::make('trn')
+                                                            ->label('Supplier (TRN)')
+                                                            ->searchable()
+                                                            ->allowHtml()
+                                                            ->getSearchResultsUsing(function (string $search) {
+                                                                return \App\Models\TaxRegistration::where('trn', 'like', "%{$search}%")
+                                                                    ->orWhere('name', 'like', "%{$search}%")
+                                                                    ->limit(30)
+                                                                    ->get()
+                                                                    ->mapWithKeys(fn ($tax) => [$tax->trn => $tax->trn . ' — <span class="text-xs text-gray-500">' . $tax->name . '</span>'])
+                                                                    ->toArray();
+                                                            })
+                                                            ->getOptionLabelUsing(fn (?string $value) => $value
+                                                                ? (($tax = \App\Models\TaxRegistration::where('trn', $value)->first())
+                                                                    ? "{$tax->trn} — {$tax->name}"
+                                                                    : $value)
+                                                                : null
+                                                            )
+                                                            ->createOptionForm([
+                                                                Forms\Components\TextInput::make('trn')
+                                                                    ->label('TRN Number')
+                                                                    ->required()
+                                                                    ->unique('tax_registrations', 'trn'),
+                                                                Forms\Components\TextInput::make('name')
+                                                                    ->label('Vendor / Company Name')
+                                                                    ->required(),
+                                                            ])
+                                                            ->createOptionUsing(function (array $data) {
+                                                                \App\Models\TaxRegistration::create($data);
+                                                                return $data['trn'];
+                                                            })
+                                                            ->columnSpan(4),
+                                                        Forms\Components\TextInput::make('amount')
+                                                            ->numeric()
+                                                            ->required()
+                                                            ->prefix('AED')
+                                                            ->default(0)
+                                                            ->live(debounce: 500)
+                                                            ->columnSpan(2)
+                                                            ->extraInputAttributes(['class' => 'font-mono text-right text-primary-600 font-bold']),
+                                                        
+                                                        Forms\Components\TextInput::make('po_number')
+                                                            ->label('PO #')
+                                                            ->maxLength(255)
+                                                            ->placeholder('Optional')
+                                                            ->columnSpan(6),
+                                                        Forms\Components\TextInput::make('invoice_number')
+                                                            ->label('Inv #')
+                                                            ->maxLength(255)
+                                                            ->placeholder('Optional')
+                                                            ->columnSpan(6),
+                                                        Forms\Components\Hidden::make('description'),
+                                                    ]),
                                             ]),
                                         ])
                                         ->defaultItems(2)
@@ -425,14 +431,11 @@ class VoucherResource extends Resource
                         ->description('STEP 3')
                         ->schema([
                                 Forms\Components\Group::make()->schema([
-                                    Forms\Components\TextInput::make('amount')
-                                        ->label('Total Amount')
-                                        ->numeric()
-                                        ->prefix('AED')
-                                        ->required()
-                                        ->readOnly()
-                                        ->helperText('Auto-calculated from debit entries above.')
-                                        ->columnSpanFull(),
+                                    Forms\Components\Placeholder::make('amount_placeholder')
+                                        ->label('Voucher Total')
+                                        ->content(fn ($get) => new \Illuminate\Support\HtmlString('<div class="text-3xl font-mono font-bold text-primary-600">' . number_format((float)($get('amount') ?? 0), 2) . ' <span class="text-xs font-normal text-gray-400">AED</span></div>')),
+                                    
+                                    Forms\Components\Hidden::make('amount')->required(),
 
                                     Forms\Components\Textarea::make('transaction_summary')
                                         ->label('Remarks')
@@ -1112,6 +1115,45 @@ class VoucherResource extends Resource
                             ->html()
                             ->listWithLineBreaks(),
                     ])->columns(4),
+
+                \Filament\Infolists\Components\Section::make('Voucher Line Items')
+                    ->schema([
+                        \Filament\Infolists\Components\RepeatableEntry::make('items')
+                            ->label('')
+                            ->schema([
+                                \Filament\Infolists\Components\Grid::make(12)
+                                    ->schema([
+                                        \Filament\Infolists\Components\TextEntry::make('entry_type')
+                                            ->label('Type')
+                                            ->badge()
+                                            ->color(fn ($state) => $state === 'debit' ? 'success' : 'danger')
+                                            ->formatStateUsing(fn ($state) => strtoupper($state))
+                                            ->columnSpan(1),
+                                        \Filament\Infolists\Components\TextEntry::make('account_code')
+                                            ->label('Account')
+                                            ->columnSpan(5),
+                                        \Filament\Infolists\Components\TextEntry::make('trn')
+                                            ->label('TRN/Supplier')
+                                            ->placeholder('—')
+                                            ->columnSpan(4),
+                                        \Filament\Infolists\Components\TextEntry::make('amount')
+                                            ->label('Amount')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono font-bold text-right'])
+                                            ->columnSpan(2),
+                                        
+                                        \Filament\Infolists\Components\TextEntry::make('po_number')
+                                            ->label('PO #')
+                                            ->placeholder('—')
+                                            ->columnSpan(6),
+                                        \Filament\Infolists\Components\TextEntry::make('invoice_number')
+                                            ->label('Invoice #')
+                                            ->placeholder('—')
+                                            ->columnSpan(6),
+                                    ])
+                            ])
+                            ->columns(1)
+                    ]),
 
                 // ── CASH DENOMINATIONS: Displayed if filled ──────────────────────
                 \Filament\Infolists\Components\Section::make('Cash Denominations breakdown')

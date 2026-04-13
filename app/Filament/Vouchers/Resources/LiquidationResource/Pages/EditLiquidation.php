@@ -50,7 +50,11 @@ class EditLiquidation extends EditRecord
         $diff = round(($spent + $returned) - $original, 2);
 
         $data['amount_short'] = max(0, -$diff);
-        $data['liquidated_at'] = now();
+
+        // Only stamp the time when the liquidation is first settled, not on subsequent edits
+        if (empty($this->getRecord()->liquidated_at)) {
+            $data['liquidated_at'] = now();
+        }
 
         $data['status'] = match (true) {
             abs($diff) <= 0.01 => 'complete',

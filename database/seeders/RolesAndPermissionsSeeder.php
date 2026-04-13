@@ -37,6 +37,17 @@ class RolesAndPermissionsSeeder extends Seeder
             // Float management
             'voucher.manage_float', // Can view/add head office float replenishments
 
+            // Accounting
+            'journal_entry.view', // Can view journal entries
+            'journal_entry.create',
+            'journal_entry.edit',
+            'journal_entry.delete',
+            
+            'purchase_entry.view', // Can view purchase entries
+            'purchase_entry.create',
+            'purchase_entry.edit',
+            'purchase_entry.delete',
+
             // Settings
             'manage_settings', // Can view Roles, Permissions, Categories, etc.
         ];
@@ -69,6 +80,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'voucher.reject',
             'voucher.pay',
             'voucher.manage_float',
+            'journal_entry.view',
+            'journal_entry.create',
+            'journal_entry.edit',
+            'journal_entry.delete',
+            'purchase_entry.view',
+            'purchase_entry.create',
+            'purchase_entry.edit',
+            'purchase_entry.delete',
         ]);
 
         // APPROVER — can view and give final approval/rejection

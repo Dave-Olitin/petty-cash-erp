@@ -241,6 +241,18 @@ class VoucherApprovalService
             $locked->load('user');
             try {
                 $locked->user?->notify(new VoucherStatusNotification($locked, 'paid'));
+
+                // Send early disbursement notification to Approvers if paying before final approval
+                if ($previousStatus !== VoucherStatus::Approved->value) {
+                    $approvers = User::role(['Approver', 'Admin', 'Super Admin'])->get();
+                    if ($approvers->isNotEmpty()) {
+                        \Filament\Notifications\Notification::make()
+                            ->title('Early Disbursement Alert')
+                            ->body("Voucher {$locked->voucher_number} was disbursed early by {$actor->name}. Please review.")
+                            ->warning()
+                            ->sendToDatabase($approvers);
+                    }
+                }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Voucher Mark Paid Notification Failed: ' . $e->getMessage());
             }

@@ -50,16 +50,23 @@ class LiquidationResource extends Resource
                 ->schema([
                     Forms\Components\Select::make('voucher_id')
                         ->label('Petty Cash Voucher')
-                        ->options(
-                            Voucher::where('type', 'petty_cash')
+                        ->options(function (?Liquidation $record) {
+                            // Include the currently-linked voucher even if already liquidated
+                            $currentId = $record?->voucher_id;
+
+                            $query = Voucher::where('type', 'petty_cash')
                                 ->where('status', 'paid')
-                                ->whereIn('liquidation_status', ['pending', 'overdue'])
-                                ->with('liquidation')
-                                ->get()
-                                ->mapWithKeys(fn ($v) => [
-                                    $v->id => $v->voucher_number . ' — ' . $v->payee . ' (AED ' . number_format($v->amount, 2) . ')'
-                                ])->toArray()
-                        )
+                                ->where(function ($q) use ($currentId) {
+                                    $q->whereIn('liquidation_status', ['pending', 'overdue']);
+                                    if ($currentId) {
+                                        $q->orWhere('id', $currentId);
+                                    }
+                                });
+
+                            return $query->get()->mapWithKeys(
+                                fn ($v) => [$v->id => $v->voucher_number . ' — ' . $v->payee . ' (AED ' . number_format($v->amount, 2) . ')']
+                            )->toArray();
+                        })
                         ->searchable()
                         ->required()
                         ->live()
@@ -92,7 +99,7 @@ class LiquidationResource extends Resource
                     Forms\Components\Hidden::make('amount_short'),
                 ]),
 
-            Forms\Components\Section::make('Liquidation Details')
+            Forms\Components\Section::make('Settlement Details')
                 ->schema([
                     Forms\Components\Grid::make(2)->schema([
                         Forms\Components\TextInput::make('amount_spent')
@@ -107,7 +114,8 @@ class LiquidationResource extends Resource
                                 $returned = (float) ($get('amount_returned') ?? 0);
                                 $short = max(0, $original - $spent - $returned);
                                 $set('amount_short', $short);
-                            }),
+                            })
+                            ->extraInputAttributes(['class' => 'font-mono text-lg']),
 
                         Forms\Components\TextInput::make('amount_returned')
                             ->label('Cash Returned to Box (AED)')
@@ -121,11 +129,13 @@ class LiquidationResource extends Resource
                                 $returned = (float) ($get('amount_returned') ?? 0);
                                 $short = max(0, $original - $spent - $returned);
                                 $set('amount_short', $short);
-                            }),
+                            })
+                            ->extraInputAttributes(['class' => 'font-mono text-lg text-success-600']),
                     ]),
 
                     Forms\Components\Placeholder::make('liquidation_summary')
-                        ->label('Live Summary')
+                        ->label('Live Calculation')
+                        ->live()
                         ->content(function (Forms\Get $get) {
                             $original = (float) ($get('_voucher_amount') ?? 0);
                             $spent = (float) ($get('amount_spent') ?? 0);
@@ -133,51 +143,148 @@ class LiquidationResource extends Resource
                             $accounted = $spent + $returned;
                             $diff = round($accounted - $original, 2);
 
-                            $status = match (true) {
-                                abs($diff) <= 0.01 => '✅ <strong style="color:green">Exact — Ready to Liquidate</strong>',
-                                $diff < 0          => '🔴 <strong style="color:red">Short by AED ' . number_format(abs($diff), 2) . ' — Employee still owes cash or receipts</strong>',
-                                $diff > 0          => '🔵 <strong style="color:blue">Excess by AED ' . number_format($diff, 2) . ' — More cash returned than original</strong>',
+                            $statusMsg = match (true) {
+                                abs($diff) <= 0.01 => '<span class="text-success-600 font-bold">✅ Exact — Ready to Liquidate</span>',
+                                $diff < 0          => '<span class="text-danger-600 font-bold">🔴 Short by AED ' . number_format(abs($diff), 2) . '</span>',
+                                $diff > 0          => '<span class="text-primary-600 font-bold">🔵 Excess by AED ' . number_format($diff, 2) . '</span>',
                                 default            => '—',
                             };
 
                             return new \Illuminate\Support\HtmlString(
-                                "<div style='line-height:2'>" .
-                                "💰 Original Amount: <strong>AED " . number_format($original, 2) . "</strong><br>" .
-                                "🧾 Amount Spent: <strong>AED " . number_format($spent, 2) . "</strong><br>" .
-                                "💵 Cash Returned: <strong>AED " . number_format($returned, 2) . "</strong><br>" .
-                                "📊 Status: {$status}" .
+                                "<div class='p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 font-mono space-y-1'>" .
+                                "<div>Original: AED " . number_format($original, 2) . "</div>" .
+                                "<div>Spent:    AED " . number_format($spent, 2) . "</div>" .
+                                "<div>Returned: AED " . number_format($returned, 2) . "</div>" .
+                                "<div class='pt-2 border-t border-gray-200 dark:border-gray-600 mt-2 font-sans'>Status: {$statusMsg}</div>" .
                                 "</div>"
                             );
                         }),
 
-                    Forms\Components\DatePicker::make('due_date')
-                        ->label('Liquidation Deadline')
-                        ->native(false)
-                        ->displayFormat('d/m/Y')
-                        ->helperText('Leave blank to use the system default (' . config('liquidation.deadline_days', 5) . ' days from payment).'),
+                    Forms\Components\Grid::make(3)->schema([
+                        Forms\Components\DatePicker::make('due_date')
+                            ->label('Deadline')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->helperText('Leave blank for system default.'),
+
+                        Forms\Components\Select::make('liquidated_by')
+                            ->label(' custodian')
+                            ->relationship('custodian', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->default(fn () => auth()->id())
+                            ->required(),
+                    ]),
 
                     Forms\Components\Textarea::make('remarks')
-                        ->label('Remarks / Notes')
+                        ->label('Custodian Remarks')
                         ->rows(3)
+                        ->placeholder('Internal notes regarding the liquidation...')
                         ->columnSpanFull(),
-
-                    Forms\Components\Select::make('liquidated_by')
-                        ->label('Filed By (Custodian)')
-                        ->relationship('custodian', 'name')
-                        ->searchable()
-                        ->preload()
-                        ->default(fn () => auth()->id())
-                        ->required(),
                 ]),
         ]);
+    }
+
+    public static function infolist(\Filament\Infolists\Infolist $infolist): \Filament\Infolists\Infolist
+    {
+        return $infolist
+            ->schema([
+                \Filament\Infolists\Components\Section::make('Liquidation Overview')
+                    ->schema([
+                        \Filament\Infolists\Components\Split::make([
+                            \Filament\Infolists\Components\Grid::make(3)
+                                ->schema([
+                                    \Filament\Infolists\Components\Group::make([
+                                        \Filament\Infolists\Components\TextEntry::make('voucher.voucher_number')
+                                            ->label('Original Voucher')
+                                            ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                            ->color('primary'),
+                                        \Filament\Infolists\Components\TextEntry::make('voucher.payee')
+                                            ->label('Employee / Payee'),
+                                    ]),
+                                    \Filament\Infolists\Components\Group::make([
+                                        \Filament\Infolists\Components\TextEntry::make('status')
+                                            ->badge()
+                                            ->color(fn ($state) => match($state) {
+                                                'complete' => 'success',
+                                                'short'    => 'danger',
+                                                'excess'   => 'info',
+                                                default    => 'warning',
+                                            })
+                                            ->formatStateUsing(fn ($state) => strtoupper($state)),
+                                        \Filament\Infolists\Components\TextEntry::make('liquidated_at')
+                                            ->label('Settled At')
+                                            ->dateTime('M j, Y h:i A')
+                                            ->placeholder('Not settled yet'),
+                                    ]),
+                                    \Filament\Infolists\Components\Group::make([
+                                        \Filament\Infolists\Components\TextEntry::make('voucher.amount')
+                                            ->label('Original Advance')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono text-xl']),
+                                    ]),
+                                ]),
+                        ])->from('md'),
+                    ]),
+
+                \Filament\Infolists\Components\Grid::make(2)
+                    ->schema([
+                        \Filament\Infolists\Components\Section::make('Settlement Details')
+                            ->schema([
+                                \Filament\Infolists\Components\Grid::make(3)
+                                    ->schema([
+                                        \Filament\Infolists\Components\TextEntry::make('amount_spent')
+                                            ->label('Amount Spent')
+                                            ->money('AED')
+                                            ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                            ->extraAttributes(['class' => 'font-mono text-lg text-gray-700']),
+                                        \Filament\Infolists\Components\TextEntry::make('amount_returned')
+                                            ->label('Cash Returned')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono text-lg text-success-600']),
+                                        \Filament\Infolists\Components\TextEntry::make('amount_short')
+                                            ->label('Shortage')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono text-lg'])
+                                            ->color(fn ($state) => (float)$state > 0 ? 'danger' : 'success'),
+                                    ]),
+                                
+                                \Filament\Infolists\Components\TextEntry::make('remarks')
+                                    ->label('Custodian Remarks')
+                                    ->prose()
+                                    ->placeholder('No remarks recorded.')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columnSpan(1),
+
+                        \Filament\Infolists\Components\Section::make('Audit Info')
+                            ->schema([
+                                \Filament\Infolists\Components\TextEntry::make('due_date')
+                                    ->label('Deadline')
+                                    ->date('M j, Y')
+                                    ->icon('heroicon-o-calendar'),
+                                \Filament\Infolists\Components\TextEntry::make('custodian.name')
+                                    ->label('Processed By')
+                                    ->icon('heroicon-o-user-circle'),
+                                \Filament\Infolists\Components\TextEntry::make('created_at')
+                                    ->label('Record Created')
+                                    ->dateTime('M j, Y h:i A')
+                                    ->icon('heroicon-o-clock'),
+                            ])
+                            ->columnSpan(1),
+                    ])
+                    ->columns(2),
+            ]);
+    }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()->with(['voucher.user', 'custodian']);
     }
 
     public static function table(Table $table): Table
     {
         return $table
-            ->query(
-                Liquidation::query()->with(['voucher.user', 'custodian'])
-            )
             ->defaultSort('created_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('voucher.voucher_number')
@@ -326,12 +433,31 @@ class LiquidationResource extends Resource
                     ->url(fn ($record) => static::getUrl('edit', ['record' => $record])),
 
                 Tables\Actions\Action::make('edit_settled')
-                    ->label('Edit Settlement')
+                    ->hiddenLabel()
                     ->icon('heroicon-m-pencil-square')
                     ->color('warning')
                     ->tooltip('Override a settled liquidation (fully audited)')
-                    ->visible(fn ($record) => in_array($record->status, ['complete', 'excess', 'short'])
-                        && auth()->user()->can('liquidation.edit_settled'))
+                    ->visible(function ($record) {
+                        if (!in_array($record->status, ['complete', 'excess', 'short'])) {
+                            return false;
+                        }
+                        if (!auth()->user()->can('liquidation.edit_settled')) {
+                            return false;
+                        }
+                        
+                        // Show only if the linked RV is collected (paid)
+                        if ($record->amount_returned > 0 && $record->voucher) {
+                            $existingRv = \App\Models\Voucher::where('type', 'receipt')
+                                ->where('description', 'like', "%{$record->voucher->voucher_number}%")
+                                ->first();
+                            
+                            if ($existingRv && $existingRv->status !== 'paid') {
+                                return false;
+                            }
+                        }
+                        
+                        return true;
+                    })
                     ->url(fn ($record) => static::getUrl('edit', ['record' => $record])),
 
                 Tables\Actions\ViewAction::make(),

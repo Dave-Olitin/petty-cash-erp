@@ -28,19 +28,8 @@ class EditTransaction extends EditRecord
         $reason = $data['edit_reason'] ?? 'No reason provided';
         unset($data['edit_reason']);
 
-        // 3. Extract created_at — bypasses fillable guard by applying via raw query
-        $customDate = $data['created_at'] ?? null;
-        unset($data['created_at']);
-
         // 4. Update the Record (mass-assignable fields only)
         $record->update($data);
-
-        // 5. Apply custom date directly if provided
-        if ($customDate) {
-            $record->newQueryWithoutScopes()
-                ->where('id', $record->id)
-                ->update(['created_at' => $customDate]);
-        }
 
         // 6. Create History Log
         \App\Models\TransactionHistory::create([

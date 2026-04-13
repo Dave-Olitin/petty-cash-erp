@@ -27,7 +27,9 @@ class VoucherStatsOverview extends BaseWidget
         
         $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, 60, function () use ($user) {
             // Base query — scope to user if they're a regular requester
-            $base = Voucher::query();
+            // ONLY count petty cash and payment vouchers, as Receipt Vouchers are not expenses
+            // and Bank Encashments are float transfers.
+            $base = Voucher::query()->whereIn('type', ['petty_cash', 'payment']);
             if (!$user->isHeadOffice() && !$user->hasAnyRole(['Accountant', 'Approver', 'Admin', 'Super Admin'])) {
                 $base->where('user_id', $user->id);
             }
