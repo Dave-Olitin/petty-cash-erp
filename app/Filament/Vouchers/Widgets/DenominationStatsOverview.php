@@ -39,20 +39,20 @@ class DenominationStatsOverview extends BaseWidget
         $balance = $totalIn - $payments;
 
         return [
-            Stat::make('Cash In: Replenishments', 'AED ' . number_format($replenished, 2))
-                ->description('Physical cash added via Float Replenishment vouchers')
+            Stat::make('Cash In: Replenishments', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">AED ' . number_format($replenished, 2) . '</span>'))
+                ->description(new \Illuminate\Support\HtmlString('<span style="color: #059669;" class="font-medium">Physical cash added via Float Replenishment vouchers</span>'))
                 ->color('success')
                 ->icon('heroicon-o-arrow-down-tray'),
-            Stat::make('Cash In: Receipt Vouchers', 'AED ' . number_format($receipts, 2))
-                ->description('Physical cash received via RV (e.g. liquidation returns)')
+            Stat::make('Cash In: Receipt Vouchers', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">AED ' . number_format($receipts, 2) . '</span>'))
+                ->description(new \Illuminate\Support\HtmlString('<span style="color: #0284c7;" class="font-medium">Physical cash received via RV (e.g. liquidation returns)</span>'))
                 ->color('info')
                 ->icon('heroicon-o-arrow-path'),
-            Stat::make('Total Cash Out (Petty Cash)', 'AED ' . number_format($payments, 2))
-                ->description('Physical cash disbursed from the safe via denomination tracking')
+            Stat::make('Total Cash Out (Petty Cash)', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">AED ' . number_format($payments, 2) . '</span>'))
+                ->description(new \Illuminate\Support\HtmlString('<span style="color: #e11d48;" class="font-medium">Physical cash disbursed from the safe via denomination tracking</span>'))
                 ->color('danger')
                 ->icon('heroicon-o-minus-circle'),
-            Stat::make('TOTAL CASH IN BOX (Grand Total)', 'AED ' . number_format($balance, 2))
-                ->description('Matches the ENDING BALANCE on your Daily Summary Report')
+            Stat::make('TOTAL CASH IN BOX (Grand Total)', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">AED ' . number_format($balance, 2) . '</span>'))
+                ->description(new \Illuminate\Support\HtmlString('<span style="color: #4f46e5;" class="font-medium">Matches the ENDING BALANCE on your Daily Summary Report</span>'))
                 ->color('primary')
                 ->icon('heroicon-o-banknotes'),
         ];

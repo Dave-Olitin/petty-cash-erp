@@ -87,20 +87,20 @@ class VoucherStatsOverview extends BaseWidget
         $momColor  = $momDiff >= 0 ? 'danger' : 'success'; // More spending = warning; less = good
 
         return [
-            Stat::make('Vouchers Waiting for Approval', $pendingNow)
-                ->description('Submitted vouchers not yet checked or signed off')
+            Stat::make('Vouchers Waiting for Approval', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">' . $pendingNow . '</span>'))
+                ->description(new \Illuminate\Support\HtmlString('<span style="color: #d97706;" class="font-medium">Submitted vouchers not yet checked or signed off</span>'))
                 ->descriptionIcon('heroicon-m-clock')
                 ->chart($pendingTrend)
                 ->color($pendingNow > 5 ? 'danger' : ($pendingNow > 0 ? 'warning' : 'success')),
 
-            Stat::make('Approved — Ready to Pay', $readyToPay)
-                ->description('Vouchers fully signed off, waiting for cash/cheque release')
+            Stat::make('Approved — Ready to Pay', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">' . $readyToPay . '</span>'))
+                ->description(new \Illuminate\Support\HtmlString('<span style="color: #059669;" class="font-medium">Vouchers fully signed off, waiting for cash/cheque release</span>'))
                 ->descriptionIcon('heroicon-m-check-badge')
                 ->chart($readyTrend)
                 ->color($readyToPay > 0 ? 'info' : 'success'),
 
-            Stat::make('Total Spent This Month', 'AED ' . Number::format($paidThisMonth, 2))
-                ->description($momLabel)
+            Stat::make('Total Spent This Month', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">AED ' . Number::format($paidThisMonth, 2) . '</span>'))
+                ->description(new \Illuminate\Support\HtmlString('<span style="color: ' . ($momDiff >= 0 ? '#e11d48' : '#0d9488') . ';" class="font-medium">' . $momLabel . '</span>'))
                 ->descriptionIcon($momDiff >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
                 ->chart($paidTrend)
                 ->color($momColor),
