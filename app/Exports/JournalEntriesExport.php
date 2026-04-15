@@ -50,13 +50,15 @@ class JournalEntriesExport implements FromCollection, WithHeadings, WithMapping,
         return [
             'ENTRY NO',
             'DATE',
-            'ENTITY',
+            'PO NUMBER',
+            'INVOICE NO',
             'REFERENCE',
             'CURRENCY',
-            'HEADER DESCRIPTION',
             'ACCOUNT CODE',
             'ACCOUNT NAME',
-            'COST CENTER',
+            'BRANCH',
+            'SUPPLIER NAME',
+            'TRN',
             'LINE REMARKS',
             'DEBIT',
             'CREDIT',
@@ -72,13 +74,15 @@ class JournalEntriesExport implements FromCollection, WithHeadings, WithMapping,
             return [
                 $entry->entry_no,
                 $entry->date ? $entry->date->format('Y-m-d') : '',
-                $entry->entity,
+                $entry->po_number,
+                $entry->invoice_no,
                 $entry->reference,
                 $entry->currency,
-                $entry->description,
                 '', // Account Code
                 '', // Account Name
-                '', // Cost Center
+                '', // Branch
+                '', // Supplier Name
+                '', // TRN
                 '', // Line Remarks
                 '', // Debit
                 '', // Credit
@@ -91,13 +95,15 @@ class JournalEntriesExport implements FromCollection, WithHeadings, WithMapping,
         return [
             $entry->entry_no,
             $entry->date ? $entry->date->format('Y-m-d') : '',
-            $entry->entity,
+            $entry->po_number,
+            $entry->invoice_no,
             $entry->reference,
             $entry->currency,
-            $entry->description,
             $row->accountCode?->code,
             $row->accountCode?->name,
-            $row->cost_center,
+            $row->branch,
+            $row->supplier_name,
+            $row->trn,
             $row->remarks,
             $row->debit,
             $row->credit,

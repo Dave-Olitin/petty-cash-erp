@@ -52,23 +52,16 @@ class PurchaseEntriesExport implements FromCollection, WithHeadings, WithMapping
             'BILL DATE',
             'DUE DATE',
             'ENTITY',
-            'BRANCH',
             'SUPPLIER NAME',
             'SUPPLIER TRN',
-            'BILL NO',
+            'PO NUMBER',
             'INVOICE NO',
             'CURRENCY',
-            'PRICE TYPE',
-            'ITEM DESCRIPTION',
             'ITEM ACCOUNT CODE',
             'ITEM ACCOUNT NAME',
-            'QTY',
-            'UNIT PRICE',
-            'TAX %',
-            'VAT AMOUNT',
+            'ITEM DESCRIPTION',
+            'BRANCH',
             'LINE TOTAL',
-            'BASE AMOUNT TOTAL',
-            'TOTAL VAT',
             'GRAND TOTAL',
         ];
     }
@@ -82,23 +75,16 @@ class PurchaseEntriesExport implements FromCollection, WithHeadings, WithMapping
                 $entry->date ? $entry->date->format('Y-m-d') : '',
                 $entry->due_date ? $entry->due_date->format('Y-m-d') : '',
                 $entry->entity,
-                $entry->branch,
                 $entry->supplier_name,
                 $entry->supplier_trn,
-                $entry->bill_no,
+                $entry->po_number,
                 $entry->invoice_no,
                 $entry->currency,
-                $entry->price_type,
-                '', // Description
                 '', // Account Code
                 '', // Account Name
-                '', // Qty
-                '', // Unit Price
-                '', // Tax %
-                '', // VAT Amount
+                '', // Description
+                '', // Branch
                 '', // Line Total
-                $entry->total_amount,
-                $entry->total_vat,
                 $entry->grand_total,
             ];
         }
@@ -109,23 +95,16 @@ class PurchaseEntriesExport implements FromCollection, WithHeadings, WithMapping
             $entry->date ? $entry->date->format('Y-m-d') : '',
             $entry->due_date ? $entry->due_date->format('Y-m-d') : '',
             $entry->entity,
-            $entry->branch,
             $entry->supplier_name,
             $entry->supplier_trn,
-            $entry->bill_no,
+            $entry->po_number,
             $entry->invoice_no,
             $entry->currency,
-            $entry->price_type,
-            $row->description,
             $row->debitAccount?->code,
             $row->debitAccount?->name,
-            $row->qty,
-            $row->unit_price,
-            $row->tax_percentage . '%',
-            $row->tax_amount,
+            $row->description,
+            $row->branch,
             $row->total,
-            $entry->total_amount,
-            $entry->total_vat,
             $entry->grand_total,
         ];
     }

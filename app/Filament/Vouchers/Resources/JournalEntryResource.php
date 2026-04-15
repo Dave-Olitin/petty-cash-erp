@@ -86,6 +86,7 @@ class JournalEntryResource extends Resource
                             Forms\Components\Select::make('account_code_id')
                                 ->relationship('accountCode', 'code')
                                 ->label('Account')
+                                ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
                                 ->searchable()
                                 ->native(false)
                                 ->columnSpan(2),
@@ -296,20 +297,20 @@ class JournalEntryResource extends Resource
                                     ->label('Entry Number')
                                     ->weight(\Filament\Support\Enums\FontWeight::Bold)
                                     ->copyable(),
+                                \Filament\Infolists\Components\TextEntry::make('date')
+                                    ->label('Post Date')
+                                    ->date('M j, Y'),
                                 \Filament\Infolists\Components\TextEntry::make('po_number')
                                     ->label('PO #')
                                     ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('invoice_no')
                                     ->label('Invoice #')
                                     ->placeholder('—'),
-                                \Filament\Infolists\Components\TextEntry::make('date')
-                                    ->label('Post Date')
-                                    ->date('M j, Y'),
                                 \Filament\Infolists\Components\TextEntry::make('voucher.voucher_number')
                                     ->label('Ref. Voucher')
                                     ->placeholder('—')
                                     ->url(fn ($record) => $record->voucher_id ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
-                            ]),
+                            ])->columns(4),
                     ]),
 
                 \Filament\Infolists\Components\Section::make('Accounting Lines')

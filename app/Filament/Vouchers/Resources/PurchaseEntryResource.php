@@ -56,7 +56,7 @@ class PurchaseEntryResource extends Resource
         return $form
             ->schema([
                 Forms\Components\Section::make('Purchase Bill Details')->schema([
-                    // ── ROW 1: Entity, Branch, Linked Voucher, Supplier (4-col) ──
+
                     Forms\Components\Select::make('entity')
                         ->label('Entity')
                         ->options(\App\Models\VoucherTemplate::where('is_active', true)->pluck('company_name', 'company_name'))
@@ -64,11 +64,7 @@ class PurchaseEntryResource extends Resource
                         ->preload()
                         ->required(),
 
-                    Forms\Components\Select::make('branch')
-                        ->label('Branch')
-                        ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
-                        ->searchable()
-                        ->preload(),
+                    Forms\Components\Hidden::make('branch'),
 
 
 
@@ -101,7 +97,7 @@ class PurchaseEntryResource extends Resource
                             return $tax->id;
                         }),
 
-                    // ── ROW 2: Bill Date, Due Date, Price Type ───────────────
+                    // ── Dates ─────────────────────────────────
                     Forms\Components\DatePicker::make('date')
                         ->label('Bill Date')
                         ->required()
@@ -152,38 +148,11 @@ class PurchaseEntryResource extends Resource
                             );
                         }),
 
-                    Forms\Components\Select::make('price_type')
-                        ->label('Price Type')
-                        ->options([
-                            'inclusive' => 'VAT Inclusive',
-                            'exclusive' => 'VAT Exclusive',
-                        ])
-                        ->default('exclusive')
-                        ->required()
-                        ->live()
-                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
-                            $lines = $get('lines') ?? [];
-                            foreach ($lines as $key => $line) {
-                                $amount = (float) ($line['amount'] ?? 0);
-                                $taxRate = (float) ($line['tax_percentage'] ?? 0);
-                                
-                                if ($state === 'inclusive') {
-                                    $tax = $amount - ($amount / (1 + ($taxRate / 100)));
-                                    $total = $amount; 
-                                } else {
-                                    $tax = $amount * ($taxRate / 100);
-                                    $total = $amount + $tax;
-                                }
-                                
-                                $set("lines.{$key}.tax_amount", round($tax, 2));
-                                $set("lines.{$key}.total", round($total, 2));
-                            }
-                        }),
-
-                    // ── HIDDEN (kept for data integrity) ───────────────────
+                    // Hidden fields kept for data integrity
                     Forms\Components\Hidden::make('supplier_name'),
                     Forms\Components\Hidden::make('supplier_trn'),
                     Forms\Components\Hidden::make('currency')->default('AED'),
+                    Forms\Components\Hidden::make('price_type')->default('exclusive'),
                 ])->columns(4),
 
                 Forms\Components\Section::make('Supplier Reference')
@@ -195,11 +164,8 @@ class PurchaseEntryResource extends Resource
                         Forms\Components\TextInput::make('invoice_no')
                             ->label('Invoice Number')
                             ->placeholder('e.g. INV-2023001'),
-                        Forms\Components\TextInput::make('bill_no')
-                            ->label('Bill Number')
-                            ->placeholder('e.g. BILL-99120'),
                     ])
-                    ->columns(3)
+                    ->columns(2)
                     ->collapsed(),
 
                 Forms\Components\Section::make('Entry Lines')->schema([
@@ -209,85 +175,41 @@ class PurchaseEntryResource extends Resource
                         ->schema([
                             Forms\Components\Grid::make(12)
                                 ->schema([
-                                    // Row 1: Line Item Description & General Ledger Accounts
-                                    Forms\Components\TextInput::make('description')
-                                        ->label('Item Description')
-                                        ->required()
-                                        ->columnSpan(4),
                                     Forms\Components\Select::make('debit_account_id')
                                         ->relationship('debitAccount', 'code')
                                         ->label('Account')
+                                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
                                         ->searchable()
                                         ->native(false)
+                                        ->columnSpan(4),
+                                    Forms\Components\TextInput::make('description')
+                                        ->label('Item Description')
+                                        ->required()
                                         ->columnSpan(4),
                                     Forms\Components\Select::make('branch')
                                         ->label('Branch')
                                         ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
                                         ->searchable()
                                         ->preload()
-                                        ->columnSpan(4),
-
-                                    // Row 2: Amounts and Tax Calculations
-                                    Forms\Components\TextInput::make('amount')
-                                        ->label('Amount')
-                                        ->numeric()
-                                        ->default(0)
-                                        ->live(onBlur: true)
-                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                            $priceType = $get('../../price_type') ?? 'exclusive';
-                                            $amount = (float) $get('amount');
-                                            $taxRate = (float) $get('tax_percentage');
-                                            
-                                            if ($priceType === 'inclusive') {
-                                                $tax = $amount - ($amount / (1 + ($taxRate / 100)));
-                                                $total = $amount;
-                                            } else {
-                                                $tax = $amount * ($taxRate / 100);
-                                                $total = $amount + $tax;
-                                            }
-                                            
-                                            $set('tax_amount', round($tax, 2));
-                                            $set('total', round($total, 2));
-                                        })
-                                        ->prefix('AED')
-                                        ->columnSpan(4),
-                                    Forms\Components\TextInput::make('tax_percentage')
-                                        ->label('Tax %')
-                                        ->numeric()
-                                        ->default(5)
-                                        ->live(onBlur: true)
-                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                            $priceType = $get('../../price_type') ?? 'exclusive';
-                                            $amount = (float) $get('amount');
-                                            $taxRate = (float) $get('tax_percentage');
-                                            
-                                            if ($priceType === 'inclusive') {
-                                                $tax = $amount - ($amount / (1 + ($taxRate / 100)));
-                                                $total = $amount;
-                                            } else {
-                                                $tax = $amount * ($taxRate / 100);
-                                                $total = $amount + $tax;
-                                            }
-                                            
-                                            $set('tax_amount', round($tax, 2));
-                                            $set('total', round($total, 2));
-                                        })
-                                        ->suffix('%')
-                                        ->columnSpan(4),
-                                    Forms\Components\TextInput::make('tax_amount')
-                                        ->label('Tax Amt')
-                                        ->numeric()
-                                        ->default(0)
-                                        ->readOnly()
-                                        ->prefix('Σ')
                                         ->columnSpan(2),
                                     Forms\Components\TextInput::make('total')
-                                        ->label('Line Total')
+                                        ->label('Total Amount')
                                         ->numeric()
                                         ->default(0)
-                                        ->readOnly()
+                                        ->live(onBlur: true)
+                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                                            // Keep amount and tax_amount in sync for backward compatibility
+                                            $total = (float) $state;
+                                            $set('amount', $total);
+                                            $set('tax_amount', 0);
+                                        })
+                                        ->prefix('AED')
                                         ->extraInputAttributes(['class' => 'font-bold text-primary-600'])
                                         ->columnSpan(2),
+                                    // Hidden fields kept for data integrity
+                                    Forms\Components\Hidden::make('amount'),
+                                    Forms\Components\Hidden::make('tax_percentage')->default(0),
+                                    Forms\Components\Hidden::make('tax_amount')->default(0),
                                 ])
                         ])
                         ->itemLabel(fn (array $state): ?string => $state['description'] ?? 'New Line Item')
@@ -296,43 +218,15 @@ class PurchaseEntryResource extends Resource
                         ->defaultItems(1)
                 ]),
 
-                Forms\Components\Section::make('Purchase Totals')
+                Forms\Components\Section::make('Grand Total')
                     ->schema([
-                        Forms\Components\Grid::make(3)
-                            ->schema([
-                                Forms\Components\Placeholder::make('total_amount_sum')
-                                    ->label('Net Amount')
-                                    ->content(function (Forms\Get $get) {
-                                        $priceType = $get('price_type') ?? 'exclusive';
-                                        $lines = $get('lines') ?? [];
-
-                                        $netSum = collect($lines)->sum(function ($item) use ($priceType) {
-                                            $amount = (float)($item['amount'] ?? 0);
-                                            $taxRate = (float)($item['tax_percentage'] ?? 0);
-                                            if ($priceType === 'inclusive') {
-                                                return $amount / (1 + ($taxRate / 100));
-                                            } else {
-                                                return $amount;
-                                            }
-                                        });
-
-                                        return new \Illuminate\Support\HtmlString('<div class="text-lg font-mono text-gray-600">' . number_format($netSum, 2) . ' <span class="text-xs">AED</span></div>');
-                                    }),
-                                Forms\Components\Placeholder::make('total_vat_sum')
-                                    ->label('Total VAT')
-                                    ->content(function (Forms\Get $get) {
-                                        $lines = $get('lines') ?? [];
-                                        $sum = (float) collect($lines)->sum(fn ($i) => (float)($i['tax_amount'] ?? 0));
-                                        return new \Illuminate\Support\HtmlString('<div class="text-lg font-mono text-gray-600">' . number_format($sum, 2) . ' <span class="text-xs">AED</span></div>');
-                                    }),
-                                Forms\Components\Placeholder::make('grand_total_sum')
-                                    ->label('Grand Total')
-                                    ->content(function (Forms\Get $get) {
-                                        $lines = $get('lines') ?? [];
-                                        $sum = (float) collect($lines)->sum(fn ($i) => (float)($i['total'] ?? 0));
-                                        return new \Illuminate\Support\HtmlString('<div class="text-2xl font-mono font-bold text-primary-600">' . number_format($sum, 2) . ' <span class="text-xs font-normal text-gray-500">AED</span></div>');
-                                    }),
-                            ])
+                        Forms\Components\Placeholder::make('grand_total_sum')
+                            ->label('Total')
+                            ->content(function (Forms\Get $get) {
+                                $lines = $get('lines') ?? [];
+                                $sum = (float) collect($lines)->sum(fn ($i) => (float)($i['total'] ?? 0));
+                                return new \Illuminate\Support\HtmlString('<div class="text-2xl font-mono font-bold text-primary-600">' . number_format($sum, 2) . ' <span class="text-xs font-normal text-gray-500">AED</span></div>');
+                            }),
                     ])->compact(),
             ]);
     }
@@ -449,16 +343,10 @@ class PurchaseEntryResource extends Resource
                                     ->copyable(),
                                 \Filament\Infolists\Components\TextEntry::make('entity')
                                     ->label('Entity'),
-                                \Filament\Infolists\Components\TextEntry::make('branch')
-                                    ->label('Branch')
-                                    ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('taxRegistration.name')
                                     ->label('Supplier'),
                                 \Filament\Infolists\Components\TextEntry::make('invoice_no')
                                     ->label('Invoice No')
-                                    ->placeholder('—'),
-                                \Filament\Infolists\Components\TextEntry::make('bill_no')
-                                    ->label('Bill No')
                                     ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('date')
                                     ->label('Bill Date')
@@ -467,12 +355,10 @@ class PurchaseEntryResource extends Resource
                                     ->label('Due Date')
                                     ->date('M j, Y')
                                     ->placeholder('—'),
-                                \Filament\Infolists\Components\TextEntry::make('price_type')
-                                    ->label('VAT Setting')
-                                    ->badge()
-                                    ->color(fn ($state) => $state === 'inclusive' ? 'warning' : 'info')
-                                    ->formatStateUsing(fn ($state) => $state === 'inclusive' ? 'Inclusive' : 'Exclusive'),
-                            ]),
+                                \Filament\Infolists\Components\TextEntry::make('po_number')
+                                    ->label('PO Number')
+                                    ->placeholder('—'),
+                            ])->columns(4),
                     ]),
 
                 \Filament\Infolists\Components\Section::make('Purchase Lines (Items)')
@@ -480,12 +366,10 @@ class PurchaseEntryResource extends Resource
                         \Filament\Infolists\Components\Grid::make(12)
                             ->extraAttributes(['class' => 'bg-gray-100 p-2 border-b border-gray-200 rounded-t-lg'])
                             ->schema([
-                                \Filament\Infolists\Components\TextEntry::make('header_desc')->state('Description / Item')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
-                                \Filament\Infolists\Components\TextEntry::make('header_account')->state('Account')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
-                                \Filament\Infolists\Components\TextEntry::make('header_cc')->state('Cost Center')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
-                                \Filament\Infolists\Components\TextEntry::make('header_tax')->state('VAT%')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1)->alignCenter(),
-                                \Filament\Infolists\Components\TextEntry::make('header_vat_amt')->state('VAT Amt')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1)->alignEnd(),
-                                \Filament\Infolists\Components\TextEntry::make('header_total')->state('Line Total')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2)->alignEnd(),
+                                \Filament\Infolists\Components\TextEntry::make('header_account')->state('Account')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(4),
+                                \Filament\Infolists\Components\TextEntry::make('header_desc')->state('Description / Item')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(4),
+                                \Filament\Infolists\Components\TextEntry::make('header_cc')->state('Branch')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
+                                \Filament\Infolists\Components\TextEntry::make('header_total')->state('Total Amount')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2)->alignEnd(),
                             ]),
 
                         \Filament\Infolists\Components\RepeatableEntry::make('lines')
@@ -493,33 +377,20 @@ class PurchaseEntryResource extends Resource
                             ->schema([
                                 \Filament\Infolists\Components\Grid::make(12)
                                     ->schema([
-                                        \Filament\Infolists\Components\TextEntry::make('description')
-                                            ->label('Description')
-                                            ->hiddenLabel()
-                                            ->columnSpan(3),
                                         \Filament\Infolists\Components\TextEntry::make('debitAccount.code')
                                             ->label('Account')
                                             ->hiddenLabel()
-                                            ->formatStateUsing(fn ($state, $record) => $state . ' (' . $record->debitAccount?->name . ')')
-                                            ->columnSpan(3),
+                                            ->formatStateUsing(fn ($state, $record) => $state . ' — ' . $record->debitAccount?->name)
+                                            ->columnSpan(4),
+                                        \Filament\Infolists\Components\TextEntry::make('description')
+                                            ->label('Description')
+                                            ->hiddenLabel()
+                                            ->columnSpan(4),
                                         \Filament\Infolists\Components\TextEntry::make('branch')
                                             ->label('Branch')
                                             ->hiddenLabel()
                                             ->placeholder('—')
                                             ->columnSpan(2),
-                                        \Filament\Infolists\Components\TextEntry::make('tax_percentage')
-                                            ->label('Tax')
-                                            ->hiddenLabel()
-                                            ->formatStateUsing(fn ($state) => $state . '%')
-                                            ->columnSpan(1)
-                                            ->alignCenter(),
-                                        \Filament\Infolists\Components\TextEntry::make('tax_amount')
-                                            ->label('VAT')
-                                            ->hiddenLabel()
-                                            ->money('AED')
-                                            ->extraAttributes(['class' => 'font-mono text-gray-500'])
-                                            ->columnSpan(1)
-                                            ->alignEnd(),
                                         \Filament\Infolists\Components\TextEntry::make('total')
                                             ->label('Total')
                                             ->hiddenLabel()
@@ -538,16 +409,8 @@ class PurchaseEntryResource extends Resource
                     ->schema([
                         \Filament\Infolists\Components\Grid::make(3)
                             ->schema([
-                                \Filament\Infolists\Components\TextEntry::make('total_amount')
-                                    ->label('Sub-Total')
-                                    ->money('AED')
-                                    ->extraAttributes(['class' => 'text-lg font-mono text-gray-700 pl-4 border-l-2 border-gray-200']),
-                                \Filament\Infolists\Components\TextEntry::make('total_vat')
-                                    ->label('Total Tax')
-                                    ->money('AED')
-                                    ->extraAttributes(['class' => 'text-lg font-mono text-gray-700 pl-4 border-l-2 border-gray-200']),
                                 \Filament\Infolists\Components\TextEntry::make('grand_total')
-                                    ->label('Final Amount')
+                                    ->label('Purchase Total')
                                     ->money('AED')
                                     ->extraAttributes(['class' => 'text-2xl font-mono font-bold text-primary-600 pl-4 border-l-4 border-primary-500']),
                             ])
