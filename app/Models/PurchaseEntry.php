@@ -23,6 +23,7 @@ class PurchaseEntry extends Model
         'price_type',
         'supplier_name',
         'supplier_trn',
+        'po_number',
         'bill_no',
         'invoice_no',
         'currency',

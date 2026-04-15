@@ -220,9 +220,9 @@ class PurchaseEntryResource extends Resource
                                         ->searchable()
                                         ->native(false)
                                         ->columnSpan(4),
-                                    Forms\Components\Select::make('cost_center')
-                                        ->label('Cost Center')
-                                        ->options(\App\Models\VoucherTemplate::where('is_active', true)->pluck('company_name', 'company_name'))
+                                    Forms\Components\Select::make('branch')
+                                        ->label('Branch')
+                                        ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
                                         ->searchable()
                                         ->preload()
                                         ->columnSpan(4),
@@ -502,8 +502,8 @@ class PurchaseEntryResource extends Resource
                                             ->hiddenLabel()
                                             ->formatStateUsing(fn ($state, $record) => $state . ' (' . $record->debitAccount?->name . ')')
                                             ->columnSpan(3),
-                                        \Filament\Infolists\Components\TextEntry::make('cost_center')
-                                            ->label('Cost Center')
+                                        \Filament\Infolists\Components\TextEntry::make('branch')
+                                            ->label('Branch')
                                             ->hiddenLabel()
                                             ->placeholder('—')
                                             ->columnSpan(2),

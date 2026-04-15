@@ -40,11 +40,11 @@ class ActivitiesRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('description')
                     ->label('Action')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'created' => 'success',
                         'updated' => 'warning',
                         'deleted' => 'danger',
-                        default   => 'gray',
+                        default => 'gray',
                     })
                     ->width('100px'),
 
@@ -73,14 +73,16 @@ class ActivitiesRelationManager extends RelationManager
                             $new = $props;
                         }
 
-                        if (!is_array($new) || empty($new)) return '—';
+                        if (!is_array($new) || empty($new))
+                            return '—';
 
                         if (empty($old)) {
                             // Created: list fields set
                             $lines = [];
                             foreach ($new as $key => $val) {
-                                if (in_array($key, ['created_at', 'updated_at', 'deleted_at'])) continue;
-                                $label   = ucwords(str_replace('_', ' ', $key));
+                                if (in_array($key, ['created_at', 'updated_at', 'deleted_at']))
+                                    continue;
+                                $label = ucwords(str_replace('_', ' ', $key));
                                 $lines[] = "{$label}: " . (is_null($val) ? '—' : (is_array($val) ? json_encode($val) : $val));
                             }
                             return implode("\n", $lines) ?: '—';
@@ -89,10 +91,12 @@ class ActivitiesRelationManager extends RelationManager
                         // Updated: show changed fields only
                         $lines = [];
                         foreach ($new as $key => $newVal) {
-                            if (in_array($key, ['created_at', 'updated_at', 'deleted_at'])) continue;
+                            if (in_array($key, ['created_at', 'updated_at', 'deleted_at']))
+                                continue;
                             $oldVal = Arr::get($old, $key, '—');
-                            if ($oldVal == $newVal) continue;
-                            $label   = ucwords(str_replace('_', ' ', $key));
+                            if ($oldVal == $newVal)
+                                continue;
+                            $label = ucwords(str_replace('_', ' ', $key));
                             $lines[] = "{$label}: {$oldVal} → {$newVal}";
                         }
                         return empty($lines) ? 'No field changes.' : implode("\n", $lines);

@@ -41,14 +41,18 @@ class JournalEntryLine extends Model
 
     protected static function booted()
     {
-        $updateParent = function ($model) {
-            $parent = $model->journalEntry;
-            if ($parent) {
-                $parent->update([
-                    'total_debit' => $parent->lines()->sum('debit'),
-                    'total_credit' => $parent->lines()->sum('credit'),
-                ]);
-            }
+        $updateParent = function (self $model) {
+            // Use the FK directly to avoid lazy-loading violation.
+            $journalEntryId = $model->journal_entry_id;
+            if (! $journalEntryId) return;
+
+            $parent = JournalEntry::find($journalEntryId);
+            if (! $parent) return;
+
+            $parent->update([
+                'total_debit'  => $parent->lines()->sum('debit'),
+                'total_credit' => $parent->lines()->sum('credit'),
+            ]);
         };
 
         static::saved($updateParent);

@@ -14,7 +14,7 @@ class PurchaseEntryLine extends Model
         'purchase_entry_id',
         'description',
         'amount',
-        'cost_center',
+        'branch',
         'tax_percentage',
         'tax_amount',
         'debit_account_id',
@@ -25,10 +25,10 @@ class PurchaseEntryLine extends Model
     protected function casts(): array
     {
         return [
-            'amount' => 'decimal:2',
+            'amount'         => 'decimal:2',
             'tax_percentage' => 'decimal:2',
-            'tax_amount' => 'decimal:2',
-            'total' => 'decimal:2',
+            'tax_amount'     => 'decimal:2',
+            'total'          => 'decimal:2',
         ];
     }
 
@@ -49,17 +49,22 @@ class PurchaseEntryLine extends Model
 
     protected static function booted()
     {
-        $updateParent = function ($model) {
-            $parent = $model->purchaseEntry;
-            if ($parent) {
-                $grandTotal = $parent->lines()->sum('total');
-                $totalVat = $parent->lines()->sum('tax_amount');
-                $parent->update([
-                    'grand_total' => $grandTotal,
-                    'total_vat' => $totalVat,
-                    'total_amount' => $grandTotal - $totalVat,
-                ]);
-            }
+        $updateParent = function (self $model) {
+            // Use FK directly to avoid lazy-loading violation.
+            $purchaseEntryId = $model->purchase_entry_id;
+            if (! $purchaseEntryId) return;
+
+            $parent = PurchaseEntry::find($purchaseEntryId);
+            if (! $parent) return;
+
+            $grandTotal = $parent->lines()->sum('total');
+            $totalVat   = $parent->lines()->sum('tax_amount');
+
+            $parent->update([
+                'grand_total'  => $grandTotal,
+                'total_vat'    => $totalVat,
+                'total_amount' => $grandTotal - $totalVat,
+            ]);
         };
 
         static::saved($updateParent);
