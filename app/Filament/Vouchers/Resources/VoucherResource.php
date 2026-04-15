@@ -1243,7 +1243,7 @@ class VoucherResource extends Resource
                                 ->grow(false),
                         ])->from('lg'),
 
-                        \Filament\Infolists\Components\FieldSet::make('Bank Settlement Details')
+                        \Filament\Infolists\Components\Section::make('Bank Settlement Details')
                             ->visible(fn ($record) => !empty($record->cheque_no))
                             ->schema([
                                 \Filament\Infolists\Components\TextEntry::make('cheque_no')
