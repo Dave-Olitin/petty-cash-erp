@@ -34,6 +34,7 @@ class Voucher extends Model implements HasMedia
         'user_id',
         'category_id',
         'voucher_template_id',
+        'purchase_entry_id',
         'attachment_paths',
         'cheque_no',
         'cheque_date',
@@ -72,6 +73,11 @@ class Voucher extends Model implements HasMedia
     public function template(): BelongsTo
     {
         return $this->belongsTo(VoucherTemplate::class, 'voucher_template_id');
+    }
+
+    public function purchaseEntry(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseEntry::class);
     }
 
     public function items(): HasMany

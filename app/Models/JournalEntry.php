@@ -15,11 +15,11 @@ class JournalEntry extends Model
 
     protected $fillable = [
         'entry_no',
-        'entity',
         'date',
+        'po_number',
+        'invoice_no',
         'reference',
         'currency',
-        'description',
         'total_debit',
         'total_credit',
         'voucher_id',

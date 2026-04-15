@@ -6,7 +6,23 @@ use Illuminate\Database\Eloquent\Model;
 
 class TaxRegistration extends Model
 {
-    protected $fillable = ['trn', 'name'];
+    protected $fillable = [
+        'trn', 
+        'name',
+        'supplier_code',
+        'payment_terms',
+        'contact_name',
+        'phone',
+        'email',
+        'entity',
+        'started_date',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'started_date' => 'date',
+        'is_active' => 'boolean',
+    ];
 
     public function getSelectLabelAttribute()
     {

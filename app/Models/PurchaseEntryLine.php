@@ -13,9 +13,8 @@ class PurchaseEntryLine extends Model
     protected $fillable = [
         'purchase_entry_id',
         'description',
-        'qty',
-        'unit_price',
-        'discount_percentage',
+        'amount',
+        'cost_center',
         'tax_percentage',
         'tax_amount',
         'debit_account_id',
@@ -26,9 +25,7 @@ class PurchaseEntryLine extends Model
     protected function casts(): array
     {
         return [
-            'qty' => 'decimal:2',
-            'unit_price' => 'decimal:2',
-            'discount_percentage' => 'decimal:2',
+            'amount' => 'decimal:2',
             'tax_percentage' => 'decimal:2',
             'tax_amount' => 'decimal:2',
             'total' => 'decimal:2',

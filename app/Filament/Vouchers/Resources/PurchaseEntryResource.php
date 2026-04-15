@@ -46,10 +46,8 @@ class PurchaseEntryResource extends Resource
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
         return parent::getEloquentQuery()->with([
-            'voucher',
             'taxRegistration',
             'lines.debitAccount',
-            'lines.creditAccount',
         ]);
     }
 
@@ -72,11 +70,7 @@ class PurchaseEntryResource extends Resource
                         ->searchable()
                         ->preload(),
 
-                    Forms\Components\Select::make('voucher_id')
-                        ->relationship('voucher', 'voucher_number')
-                        ->searchable()
-                        ->preload()
-                        ->label('Linked Voucher'),
+
 
                     Forms\Components\Select::make('tax_registration_id')
                         ->label('Supplier')
@@ -84,6 +78,20 @@ class PurchaseEntryResource extends Resource
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->name)
                         ->searchable()
                         ->preload()
+                        ->live()
+                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                            if ($state) {
+                                $tax = \App\Models\TaxRegistration::find($state);
+                                if ($tax && $tax->payment_terms && $get('date')) {
+                                    $date = \Carbon\Carbon::parse($get('date'));
+                                    if (preg_match('/(\d+)/', $tax->payment_terms, $matches)) {
+                                        $set('due_date', $date->addDays((int) $matches[1])->format('Y-m-d'));
+                                    } else {
+                                        $set('due_date', $date->format('Y-m-d'));
+                                    }
+                                }
+                            }
+                        })
                         ->createOptionForm([
                             Forms\Components\TextInput::make('trn')->label('TRN Number')->required()->unique('tax_registrations', 'trn'),
                             Forms\Components\TextInput::make('name')->label('Supplier / Company Name')->required(),
@@ -99,12 +107,50 @@ class PurchaseEntryResource extends Resource
                         ->required()
                         ->default(now())
                         ->native(false)
-                        ->displayFormat('d/m/Y'),
+                        ->displayFormat('d/m/Y')
+                        ->live()
+                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                            $taxId = $get('tax_registration_id');
+                            if ($state && $taxId) {
+                                $tax = \App\Models\TaxRegistration::find($taxId);
+                                if ($tax && $tax->payment_terms) {
+                                    $date = \Carbon\Carbon::parse($state);
+                                    if (preg_match('/(\d+)/', $tax->payment_terms, $matches)) {
+                                        $set('due_date', $date->addDays((int) $matches[1])->format('Y-m-d'));
+                                    } else {
+                                        $set('due_date', $date->format('Y-m-d'));
+                                    }
+                                }
+                            }
+                        }),
 
                     Forms\Components\DatePicker::make('due_date')
                         ->label('Due Date')
                         ->native(false)
-                        ->displayFormat('d/m/Y'),
+                        ->displayFormat('d/m/Y')
+                        ->helperText(function (Forms\Get $get) {
+                            $taxId = $get('tax_registration_id');
+                            if (!$taxId) {
+                                return new \Illuminate\Support\HtmlString(
+                                    '<span class="text-xs text-gray-400 italic">⚡ Select a supplier to auto-calculate the due date from their payment terms.</span>'
+                                );
+                            }
+                            $tax = \App\Models\TaxRegistration::find($taxId);
+                            if (!$tax || !$tax->payment_terms) {
+                                return new \Illuminate\Support\HtmlString(
+                                    '<span class="text-xs text-amber-500 italic">⚠ No payment terms set for this supplier. Enter due date manually or update the supplier record.</span>'
+                                );
+                            }
+                            $terms = $tax->payment_terms;
+                            if (preg_match('/(\d+)/', $terms, $matches)) {
+                                return new \Illuminate\Support\HtmlString(
+                                    '<span class="text-xs text-green-600 italic">✓ Auto-calculated: <strong>' . e($terms) . '</strong> (' . $matches[1] . ' days from bill date). You can override this manually.</span>'
+                                );
+                            }
+                            return new \Illuminate\Support\HtmlString(
+                                '<span class="text-xs text-amber-500 italic">⚠ Payment terms "<strong>' . e($terms) . '</strong>" (e.g. COD / On Receipt) — due date defaulted to bill date. Override if needed.</span>'
+                            );
+                        }),
 
                     Forms\Components\Select::make('price_type')
                         ->label('Price Type')
@@ -118,19 +164,15 @@ class PurchaseEntryResource extends Resource
                         ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                             $lines = $get('lines') ?? [];
                             foreach ($lines as $key => $line) {
-                                $qty = (float) ($line['qty'] ?? 1);
-                                $price = (float) ($line['unit_price'] ?? 0);
-                                $disc = (float) ($line['discount_percentage'] ?? 0);
+                                $amount = (float) ($line['amount'] ?? 0);
                                 $taxRate = (float) ($line['tax_percentage'] ?? 0);
                                 
-                                $discounted = ($qty * $price) * (1 - ($disc / 100));
-                                
                                 if ($state === 'inclusive') {
-                                    $tax = $discounted - ($discounted / (1 + ($taxRate / 100)));
-                                    $total = $discounted; 
+                                    $tax = $amount - ($amount / (1 + ($taxRate / 100)));
+                                    $total = $amount; 
                                 } else {
-                                    $tax = $discounted * ($taxRate / 100);
-                                    $total = $discounted + $tax;
+                                    $tax = $amount * ($taxRate / 100);
+                                    $total = $amount + $tax;
                                 }
                                 
                                 $set("lines.{$key}.tax_amount", round($tax, 2));
@@ -147,6 +189,9 @@ class PurchaseEntryResource extends Resource
                 Forms\Components\Section::make('Supplier Reference')
                     ->description('Provide optional supplier document numbers.')
                     ->schema([
+                        Forms\Components\TextInput::make('po_number')
+                            ->label('PO Number')
+                            ->placeholder('e.g. PO-2024-001'),
                         Forms\Components\TextInput::make('invoice_no')
                             ->label('Invoice Number')
                             ->placeholder('e.g. INV-2023001'),
@@ -154,7 +199,7 @@ class PurchaseEntryResource extends Resource
                             ->label('Bill Number')
                             ->placeholder('e.g. BILL-99120'),
                     ])
-                    ->columns(2)
+                    ->columns(3)
                     ->collapsed(),
 
                 Forms\Components\Section::make('Entry Lines')->schema([
@@ -171,96 +216,41 @@ class PurchaseEntryResource extends Resource
                                         ->columnSpan(4),
                                     Forms\Components\Select::make('debit_account_id')
                                         ->relationship('debitAccount', 'code')
-                                        ->label('Debit Account')
+                                        ->label('Account')
                                         ->searchable()
                                         ->native(false)
                                         ->columnSpan(4),
-                                    Forms\Components\Select::make('credit_account_id')
-                                        ->relationship('creditAccount', 'code')
-                                        ->label('Credit Account')
+                                    Forms\Components\Select::make('cost_center')
+                                        ->label('Cost Center')
+                                        ->options(\App\Models\VoucherTemplate::where('is_active', true)->pluck('company_name', 'company_name'))
                                         ->searchable()
-                                        ->native(false)
+                                        ->preload()
                                         ->columnSpan(4),
 
-                                    // Row 2: Quantities, Pricing, and Tax Calculations
-                                    Forms\Components\TextInput::make('qty')
-                                        ->label('Qty')
-                                        ->numeric()
-                                        ->default(1)
-                                        ->live(onBlur: true)
-                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                            $priceType = $get('../../price_type') ?? 'exclusive';
-                                            $qty = (float) $get('qty');
-                                            $price = (float) $get('unit_price');
-                                            $disc = (float) $get('discount_percentage');
-                                            $taxRate = (float) $get('tax_percentage');
-                                            $discounted = ($qty * $price) * (1 - ($disc / 100));
-                                            
-                                            if ($priceType === 'inclusive') {
-                                                $tax = $discounted - ($discounted / (1 + ($taxRate / 100)));
-                                                $total = $discounted;
-                                            } else {
-                                                $tax = $discounted * ($taxRate / 100);
-                                                $total = $discounted + $tax;
-                                            }
-                                            
-                                            $set('tax_amount', round($tax, 2));
-                                            $set('total', round($total, 2));
-                                        })
-                                        ->prefix('x')
-                                        ->columnSpan(2),
-                                    Forms\Components\TextInput::make('unit_price')
-                                        ->label('Unit Price')
+                                    // Row 2: Amounts and Tax Calculations
+                                    Forms\Components\TextInput::make('amount')
+                                        ->label('Amount')
                                         ->numeric()
                                         ->default(0)
                                         ->live(onBlur: true)
                                         ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
                                             $priceType = $get('../../price_type') ?? 'exclusive';
-                                            $qty = (float) $get('qty');
-                                            $price = (float) $get('unit_price');
-                                            $disc = (float) $get('discount_percentage');
+                                            $amount = (float) $get('amount');
                                             $taxRate = (float) $get('tax_percentage');
-                                            $discounted = ($qty * $price) * (1 - ($disc / 100));
                                             
                                             if ($priceType === 'inclusive') {
-                                                $tax = $discounted - ($discounted / (1 + ($taxRate / 100)));
-                                                $total = $discounted;
+                                                $tax = $amount - ($amount / (1 + ($taxRate / 100)));
+                                                $total = $amount;
                                             } else {
-                                                $tax = $discounted * ($taxRate / 100);
-                                                $total = $discounted + $tax;
+                                                $tax = $amount * ($taxRate / 100);
+                                                $total = $amount + $tax;
                                             }
                                             
                                             $set('tax_amount', round($tax, 2));
                                             $set('total', round($total, 2));
                                         })
                                         ->prefix('AED')
-                                        ->columnSpan(2),
-                                    Forms\Components\TextInput::make('discount_percentage')
-                                        ->label('Disc %')
-                                        ->numeric()
-                                        ->default(0)
-                                        ->live(onBlur: true)
-                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                            $priceType = $get('../../price_type') ?? 'exclusive';
-                                            $qty = (float) $get('qty');
-                                            $price = (float) $get('unit_price');
-                                            $disc = (float) $get('discount_percentage');
-                                            $taxRate = (float) $get('tax_percentage');
-                                            $discounted = ($qty * $price) * (1 - ($disc / 100));
-                                            
-                                            if ($priceType === 'inclusive') {
-                                                $tax = $discounted - ($discounted / (1 + ($taxRate / 100)));
-                                                $total = $discounted;
-                                            } else {
-                                                $tax = $discounted * ($taxRate / 100);
-                                                $total = $discounted + $tax;
-                                            }
-                                            
-                                            $set('tax_amount', round($tax, 2));
-                                            $set('total', round($total, 2));
-                                        })
-                                        ->suffix('%')
-                                        ->columnSpan(2),
+                                        ->columnSpan(4),
                                     Forms\Components\TextInput::make('tax_percentage')
                                         ->label('Tax %')
                                         ->numeric()
@@ -268,25 +258,22 @@ class PurchaseEntryResource extends Resource
                                         ->live(onBlur: true)
                                         ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
                                             $priceType = $get('../../price_type') ?? 'exclusive';
-                                            $qty = (float) $get('qty');
-                                            $price = (float) $get('unit_price');
-                                            $disc = (float) $get('discount_percentage');
+                                            $amount = (float) $get('amount');
                                             $taxRate = (float) $get('tax_percentage');
-                                            $discounted = ($qty * $price) * (1 - ($disc / 100));
                                             
                                             if ($priceType === 'inclusive') {
-                                                $tax = $discounted - ($discounted / (1 + ($taxRate / 100)));
-                                                $total = $discounted;
+                                                $tax = $amount - ($amount / (1 + ($taxRate / 100)));
+                                                $total = $amount;
                                             } else {
-                                                $tax = $discounted * ($taxRate / 100);
-                                                $total = $discounted + $tax;
+                                                $tax = $amount * ($taxRate / 100);
+                                                $total = $amount + $tax;
                                             }
                                             
                                             $set('tax_amount', round($tax, 2));
                                             $set('total', round($total, 2));
                                         })
                                         ->suffix('%')
-                                        ->columnSpan(2),
+                                        ->columnSpan(4),
                                     Forms\Components\TextInput::make('tax_amount')
                                         ->label('Tax Amt')
                                         ->numeric()
@@ -318,18 +305,14 @@ class PurchaseEntryResource extends Resource
                                     ->content(function (Forms\Get $get) {
                                         $priceType = $get('price_type') ?? 'exclusive';
                                         $lines = $get('lines') ?? [];
-                                        
+
                                         $netSum = collect($lines)->sum(function ($item) use ($priceType) {
-                                            $qty = (float)($item['qty'] ?? 0);
-                                            $price = (float)($item['unit_price'] ?? 0);
-                                            $disc = (float)($item['discount_percentage'] ?? 0);
+                                            $amount = (float)($item['amount'] ?? 0);
                                             $taxRate = (float)($item['tax_percentage'] ?? 0);
-                                            $discounted = ($qty * $price) * (1 - ($disc / 100));
-                                            
                                             if ($priceType === 'inclusive') {
-                                                return $discounted / (1 + ($taxRate / 100));
+                                                return $amount / (1 + ($taxRate / 100));
                                             } else {
-                                                return $discounted;
+                                                return $amount;
                                             }
                                         });
 
@@ -378,10 +361,7 @@ class PurchaseEntryResource extends Resource
                 Tables\Columns\TextColumn::make('taxRegistration.name')
                     ->label('Supplier')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('voucher.voucher_number')
-                    ->label('Ref. Voucher')
-                    ->searchable()
-                    ->default('—'),
+
                 Tables\Columns\TextColumn::make('price_type')
                     ->label('Price Type')
                     ->badge()
@@ -492,10 +472,6 @@ class PurchaseEntryResource extends Resource
                                     ->badge()
                                     ->color(fn ($state) => $state === 'inclusive' ? 'warning' : 'info')
                                     ->formatStateUsing(fn ($state) => $state === 'inclusive' ? 'Inclusive' : 'Exclusive'),
-                                \Filament\Infolists\Components\TextEntry::make('voucher.voucher_number')
-                                    ->label('Ref. Voucher')
-                                    ->placeholder('—')
-                                    ->url(fn ($record) => $record->voucher_id ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
                             ]),
                     ]),
 
@@ -506,8 +482,7 @@ class PurchaseEntryResource extends Resource
                             ->schema([
                                 \Filament\Infolists\Components\TextEntry::make('header_desc')->state('Description / Item')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
                                 \Filament\Infolists\Components\TextEntry::make('header_account')->state('Account')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
-                                \Filament\Infolists\Components\TextEntry::make('header_qty')->state('Qty')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
-                                \Filament\Infolists\Components\TextEntry::make('header_price')->state('Price')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1)->alignEnd(),
+                                \Filament\Infolists\Components\TextEntry::make('header_cc')->state('Cost Center')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
                                 \Filament\Infolists\Components\TextEntry::make('header_tax')->state('VAT%')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1)->alignCenter(),
                                 \Filament\Infolists\Components\TextEntry::make('header_vat_amt')->state('VAT Amt')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1)->alignEnd(),
                                 \Filament\Infolists\Components\TextEntry::make('header_total')->state('Line Total')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2)->alignEnd(),
@@ -527,17 +502,11 @@ class PurchaseEntryResource extends Resource
                                             ->hiddenLabel()
                                             ->formatStateUsing(fn ($state, $record) => $state . ' (' . $record->debitAccount?->name . ')')
                                             ->columnSpan(3),
-                                        \Filament\Infolists\Components\TextEntry::make('qty')
-                                            ->label('Qty')
+                                        \Filament\Infolists\Components\TextEntry::make('cost_center')
+                                            ->label('Cost Center')
                                             ->hiddenLabel()
-                                            ->columnSpan(1),
-                                        \Filament\Infolists\Components\TextEntry::make('unit_price')
-                                            ->label('Price')
-                                            ->hiddenLabel()
-                                            ->money('AED')
-                                            ->extraAttributes(['class' => 'font-mono text-gray-600'])
-                                            ->columnSpan(1)
-                                            ->alignEnd(),
+                                            ->placeholder('—')
+                                            ->columnSpan(2),
                                         \Filament\Infolists\Components\TextEntry::make('tax_percentage')
                                             ->label('Tax')
                                             ->hiddenLabel()

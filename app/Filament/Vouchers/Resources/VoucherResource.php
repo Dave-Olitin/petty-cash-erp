@@ -23,7 +23,6 @@ class VoucherResource extends Resource
 
     /**
      * Auto-computes change_given = max(0, tendered - voucher_amount).
-     * Called by afterStateUpdated on every denomination field.
      */
     public static function recomputeChange(Forms\Get $get, Forms\Set $set): void
     {
@@ -32,9 +31,25 @@ class VoucherResource extends Resource
             + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1)
             + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
 
-        $voucherAmount = (float) ($get('voucher_amount') ?? 0);
+        $voucherAmount = (float) ($get('amount') ?? 0);
         $change = max(0, round($tendered - $voucherAmount, 2));
         $set('change_given', $change);
+    }
+
+    /**
+     * Auto-computes voucher total amount from items.
+     */
+    public static function recomputeVoucherTotal(Forms\Get $get, Forms\Set $set): void
+    {
+        $items = $get('items') ?? [];
+        $type  = $get('type');
+        $field = ($type === 'receipt') ? 'credit' : 'debit';
+
+        $total = 0;
+        foreach ($items as $item) {
+            $total += (float) ($item[$field] ?? 0);
+        }
+        $set('amount', number_format($total, 2, '.', ''));
     }
 
     public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
@@ -170,6 +185,17 @@ class VoucherResource extends Resource
                                                 }
                                             }),
 
+                                        Forms\Components\Select::make('purchase_entry_id')
+                                            ->label('Linked Purchase Entry')
+                                            ->relationship('purchaseEntry', 'entry_no')
+                                            ->getOptionLabelFromRecordUsing(fn ($record) =>
+                                                $record->entry_no . ' — ' . ($record->taxRegistration?->name ?? 'No Supplier') . ' — AED ' . number_format($record->total ?? 0, 2)
+                                            )
+                                            ->searchable()
+                                            ->preload()
+                                            ->nullable()
+                                            ->placeholder('Optional — link a purchase entry'),
+
                                         Forms\Components\Select::make('department')
                                             ->label('Department')
                                             ->options(\App\Models\Department::active()->pluck('name', 'name')->toArray())
@@ -268,18 +294,10 @@ class VoucherResource extends Resource
                                         ->relationship()
                                         ->label('')
                                         ->schema([
-                                            // Row 1: Type, Branch, Account Code
+                                            // Row 1: Branch, Account Code, Debit, Credit
                                             Forms\Components\Grid::make(['default' => 1, 'md' => 12])->schema([
-                                                Forms\Components\Select::make('entry_type')
-                                                    ->label('Entry type')
-                                                    ->options([
-                                                        'debit'  => 'DR — Debit',
-                                                        'credit' => 'CR — Credit',
-                                                    ])
-                                                    ->default('debit')
-                                                    ->required()
-                                                    ->live()
-                                                    ->columnSpan(['default' => 1, 'md' => 6]),
+                                                Forms\Components\Hidden::make('entry_type')
+                                                    ->default('debit'),
 
                                                 Forms\Components\Select::make('branch_code')
                                                     ->label('Branch')
@@ -296,104 +314,134 @@ class VoucherResource extends Resource
                                                         return $branch->name;
                                                     })
                                                     ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
-                                                    ->columnSpan(['default' => 1, 'md' => 6]),
+                                                    ->columnSpan(3),
 
-                                                Forms\Components\Grid::make(12)
-                                                    ->schema([
-                                                        Forms\Components\Select::make('entry_type')
-                                                            ->label('Type')
-                                                            ->options(['debit' => 'DR', 'credit' => 'CR'])
-                                                            ->required()
-                                                            ->selectablePlaceholder(false)
-                                                            ->columnSpan(1),
-                                                        Forms\Components\Select::make('account_code')
-                                                            ->label('Account Code')
-                                                            ->searchable()
-                                                            ->allowHtml()
-                                                            ->getSearchResultsUsing(function (string $search) {
-                                                                return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
-                                                                    ->orWhere('name', 'like', "%{$search}%")
-                                                                    ->limit(30)
-                                                                    ->get()
-                                                                    ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
-                                                                    ->toArray();
-                                                            })
-                                                            ->getOptionLabelUsing(fn (?string $value) => $value
-                                                                ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
-                                                                    ? "{$ac->code} — {$ac->name}"
-                                                                    : $value
-                                                                : null
-                                                            )
-                                                            ->createOptionForm([
-                                                                Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
-                                                                Forms\Components\TextInput::make('name')->required(),
-                                                            ])
-                                                            ->createOptionUsing(function (array $data) {
-                                                                \App\Models\AccountCode::create($data);
-                                                                return $data['code'];
-                                                            })
-                                                            ->live(debounce: 500)
-                                                            ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
-                                                                if (blank($state)) return;
-                                                                $account = \App\Models\AccountCode::where('code', $state)->first();
-                                                                if ($account) {
-                                                                    $set('description', $account->name);
-                                                                }
-                                                            })
-                                                            ->columnSpan(5),
-                                                        Forms\Components\Select::make('trn')
-                                                            ->label('Supplier (TRN)')
-                                                            ->searchable()
-                                                            ->allowHtml()
-                                                            ->getSearchResultsUsing(function (string $search) {
-                                                                return \App\Models\TaxRegistration::where('trn', 'like', "%{$search}%")
-                                                                    ->orWhere('name', 'like', "%{$search}%")
-                                                                    ->limit(30)
-                                                                    ->get()
-                                                                    ->mapWithKeys(fn ($tax) => [$tax->trn => $tax->trn . ' — <span class="text-xs text-gray-500">' . $tax->name . '</span>'])
-                                                                    ->toArray();
-                                                            })
-                                                            ->getOptionLabelUsing(fn (?string $value) => $value
-                                                                ? (($tax = \App\Models\TaxRegistration::where('trn', $value)->first())
-                                                                    ? "{$tax->trn} — {$tax->name}"
-                                                                    : $value)
-                                                                : null
-                                                            )
-                                                            ->createOptionForm([
-                                                                Forms\Components\TextInput::make('trn')
-                                                                    ->label('TRN Number')
-                                                                    ->required()
-                                                                    ->unique('tax_registrations', 'trn'),
-                                                                Forms\Components\TextInput::make('name')
-                                                                    ->label('Vendor / Company Name')
-                                                                    ->required(),
-                                                            ])
-                                                            ->createOptionUsing(function (array $data) {
-                                                                \App\Models\TaxRegistration::create($data);
-                                                                return $data['trn'];
-                                                            })
-                                                            ->columnSpan(4),
-                                                        Forms\Components\TextInput::make('amount')
-                                                            ->numeric()
-                                                            ->required()
-                                                            ->prefix('AED')
-                                                            ->default(0)
-                                                            ->live(debounce: 500)
-                                                            ->columnSpan(2)
-                                                            ->extraInputAttributes(['class' => 'font-mono text-right text-primary-600 font-bold']),
-                                                        
-                                                        Forms\Components\TextInput::make('po_number')
-                                                            ->label('PO #')
-                                                            ->maxLength(255)
-                                                            ->placeholder('Optional')
-                                                            ->columnSpan(6),
-                                                        Forms\Components\TextInput::make('invoice_number')
-                                                            ->label('Inv #')
-                                                            ->maxLength(255)
-                                                            ->placeholder('Optional')
-                                                            ->columnSpan(6),
-                                                        Forms\Components\Hidden::make('description'),
+                                                Forms\Components\Select::make('account_code')
+                                                    ->label('Account Code')
+                                                    ->searchable()
+                                                    ->allowHtml()
+                                                    ->getSearchResultsUsing(function (string $search) {
+                                                        return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
+                                                            ->orWhere('name', 'like', "%{$search}%")
+                                                            ->limit(30)
+                                                            ->get()
+                                                            ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
+                                                            ->toArray();
+                                                    })
+                                                    ->getOptionLabelUsing(fn (?string $value) => $value
+                                                        ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                                            ? "{$ac->code} — {$ac->name}"
+                                                            : $value
+                                                        : null
+                                                    )
+                                                    ->createOptionForm([
+                                                        Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
+                                                        Forms\Components\TextInput::make('name')->required(),
+                                                    ])
+                                                    ->createOptionUsing(function (array $data) {
+                                                        \App\Models\AccountCode::create($data);
+                                                        return $data['code'];
+                                                    })
+                                                    ->live(debounce: 500)
+                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
+                                                        if (blank($state)) return;
+                                                        $account = \App\Models\AccountCode::where('code', $state)->first();
+                                                        if ($account) {
+                                                            $set('description', $account->name);
+                                                        }
+                                                    })
+                                                    ->columnSpan(5),
+
+                                                Forms\Components\TextInput::make('debit')
+                                                    ->label('Debit (DR)')
+                                                    ->numeric()
+                                                    ->required()
+                                                    ->prefix('DR')
+                                                    ->default(0)
+                                                    ->live(debounce: 500)
+                                                    ->columnSpan(2)
+                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                                                        $val = (float)($state ?? 0);
+                                                        if ($val > 0) {
+                                                            $set('credit', 0);
+                                                            $set('entry_type', 'debit');
+                                                        }
+                                                        $set('amount', $val);
+                                                    })
+                                                    ->extraInputAttributes([
+                                                        'class' => 'font-mono text-right text-green-700 font-bold border-green-500 focus:border-green-600 ring-green-200',
+                                                        'style' => 'border-width: 2px;',
                                                     ]),
+
+                                                Forms\Components\TextInput::make('credit')
+                                                    ->label('Credit (CR)')
+                                                    ->numeric()
+                                                    ->required()
+                                                    ->prefix('CR')
+                                                    ->default(0)
+                                                    ->live(debounce: 500)
+                                                    ->columnSpan(2)
+                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                                                        $val = (float)($state ?? 0);
+                                                        if ($val > 0) {
+                                                            $set('debit', 0);
+                                                            $set('entry_type', 'credit');
+                                                        }
+                                                        $set('amount', $val);
+                                                    })
+                                                    ->extraInputAttributes([
+                                                        'class' => 'font-mono text-right text-red-700 font-bold border-red-500 focus:border-red-600 ring-red-200',
+                                                        'style' => 'border-width: 2px;',
+                                                    ]),
+
+                                                // Row 2 Fields
+                                                Forms\Components\Select::make('trn')
+                                                    ->label('Supplier (TRN)')
+                                                    ->searchable()
+                                                    ->allowHtml()
+                                                    ->getSearchResultsUsing(function (string $search) {
+                                                        return \App\Models\TaxRegistration::where('trn', 'like', "%{$search}%")
+                                                            ->orWhere('name', 'like', "%{$search}%")
+                                                            ->limit(30)
+                                                            ->get()
+                                                            ->mapWithKeys(fn ($tax) => [$tax->trn => $tax->trn . ' — <span class="text-xs text-gray-500">' . $tax->name . '</span>'])
+                                                            ->toArray();
+                                                    })
+                                                    ->getOptionLabelUsing(fn (?string $value) => $value
+                                                        ? (($tax = \App\Models\TaxRegistration::where('trn', $value)->first())
+                                                            ? "{$tax->trn} — {$tax->name}"
+                                                            : $value)
+                                                        : null
+                                                    )
+                                                    ->createOptionForm([
+                                                        Forms\Components\TextInput::make('trn')
+                                                            ->label('TRN Number')
+                                                            ->required()
+                                                            ->unique('tax_registrations', 'trn'),
+                                                        Forms\Components\TextInput::make('name')
+                                                            ->label('Vendor / Company Name')
+                                                            ->required(),
+                                                    ])
+                                                    ->createOptionUsing(function (array $data) {
+                                                        \App\Models\TaxRegistration::create($data);
+                                                        return $data['trn'];
+                                                    })
+                                                    ->columnSpan(4),
+
+                                                Forms\Components\TextInput::make('po_number')
+                                                    ->label('PO #')
+                                                    ->maxLength(255)
+                                                    ->placeholder('Optional')
+                                                    ->columnSpan(4),
+
+                                                Forms\Components\TextInput::make('invoice_number')
+                                                    ->label('Inv #')
+                                                    ->maxLength(255)
+                                                    ->placeholder('Optional')
+                                                    ->columnSpan(4),
+
+                                                Forms\Components\Hidden::make('amount'),
+                                                Forms\Components\Hidden::make('description'),
                                             ]),
                                         ])
                                         ->defaultItems(2)
@@ -403,25 +451,12 @@ class VoucherResource extends Resource
                                         ->cloneable()
                                         ->addActionLabel('+ Add Ledger Entry')
                                         ->itemLabel(fn (array $state): ?string =>
-                                            (($state['entry_type'] ?? 'debit') === 'credit' ? '🔴 CR' : '🟢 DR') .
+                                            ((float)($state['credit'] ?? 0) > 0 ? '🔴 CR' : '🟢 DR') .
                                             ' — ' . ($state['description'] ?: ($state['account_code'] ?: 'New Entry')) .
-                                            ' — AED ' . number_format((float) ($state['amount'] ?? 0), 2)
+                                            ' — DR: AED ' . number_format((float)($state['debit'] ?? 0), 2) .
+                                            ' | CR: AED ' . number_format((float)($state['credit'] ?? 0), 2)
                                         )
-                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                            $items = $get('items') ?? [];
-                                            $type  = $get('type'); // e.g. 'receipt', 'petty_cash', 'payment'
-
-                                            // Receipt vouchers are credit-based; all others are debit-based.
-                                            $targetType = ($type === 'receipt') ? 'credit' : 'debit';
-
-                                            $total = 0;
-                                            foreach ($items as $item) {
-                                                if (($item['entry_type'] ?? 'debit') === $targetType) {
-                                                    $total += (float) ($item['amount'] ?? 0);
-                                                }
-                                            }
-                                            $set('amount', number_format($total, 2, '.', ''));
-                                        })
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => static::recomputeVoucherTotal($get, $set))
                                         ->live(),
                         ]),
 
@@ -433,8 +468,47 @@ class VoucherResource extends Resource
                                 Forms\Components\Group::make()->schema([
                                     Forms\Components\Placeholder::make('amount_placeholder')
                                         ->label('Voucher Total')
-                                        ->content(fn ($get) => new \Illuminate\Support\HtmlString('<div class="text-3xl font-mono font-bold text-primary-600">' . number_format((float)($get('amount') ?? 0), 2) . ' <span class="text-xs font-normal text-gray-400">AED</span></div>')),
-                                    
+                                        ->content(fn ($get) => new \Illuminate\Support\HtmlString(
+                                            '<div class="text-3xl font-mono font-bold text-primary-600">' .
+                                            number_format((float)($get('amount') ?? 0), 2) .
+                                            ' <span class="text-xs font-normal text-gray-400">AED</span></div>'
+                                        )),
+
+                                    Forms\Components\Placeholder::make('balance_check')
+                                        ->label('Debit / Credit Balance')
+                                        ->content(function ($get) {
+                                            $items  = $get('items') ?? [];
+                                            $totalDr = 0;
+                                            $totalCr = 0;
+
+                                            foreach ($items as $item) {
+                                                $totalDr += (float) ($item['debit']  ?? 0);
+                                                $totalCr += (float) ($item['credit'] ?? 0);
+                                            }
+
+                                            $diff      = round(abs($totalDr - $totalCr), 2);
+                                            $balanced  = $diff <= 0.01;
+
+                                            $drLine = '<div class="flex justify-between"><span class="text-gray-500 text-sm">Total Debit&nbsp;(DR)</span><span class="font-mono font-semibold text-green-700">AED ' . number_format($totalDr, 2) . '</span></div>';
+                                            $crLine = '<div class="flex justify-between"><span class="text-gray-500 text-sm">Total Credit (CR)</span><span class="font-mono font-semibold text-red-700">AED '  . number_format($totalCr, 2) . '</span></div>';
+
+                                            if ($balanced) {
+                                                $badge = '<div class="mt-2 flex items-center gap-2 rounded-lg" style="background-color: #f0fdf4; border: 1px solid #bdf2cb; color: #166534; padding: 8px 12px;">'
+                                                    . '<svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+                                                    . '<span style="font-weight: 600; font-size: 0.875rem;">Balanced — Debits equal Credits</span>'
+                                                    . '</div>';
+                                            } else {
+                                                $badge = '<div class="mt-2 flex items-center gap-2 rounded-lg" style="background-color: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 8px 12px;">'
+                                                    . '<svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>'
+                                                    . '<span style="font-weight: 600; font-size: 0.875rem;">Out of Balance — Difference: AED ' . number_format($diff, 2) . '</span>'
+                                                    . '</div>';
+                                            }
+
+                                            return new \Illuminate\Support\HtmlString(
+                                                '<div class="space-y-1">' . $drLine . $crLine . $badge . '</div>'
+                                            );
+                                        }),
+
                                     Forms\Components\Hidden::make('amount')->required(),
 
                                     Forms\Components\Textarea::make('transaction_summary')
@@ -498,12 +572,12 @@ class VoucherResource extends Resource
                                 ])->columns(['default' => 1, 'md' => 2]),
                         ]),
                 ])->skippable()->contained(false),
-                    ])->columnSpan(['default' => 'full', 'lg' => 2]),
+            ])->columnSpan(['default' => 'full', 'lg' => 2]),
 
-                    $previewSection,
-                ]),
-            ]);
-    }
+            $previewSection,
+        ]),
+    ]);
+}
 
 
     public static function table(Table $table): Table

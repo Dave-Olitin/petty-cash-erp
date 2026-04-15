@@ -56,37 +56,27 @@ class JournalEntryResource extends Resource
         return $form
             ->schema([
                 Forms\Components\Section::make('Journal Entry Details')->schema([
-                    // ── NEW HEADER FIELDS (3-col) ─────────────────────────────
-                    Forms\Components\Select::make('entity')
-                        ->label('Entity')
-                        ->options(\App\Models\VoucherTemplate::where('is_active', true)->pluck('company_name', 'company_name'))
-                        ->searchable()
-                        ->preload()
-                        ->required(),
-
                     Forms\Components\DatePicker::make('date')
                         ->required()
                         ->default(now())
                         ->native(false)
                         ->displayFormat('d/m/Y'),
-
                     Forms\Components\Select::make('voucher_id')
                         ->relationship('voucher', 'voucher_number')
                         ->searchable()
                         ->preload()
                         ->label('Linked Voucher'),
-
-                    // Description — full width below the 3 cols
-                    Forms\Components\Textarea::make('description')
-                        ->label('Description')
-                        ->rows(2)
-                        ->placeholder('Narration / purpose of this journal entry...')
-                        ->columnSpanFull(),
+                    Forms\Components\TextInput::make('po_number')
+                        ->label('PO Number')
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('invoice_no')
+                        ->label('Invoice #')
+                        ->maxLength(255),
 
                     // ── HIDDEN (kept for data integrity) ──────────────────────
                     Forms\Components\Hidden::make('reference'),
                     Forms\Components\Hidden::make('currency')->default('AED'),
-                ])->columns(3),
+                ])->columns(4),
 
                 Forms\Components\Section::make('Entry Lines')->schema([
                     Forms\Components\Repeater::make('lines')
@@ -99,12 +89,33 @@ class JournalEntryResource extends Resource
                                 ->searchable()
                                 ->native(false)
                                 ->columnSpan(2),
-                            Forms\Components\TextInput::make('cost_center')
-                                ->label('Cost Center')
+                            Forms\Components\Select::make('branch')
+                                ->label('Branch')
+                                ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
+                                ->searchable()
+                                ->preload()
+                                ->columnSpan(1),
+                            Forms\Components\Select::make('supplier_name')
+                                ->label('Supplier')
+                                ->options(\App\Models\TaxRegistration::pluck('name', 'name'))
+                                ->searchable()
+                                ->live(onBlur: true)
+                                ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
+                                    if ($state) {
+                                        $tax = \App\Models\TaxRegistration::where('name', $state)->first();
+                                        if ($tax && $tax->trn) {
+                                            $set('trn', $tax->trn);
+                                        }
+                                    }
+                                })
+                                ->columnSpan(2),
+                            Forms\Components\TextInput::make('trn')
+                                ->label('TRN')
+                                ->maxLength(255)
                                 ->columnSpan(1),
                             Forms\Components\TextInput::make('remarks')
-                                ->label('Remarks')
-                                ->columnSpan(1),
+                                ->label('Description')
+                                ->columnSpan(2),
                             Forms\Components\TextInput::make('debit')
                                 ->label('Debit')
                                 ->numeric()
@@ -127,7 +138,7 @@ class JournalEntryResource extends Resource
                                 ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                     if ((float)$state > 0) $set('debit', 0);
                                 }),
-                        ])->columns(6)
+                        ])->columns(10)
                         ->rule(function () {
                             return function (string $attribute, $value, \Closure $fail) {
                                 // Ensure user provides balanced lines before saving
@@ -189,10 +200,11 @@ class JournalEntryResource extends Resource
                     ->label('Entry No.')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('entity')
-                    ->label('Entity')
+                Tables\Columns\TextColumn::make('po_number')
+                    ->label('PO #')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('date')
                     ->label('Date')
                     ->date()
@@ -284,8 +296,12 @@ class JournalEntryResource extends Resource
                                     ->label('Entry Number')
                                     ->weight(\Filament\Support\Enums\FontWeight::Bold)
                                     ->copyable(),
-                                \Filament\Infolists\Components\TextEntry::make('entity')
-                                    ->label('Entity'),
+                                \Filament\Infolists\Components\TextEntry::make('po_number')
+                                    ->label('PO #')
+                                    ->placeholder('—'),
+                                \Filament\Infolists\Components\TextEntry::make('invoice_no')
+                                    ->label('Invoice #')
+                                    ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('date')
                                     ->label('Post Date')
                                     ->date('M j, Y'),
@@ -294,12 +310,6 @@ class JournalEntryResource extends Resource
                                     ->placeholder('—')
                                     ->url(fn ($record) => $record->voucher_id ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
                             ]),
-
-                        \Filament\Infolists\Components\TextEntry::make('description')
-                            ->label('Narration / Description')
-                            ->placeholder('No description provided.')
-                            ->columnSpanFull()
-                            ->prose(),
                     ]),
 
                 \Filament\Infolists\Components\Section::make('Accounting Lines')
@@ -307,11 +317,13 @@ class JournalEntryResource extends Resource
                         \Filament\Infolists\Components\Grid::make(12)
                             ->extraAttributes(['class' => 'bg-gray-100 p-2 border-b border-gray-200 rounded-t-lg'])
                             ->schema([
-                                \Filament\Infolists\Components\TextEntry::make('header_account')->state('Account / Ledger')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(4),
-                                \Filament\Infolists\Components\TextEntry::make('header_cc')->state('Cost Center')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
-                                \Filament\Infolists\Components\TextEntry::make('header_remarks')->state('Remarks')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
-                                \Filament\Infolists\Components\TextEntry::make('header_debit')->state('Debit (DR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
-                                \Filament\Infolists\Components\TextEntry::make('header_credit')->state('Credit (CR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
+                                \Filament\Infolists\Components\TextEntry::make('header_account')->state('Account / Ledger')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
+                                \Filament\Infolists\Components\TextEntry::make('header_branch')->state('Branch')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
+                                \Filament\Infolists\Components\TextEntry::make('header_supplier')->state('Supplier')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
+                                \Filament\Infolists\Components\TextEntry::make('header_trn')->state('TRN')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
+                                \Filament\Infolists\Components\TextEntry::make('header_remarks')->state('Description')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
+                                \Filament\Infolists\Components\TextEntry::make('header_debit')->state('Debit (DR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
+                                \Filament\Infolists\Components\TextEntry::make('header_credit')->state('Credit (CR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
                             ]),
 
                         \Filament\Infolists\Components\RepeatableEntry::make('lines')
@@ -323,14 +335,24 @@ class JournalEntryResource extends Resource
                                             ->label('Account')
                                             ->hiddenLabel()
                                             ->formatStateUsing(fn ($state, $record) => $state . ' - ' . $record->accountCode?->name)
-                                            ->columnSpan(4),
-                                        \Filament\Infolists\Components\TextEntry::make('cost_center')
-                                            ->label('Cost Center')
+                                            ->columnSpan(3),
+                                        \Filament\Infolists\Components\TextEntry::make('branch')
+                                            ->label('Branch')
                                             ->hiddenLabel()
                                             ->placeholder('—')
                                             ->columnSpan(2),
+                                        \Filament\Infolists\Components\TextEntry::make('supplier_name')
+                                            ->label('Supplier')
+                                            ->hiddenLabel()
+                                            ->placeholder('—')
+                                            ->columnSpan(2),
+                                        \Filament\Infolists\Components\TextEntry::make('trn')
+                                            ->label('TRN')
+                                            ->hiddenLabel()
+                                            ->placeholder('—')
+                                            ->columnSpan(1),
                                         \Filament\Infolists\Components\TextEntry::make('remarks')
-                                            ->label('Remarks')
+                                            ->label('Description')
                                             ->hiddenLabel()
                                             ->placeholder('—')
                                             ->columnSpan(2),
@@ -339,13 +361,13 @@ class JournalEntryResource extends Resource
                                             ->hiddenLabel()
                                             ->money('AED')
                                             ->extraAttributes(['class' => 'font-mono text-gray-700'])
-                                            ->columnSpan(2),
+                                            ->columnSpan(1),
                                         \Filament\Infolists\Components\TextEntry::make('credit')
                                             ->label('Credit')
                                             ->hiddenLabel()
                                             ->money('AED')
                                             ->extraAttributes(['class' => 'font-mono text-gray-700'])
-                                            ->columnSpan(2),
+                                            ->columnSpan(1),
                                     ])
                             ])
                             ->columns(1)

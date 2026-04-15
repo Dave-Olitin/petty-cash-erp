@@ -29,7 +29,6 @@ class PurchaseEntry extends Model
         'total_amount',
         'total_vat',
         'grand_total',
-        'voucher_id',
     ];
 
     protected function casts(): array
@@ -68,10 +67,7 @@ class PurchaseEntry extends Model
         });
     }
 
-    public function voucher(): BelongsTo
-    {
-        return $this->belongsTo(Voucher::class);
-    }
+
 
     public function taxRegistration(): BelongsTo
     {

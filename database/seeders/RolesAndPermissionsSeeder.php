@@ -50,6 +50,13 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // Settings
             'manage_settings', // Can view Roles, Permissions, Categories, etc.
+
+            // Liquidations
+            'liquidation.edit_settled', // Can override settled liquidations
+
+            // Reports & Advanced
+            'report.view',
+            'voucher.edit_own_undisbursed',
         ];
 
         foreach ($permissions as $perm) {
@@ -88,6 +95,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'purchase_entry.create',
             'purchase_entry.edit',
             'purchase_entry.delete',
+            'liquidation.edit_settled',
         ]);
 
         // APPROVER — can view and give final approval/rejection
