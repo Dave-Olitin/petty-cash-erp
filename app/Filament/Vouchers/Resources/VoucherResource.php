@@ -31,7 +31,12 @@ class VoucherResource extends Resource
             + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1)
             + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
 
-        $voucherAmount = (float) ($get('amount') ?? 0);
+        // 'voucher_amount' is used in the action modal (hidden field via mountUsing).
+        // 'amount' is used if called from the main form context.
+        $voucherAmount = (float) ($get('voucher_amount') ?: $get('amount') ?: 0);
+        
+        // Final calculation for change is tendered - voucherAmount, but we only show it as change if it's positive.
+        // If it's negative, it means we are 'short'.
         $change = max(0, round($tendered - $voucherAmount, 2));
         $set('change_given', $change);
     }
@@ -189,7 +194,7 @@ class VoucherResource extends Resource
                                             ->label('Linked Purchase Entry')
                                             ->relationship('purchaseEntry', 'entry_no')
                                             ->getOptionLabelFromRecordUsing(fn ($record) =>
-                                                $record->entry_no . ' — ' . ($record->taxRegistration?->name ?? 'No Supplier') . ' — AED ' . number_format($record->total ?? 0, 2)
+                                                $record->entry_no . ' — ' . ($record->supplier_name ?? 'No Supplier') . ' — AED ' . number_format($record->total_amount ?? 0, 2)
                                             )
                                             ->searchable()
                                             ->preload()
@@ -299,146 +304,152 @@ class VoucherResource extends Resource
                                                 Forms\Components\Hidden::make('entry_type')
                                                     ->default('debit'),
 
-                                                Forms\Components\Select::make('branch_code')
-                                                    ->label('Branch')
-                                                    ->searchable()
-                                                    ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
-                                                    ->createOptionForm([
-                                                        Forms\Components\TextInput::make('name')
-                                                            ->label('New Branch Name')
-                                                            ->required()
-                                                            ->unique('ledger_branches', 'name'),
-                                                    ])
-                                                    ->createOptionUsing(function (array $data) {
-                                                        $branch = \App\Models\LedgerBranch::create(['name' => $data['name']]);
-                                                        return $branch->name;
-                                                    })
-                                                    ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
-                                                    ->columnSpan(3),
+                                                Forms\Components\Grid::make(12)->schema([
+                                                    Forms\Components\Select::make('branch_code')
+                                                        ->label('Branch')
+                                                        ->searchable()
+                                                        ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
+                                                        ->createOptionForm([
+                                                            Forms\Components\TextInput::make('name')
+                                                                ->label('New Branch Name')
+                                                                ->required()
+                                                                ->unique('ledger_branches', 'name'),
+                                                        ])
+                                                        ->createOptionUsing(function (array $data) {
+                                                            $branch = \App\Models\LedgerBranch::create(['name' => $data['name']]);
+                                                            return $branch->name;
+                                                        })
+                                                        ->default(fn (Forms\Get $get) => \App\Models\VoucherTemplate::find($get('../../voucher_template_id'))?->branch_code)
+                                                        ->columnSpan(6),
 
-                                                Forms\Components\Select::make('account_code')
-                                                    ->label('Account Code')
-                                                    ->searchable()
-                                                    ->allowHtml()
-                                                    ->getSearchResultsUsing(function (string $search) {
-                                                        return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
-                                                            ->orWhere('name', 'like', "%{$search}%")
-                                                            ->limit(30)
-                                                            ->get()
-                                                            ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
-                                                            ->toArray();
-                                                    })
-                                                    ->getOptionLabelUsing(fn (?string $value) => $value
-                                                        ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
-                                                            ? "{$ac->code} — {$ac->name}"
-                                                            : $value
-                                                        : null
-                                                    )
-                                                    ->createOptionForm([
-                                                        Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
-                                                        Forms\Components\TextInput::make('name')->required(),
-                                                    ])
-                                                    ->createOptionUsing(function (array $data) {
-                                                        \App\Models\AccountCode::create($data);
-                                                        return $data['code'];
-                                                    })
-                                                    ->live(debounce: 500)
-                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
-                                                        if (blank($state)) return;
-                                                        $account = \App\Models\AccountCode::where('code', $state)->first();
-                                                        if ($account) {
-                                                            $set('description', $account->name);
-                                                        }
-                                                    })
-                                                    ->columnSpan(5),
+                                                    Forms\Components\Select::make('account_code')
+                                                        ->label('Account Code')
+                                                        ->searchable()
+                                                        ->allowHtml()
+                                                        ->getSearchResultsUsing(function (string $search) {
+                                                            return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
+                                                                ->orWhere('name', 'like', "%{$search}%")
+                                                                ->limit(30)
+                                                                ->get()
+                                                                ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
+                                                                ->toArray();
+                                                        })
+                                                        ->getOptionLabelUsing(fn (?string $value) => $value
+                                                            ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                                                ? "{$ac->code} — {$ac->name}"
+                                                                : $value
+                                                            : null
+                                                        )
+                                                        ->createOptionForm([
+                                                            Forms\Components\TextInput::make('code')->required()->unique('account_codes', 'code'),
+                                                            Forms\Components\TextInput::make('name')->required(),
+                                                        ])
+                                                        ->createOptionUsing(function (array $data) {
+                                                            \App\Models\AccountCode::create($data);
+                                                            return $data['code'];
+                                                        })
+                                                        ->live(debounce: 500)
+                                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, ?string $state) {
+                                                            if (blank($state)) return;
+                                                            $account = \App\Models\AccountCode::where('code', $state)->first();
+                                                            if ($account) {
+                                                                $set('description', $account->name);
+                                                            }
+                                                        })
+                                                        ->columnSpan(6),
+                                                ]),
 
-                                                Forms\Components\TextInput::make('debit')
-                                                    ->label('Debit (DR)')
-                                                    ->numeric()
-                                                    ->required()
-                                                    ->prefix('DR')
-                                                    ->default(0)
-                                                    ->live(debounce: 500)
-                                                    ->columnSpan(2)
-                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
-                                                        $val = (float)($state ?? 0);
-                                                        if ($val > 0) {
-                                                            $set('credit', 0);
-                                                            $set('entry_type', 'debit');
-                                                        }
-                                                        $set('amount', $val);
-                                                    })
-                                                    ->extraInputAttributes([
-                                                        'class' => 'font-mono text-right text-green-700 font-bold border-green-500 focus:border-green-600 ring-green-200',
-                                                        'style' => 'border-width: 2px;',
-                                                    ]),
+                                                Forms\Components\Grid::make(12)->schema([
+                                                    Forms\Components\Select::make('trn')
+                                                        ->label('Supplier (TRN)')
+                                                        ->searchable()
+                                                        ->allowHtml()
+                                                        ->getSearchResultsUsing(function (string $search) {
+                                                            return \App\Models\TaxRegistration::where('trn', 'like', "%{$search}%")
+                                                                ->orWhere('name', 'like', "%{$search}%")
+                                                                ->limit(30)
+                                                                ->get()
+                                                                ->mapWithKeys(fn ($tax) => [$tax->trn => $tax->trn . ' — <span class="text-xs text-gray-500">' . $tax->name . '</span>'])
+                                                                ->toArray();
+                                                        })
+                                                        ->getOptionLabelUsing(fn (?string $value) => $value
+                                                            ? (($tax = \App\Models\TaxRegistration::where('trn', $value)->first())
+                                                                ? "{$tax->trn} — {$tax->name}"
+                                                                : $value)
+                                                            : null
+                                                        )
+                                                        ->createOptionForm([
+                                                            Forms\Components\TextInput::make('trn')
+                                                                ->label('TRN Number')
+                                                                ->required()
+                                                                ->unique('tax_registrations', 'trn'),
+                                                            Forms\Components\TextInput::make('name')
+                                                                ->label('Vendor / Company Name')
+                                                                ->required(),
+                                                        ])
+                                                        ->createOptionUsing(function (array $data) {
+                                                            \App\Models\TaxRegistration::create($data);
+                                                            return $data['trn'];
+                                                        })
+                                                        ->columnSpan(6),
 
-                                                Forms\Components\TextInput::make('credit')
-                                                    ->label('Credit (CR)')
-                                                    ->numeric()
-                                                    ->required()
-                                                    ->prefix('CR')
-                                                    ->default(0)
-                                                    ->live(debounce: 500)
-                                                    ->columnSpan(2)
-                                                    ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
-                                                        $val = (float)($state ?? 0);
-                                                        if ($val > 0) {
-                                                            $set('debit', 0);
-                                                            $set('entry_type', 'credit');
-                                                        }
-                                                        $set('amount', $val);
-                                                    })
-                                                    ->extraInputAttributes([
-                                                        'class' => 'font-mono text-right text-red-700 font-bold border-red-500 focus:border-red-600 ring-red-200',
-                                                        'style' => 'border-width: 2px;',
-                                                    ]),
+                                                    Forms\Components\TextInput::make('debit')
+                                                        ->label('Debit (DR)')
+                                                        ->numeric()
+                                                        ->required()
+                                                        ->prefix('DR')
+                                                        ->default(0)
+                                                        ->live(debounce: 500)
+                                                        ->columnSpan(3)
+                                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                                                            $val = (float)($state ?? 0);
+                                                            if ($val > 0) {
+                                                                $set('credit', 0);
+                                                                $set('entry_type', 'debit');
+                                                            }
+                                                            $set('amount', $val);
+                                                        })
+                                                        ->extraInputAttributes([
+                                                            'class' => 'font-mono text-right text-green-700 font-bold border-green-500 focus:border-green-600 ring-green-200',
+                                                            'style' => 'border-width: 2px;',
+                                                        ]),
 
-                                                // Row 2 Fields
-                                                Forms\Components\Select::make('trn')
-                                                    ->label('Supplier (TRN)')
-                                                    ->searchable()
-                                                    ->allowHtml()
-                                                    ->getSearchResultsUsing(function (string $search) {
-                                                        return \App\Models\TaxRegistration::where('trn', 'like', "%{$search}%")
-                                                            ->orWhere('name', 'like', "%{$search}%")
-                                                            ->limit(30)
-                                                            ->get()
-                                                            ->mapWithKeys(fn ($tax) => [$tax->trn => $tax->trn . ' — <span class="text-xs text-gray-500">' . $tax->name . '</span>'])
-                                                            ->toArray();
-                                                    })
-                                                    ->getOptionLabelUsing(fn (?string $value) => $value
-                                                        ? (($tax = \App\Models\TaxRegistration::where('trn', $value)->first())
-                                                            ? "{$tax->trn} — {$tax->name}"
-                                                            : $value)
-                                                        : null
-                                                    )
-                                                    ->createOptionForm([
-                                                        Forms\Components\TextInput::make('trn')
-                                                            ->label('TRN Number')
-                                                            ->required()
-                                                            ->unique('tax_registrations', 'trn'),
-                                                        Forms\Components\TextInput::make('name')
-                                                            ->label('Vendor / Company Name')
-                                                            ->required(),
-                                                    ])
-                                                    ->createOptionUsing(function (array $data) {
-                                                        \App\Models\TaxRegistration::create($data);
-                                                        return $data['trn'];
-                                                    })
-                                                    ->columnSpan(4),
+                                                    Forms\Components\TextInput::make('credit')
+                                                        ->label('Credit (CR)')
+                                                        ->numeric()
+                                                        ->required()
+                                                        ->prefix('CR')
+                                                        ->default(0)
+                                                        ->live(debounce: 500)
+                                                        ->columnSpan(3)
+                                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                                                            $val = (float)($state ?? 0);
+                                                            if ($val > 0) {
+                                                                $set('debit', 0);
+                                                                $set('entry_type', 'credit');
+                                                            }
+                                                            $set('amount', $val);
+                                                        })
+                                                        ->extraInputAttributes([
+                                                            'class' => 'font-mono text-right text-red-700 font-bold border-red-500 focus:border-red-600 ring-red-200',
+                                                            'style' => 'border-width: 2px;',
+                                                        ]),
+                                                ]),
 
-                                                Forms\Components\TextInput::make('po_number')
-                                                    ->label('PO #')
-                                                    ->maxLength(255)
-                                                    ->placeholder('Optional')
-                                                    ->columnSpan(4),
+                                                Forms\Components\Grid::make(12)->schema([
+                                                    Forms\Components\TextInput::make('po_number')
+                                                        ->label('PO #')
+                                                        ->maxLength(255)
+                                                        ->placeholder('Optional')
+                                                        ->columnSpan(6),
 
-                                                Forms\Components\TextInput::make('invoice_number')
-                                                    ->label('Inv #')
-                                                    ->maxLength(255)
-                                                    ->placeholder('Optional')
-                                                    ->columnSpan(4),
+                                                    Forms\Components\TextInput::make('invoice_number')
+                                                        ->label('Inv #')
+                                                        ->maxLength(255)
+                                                        ->placeholder('Optional')
+                                                        ->columnSpan(6),
+                                                ]),
+
 
                                                 Forms\Components\Hidden::make('amount'),
                                                 Forms\Components\Hidden::make('description'),
@@ -847,65 +858,93 @@ class VoucherResource extends Resource
                                     ->maxLength(100),
                             ])->columns(3),
 
-                        Forms\Components\Section::make('Cash Handover / Collection')
-                            ->description(fn (Voucher $record) => new \Illuminate\Support\HtmlString("Voucher Amount: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Enter the bills/coins you hand over. Change back is auto-calculated."))
+                        Forms\Components\Section::make('Physical Cash Breakdown')
+                            ->description(fn (Voucher $record) => new \Illuminate\Support\HtmlString("Voucher Total: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Please count the currency notes and coins."))
                             ->visible(fn (Voucher $record) => !in_array($record->type, ['payment', 'bank_encashment']))
                             ->schema([
-                                Forms\Components\Grid::make(3)->schema([
-                                    Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('bill_500')->label('500 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('bill_200')->label('200 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('bill_100')->label('100 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('bill_50')->label('50 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('bill_20')->label('20 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('bill_10')->label('10 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('bill_5')->label('5 Bills')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('coin_1')->label('1 Coins')->numeric()->default(0)->live()->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('coin_0_50')->label('0.50 Coins')->numeric()->default(0)->live()->step('1')->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                    Forms\Components\TextInput::make('coin_0_25')->label('0.25 Coins')->numeric()->default(0)->live()->step('1')->minValue(0)
-                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
-                                ]),
-                                Forms\Components\Grid::make(2)->schema([
-                                    Forms\Components\TextInput::make('change_given')
-                                        ->label('Change Received Back (AED)')
-                                        ->numeric()
-                                        ->default(0)
-                                        ->readOnly()
-                                        ->helperText('Auto-calculated: Cash tendered minus voucher amount. Adjust denominations above to update.'),
-                                    Forms\Components\Placeholder::make('net_summary')
-                                        ->label('Live Summary')
-                                        ->content(function (Forms\Get $get) {
-                                            $total  = ((int) $get('bill_1000') * 1000) + ((int) $get('bill_500') * 500) + ((int) $get('bill_200') * 200) + ((int) $get('bill_100') * 100) + ((int) $get('bill_50') * 50) + ((int) $get('bill_20') * 20) + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1) + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
-                                            $change = (float) ($get('change_given') ?? 0);
-                                            $net    = $total - $change;
-                                            return new \Illuminate\Support\HtmlString(
-                                                "<div style='line-height:1.9'>" .
-                                                "💵 <strong>Cash Tendered:</strong> AED " . number_format($total, 2) . "<br>" .
-                                                "🔄 <strong>Change Back:</strong> AED " . number_format($change, 2) . "<br>" .
-                                                "✅ <strong>Net Disbursed:</strong> AED " . number_format($net, 2) .
-                                                "</div>"
-                                            );
-                                        }),
-                                    Forms\Components\Textarea::make('remarks')
-                                    ->label('Remarks / Notes')
-                                    ->placeholder('Optional: explain differences in denominations or general notes.')
-                                    ->columnSpanFull(),
-                                Forms\Components\Toggle::make('is_change_received')
-                                    ->label('Employee has already returned the exact change for this transaction.')
-                                    ->default(true)
-                                    ->visible(fn (Forms\Get $get) => (float)($get('change_given') ?? 0) > 0)
-                                    ->columnSpanFull(),
-                                ]),
+                                \Filament\Forms\Components\Fieldset::make('Currency Notes (Bills)')
+                                    ->schema([
+                                        Forms\Components\TextInput::make('bill_1000')->label('1000s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('bill_500')->label('500s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('bill_200')->label('200s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('bill_100')->label('100s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('bill_50')->label('50s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('bill_20')->label('20s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('bill_10')->label('10s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('bill_5')->label('5s')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                    ])->columns(4),
+
+                                \Filament\Forms\Components\Fieldset::make('Coins')
+                                    ->schema([
+                                        Forms\Components\TextInput::make('coin_1')->label('1.00')->numeric()->default(0)->live()->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('coin_0_50')->label('0.50')->numeric()->default(0)->live()->step('1')->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                        Forms\Components\TextInput::make('coin_0_25')->label('0.25')->numeric()->default(0)->live()->step('1')->minValue(0)
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+                                    ])->columns(3),
+
+                                \Filament\Forms\Components\Card::make()
+                                    ->schema([
+                                        Forms\Components\Grid::make(3)->schema([
+                                            Forms\Components\TextInput::make('change_given')
+                                                ->label('Cash Return / Change Due')
+                                                ->numeric()
+                                                ->default(0)
+                                                ->readOnly()
+                                                ->extraInputAttributes(['class' => 'font-bold text-lg text-primary-600'])
+                                                ->helperText('Change automatically calculated based on tendered amount.'),
+                                            
+                                            Forms\Components\Placeholder::make('net_summary')
+                                                ->label('Financial Summary')
+                                                ->columnSpan(2)
+                                                ->content(function (Forms\Get $get, Voucher $record) {
+                                                    $tendered = ((int) $get('bill_1000') * 1000) + ((int) $get('bill_500') * 500) + ((int) $get('bill_200') * 200) + ((int) $get('bill_100') * 100) + ((int) $get('bill_50') * 50) + ((int) $get('bill_20') * 20) + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1) + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
+                                                    $target   = (float) $record->amount;
+                                                    $change   = (float) ($get('change_given') ?? 0);
+                                                    $net      = round($tendered - $change, 2);
+                                                    $diff     = round($net - $target, 2);
+
+                                                    $statusBadge = match(true) {
+                                                        abs($diff) < 0.01 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 decoration-none">✓ BALANCED</span>',
+                                                        $diff < 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 decoration-none">⚠ SHORT BY AED '.number_format(abs($diff), 2).'</span>',
+                                                        $diff > 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 decoration-none">ℹ EXCESS BY AED '.number_format($diff, 2).'</span>',
+                                                    };
+
+                                                    return new \Illuminate\Support\HtmlString(
+                                                        "<div class='p-3 bg-gray-50 dark:bg-gray-800/80 rounded-lg border border-gray-100 dark:border-gray-700'>" .
+                                                        "<div class='grid grid-cols-2 gap-y-1 text-sm'>" .
+                                                        "<div class='text-gray-500'>Cash Tendered:</div><div class='text-right font-mono font-bold'>AED " . number_format($tendered, 2) . "</div>" .
+                                                        "<div class='text-gray-500'>Voucher Total:</div><div class='text-right font-mono font-bold'>AED " . number_format($target, 2) . "</div>" .
+                                                        "<div class='col-span-2 my-2 border-t border-dashed border-gray-300 dark:border-gray-600'></div>" .
+                                                        "<div class='font-bold self-center'>Verification:</div><div class='text-right'>{$statusBadge}</div>" .
+                                                        "</div>" .
+                                                        "</div>"
+                                                    );
+                                                }),
+                                        ]),
+
+                                        Forms\Components\Grid::make(2)->schema([
+                                            Forms\Components\Textarea::make('remarks')
+                                                ->label('Remarks / Notes')
+                                                ->placeholder('Brief notes about physical cash state if needed...')
+                                                ->columnSpanFull(),
+                                            Forms\Components\Toggle::make('is_change_received')
+                                                ->label('Exact change has been verified and accounted for.')
+                                                ->inline(false)
+                                                ->default(true)
+                                                ->visible(fn (Forms\Get $get) => (float)($get('change_given') ?? 0) > 0)
+                                                ->columnSpanFull(),
+                                        ]),
+                                    ])
                             ])
                     ])
                     ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
@@ -1089,7 +1128,7 @@ class VoucherResource extends Resource
                         ->columnSpan(3),
 
                     // Right: Approval Trail (takes up 1 column)
-                    \Filament\Infolists\Components\Section::make()
+                    \Filament\Infolists\Components\Section::make('Approval Progress')
                         ->schema([
                             \Filament\Infolists\Components\ViewEntry::make('approvals_timeline')
                                 ->label('')
@@ -1098,139 +1137,153 @@ class VoucherResource extends Resource
                         ->columnSpan(1),
                 ]),
 
-                // ── BOTTOM ROW: Voucher Details — full width ───────────────────────
-                \Filament\Infolists\Components\Section::make('Voucher Details')
+                // ── MIDDLE ROW: Voucher Overview — Premium Split Layout ─────────────────────
+                \Filament\Infolists\Components\Section::make('Voucher Overview')
+                    ->icon('heroicon-o-information-circle')
                     ->compact()
                     ->schema([
-                        \Filament\Infolists\Components\TextEntry::make('voucher_number')
-                            ->label('Voucher #')
-                            ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                            ->copyable(),
-                        \Filament\Infolists\Components\TextEntry::make('status')
-                            ->badge()
-                            ->icon(fn (string $state): string => match ($state) {
-                                'draft'            => 'heroicon-m-pencil-square',
-                                'pending_checker'  => 'heroicon-m-clock',
-                                'pending_approver' => 'heroicon-m-clock',
-                                'approved'         => 'heroicon-m-check-circle',
-                                'rejected'         => 'heroicon-m-x-circle',
-                                'paid'             => 'heroicon-m-banknotes',
-                                default            => 'heroicon-m-question-mark-circle',
-                            })
-                            ->color(fn (string $state): string => match ($state) {
-                                'draft'            => 'gray',
-                                'pending_checker'  => 'warning',
-                                'pending_approver' => 'warning',
-                                'approved'         => 'success',
-                                'rejected'         => 'danger',
-                                'paid'             => 'success',
-                                default            => 'gray',
-                            })
-                            ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
-                        \Filament\Infolists\Components\TextEntry::make('user.name')
-                            ->label('Requester')
-                            ->icon('heroicon-m-user-circle')
-                            ->iconColor('primary')
-                            ->weight(\Filament\Support\Enums\FontWeight::Bold),
-                        \Filament\Infolists\Components\TextEntry::make('type')
-                            ->formatStateUsing(fn ($state) => match($state) {
-                                'petty_cash' => 'Petty Cash',
-                                'receipt' => 'Receipt Voucher',
-                                'bank_encashment' => 'Bank Encashment',
-                                default => 'Payment Voucher'
-                            }),
-                        \Filament\Infolists\Components\TextEntry::make('account_codes')
-                            ->label('Account Code(s)')
-                            ->getStateUsing(fn ($record) => $record->items->pluck('account_code')->unique()->implode(', ') ?: '—'),
-                        \Filament\Infolists\Components\TextEntry::make('po_numbers')
-                            ->label('PO Number(s)')
-                            ->getStateUsing(fn ($record) => $record->items->pluck('po_number')->filter()->unique()->implode(', ') ?: '—')
-                            ->visible(fn ($record) => $record->items->pluck('po_number')->filter()->isNotEmpty()),
-                        \Filament\Infolists\Components\TextEntry::make('invoice_numbers')
-                            ->label('Invoice Number(s)')
-                            ->getStateUsing(fn ($record) => $record->items->pluck('invoice_number')->filter()->unique()->implode(', ') ?: '—')
-                            ->visible(fn ($record) => $record->items->pluck('invoice_number')->filter()->isNotEmpty()),
-                        \Filament\Infolists\Components\TextEntry::make('department')
-                            ->label('Department')
-                            ->placeholder('—'),
-                        \Filament\Infolists\Components\TextEntry::make('category.name')
-                            ->label('Trans Cat')
-                            ->placeholder('—'),
-                        \Filament\Infolists\Components\TextEntry::make('payee')
-                            ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
-                        \Filament\Infolists\Components\TextEntry::make('amount')
-                            ->money('aed')
-                            ->weight(\Filament\Support\Enums\FontWeight::Bold),
-                        \Filament\Infolists\Components\TextEntry::make('description')
-                            ->columnSpanFull()
-                            ->placeholder('No description provided'),
-                        \Filament\Infolists\Components\TextEntry::make('transaction_summary')
-                            ->label('Remarks')
-                            ->columnSpanFull()
-                            ->placeholder('—'),
+                        \Filament\Infolists\Components\Split::make([
+                            // Major Column: Financials & Identity
+                            \Filament\Infolists\Components\Grid::make(1)->schema([
+                                \Filament\Infolists\Components\Grid::make(3)->schema([
+                                    \Filament\Infolists\Components\TextEntry::make('voucher_number')
+                                        ->label('Voucher Number')
+                                        ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                        ->size(\Filament\Infolists\Components\TextEntry\TextEntrySize::Large)
+                                        ->color('primary')
+                                        ->icon('heroicon-m-hashtag')
+                                        ->copyable(),
 
-                        \Filament\Infolists\Components\TextEntry::make('cheque_no')
-                            ->label('Cheque #')
-                            ->visible(fn ($record) => !empty($record->cheque_no)),
-                        \Filament\Infolists\Components\TextEntry::make('cheque_date')
-                            ->date()
-                            ->visible(fn ($record) => !empty($record->cheque_no)),
-                        \Filament\Infolists\Components\TextEntry::make('bank')
-                            ->visible(fn ($record) => !empty($record->cheque_no)),
+                                    \Filament\Infolists\Components\TextEntry::make('status')
+                                        ->badge()
+                                        ->icon(fn (string $state): string => match ($state) {
+                                            'draft'            => 'heroicon-m-pencil-square',
+                                            'pending_checker'  => 'heroicon-m-clock',
+                                            'pending_approver' => 'heroicon-m-clock',
+                                            'approved'         => 'heroicon-m-check-circle',
+                                            'rejected'         => 'heroicon-m-x-circle',
+                                            'paid'             => 'heroicon-m-banknotes',
+                                            default            => 'heroicon-m-question-mark-circle',
+                                        })
+                                        ->color(fn (string $state): string => match ($state) {
+                                            'draft'            => 'gray',
+                                            'pending_checker'  => 'warning',
+                                            'pending_approver' => 'warning',
+                                            'approved'         => 'success',
+                                            'rejected'         => 'danger',
+                                            'paid'             => 'success',
+                                            default            => 'gray',
+                                        })
+                                        ->formatStateUsing(fn (string $state): string => strtoupper(str_replace('_', ' ', $state))),
+
+                                    \Filament\Infolists\Components\TextEntry::make('type')
+                                        ->label('Classification')
+                                        ->weight(\Filament\Support\Enums\FontWeight::SemiBold)
+                                        ->icon('heroicon-m-tag')
+                                        ->formatStateUsing(fn ($state) => match($state) {
+                                            'petty_cash'      => 'Petty Cash',
+                                            'receipt'         => 'Receipt Voucher',
+                                            'bank_encashment' => 'Bank Encashment',
+                                            default           => 'Payment Voucher'
+                                        }),
+                                ]),
+
+                                \Filament\Infolists\Components\Grid::make(2)->schema([
+                                    \Filament\Infolists\Components\TextEntry::make('amount')
+                                        ->label('Disbursement Amount')
+                                        ->money('aed')
+                                        ->weight(\Filament\Support\Enums\FontWeight::ExtraBold)
+                                        ->size(\Filament\Infolists\Components\TextEntry\TextEntrySize::Large)
+                                        ->color('primary')
+                                        ->extraAttributes(['class' => 'font-mono text-2xl px-4 py-2 bg-primary-50 dark:bg-primary-900/10 rounded-lg inline-block']),
+
+                                    \Filament\Infolists\Components\TextEntry::make('payee')
+                                        ->label('Payee / Beneficiary')
+                                        ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                        ->icon('heroicon-m-user-group'),
+                                ]),
+
+                                \Filament\Infolists\Components\TextEntry::make('description')
+                                    ->label('Purpose of Expenditure')
+                                    ->placeholder('N/A')
+                                    ->prose()
+                                    ->columnSpanFull(),
+                                
+                                \Filament\Infolists\Components\TextEntry::make('transaction_summary')
+                                    ->label('Accountant Remarks')
+                                    ->placeholder('—')
+                                    ->prose()
+                                    ->columnSpanFull(),
+                            ])->columnSpan(3),
+
+                            // Minor Column: Audit sidebar
+                            \Filament\Infolists\Components\Section::make('Identity & Date')
+                                ->compact()
+                                ->schema([
+                                    \Filament\Infolists\Components\TextEntry::make('user.name')
+                                        ->label('Prepared By')
+                                        ->icon('heroicon-m-user-circle'),
+
+                                    \Filament\Infolists\Components\TextEntry::make('department')
+                                        ->label('Department')
+                                        ->placeholder('General')
+                                        ->icon('heroicon-m-briefcase'),
+
+                                    \Filament\Infolists\Components\TextEntry::make('category.name')
+                                        ->label('Expense Category')
+                                        ->placeholder('Uncategorized')
+                                        ->icon('heroicon-m-square-3-stack-3d'),
+                                    
+                                    \Filament\Infolists\Components\TextEntry::make('created_at')
+                                        ->label('Submitted On')
+                                        ->dateTime('d M Y, h:i A')
+                                        ->icon('heroicon-m-calendar-days'),
+                                ])
+                                ->columnSpan(1)
+                                ->grow(false),
+                        ])->from('lg'),
+
+                        \Filament\Infolists\Components\FieldSet::make('Bank Settlement Details')
+                            ->visible(fn ($record) => !empty($record->cheque_no))
+                            ->schema([
+                                \Filament\Infolists\Components\TextEntry::make('cheque_no')
+                                    ->label('Cheque Reference')
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->fontFamily('mono')
+                                    ->icon('heroicon-m-credit-card'),
+                                \Filament\Infolists\Components\TextEntry::make('cheque_date')
+                                    ->label('Release Date')
+                                    ->date('d M Y')
+                                    ->icon('heroicon-m-calendar'),
+                                \Filament\Infolists\Components\TextEntry::make('bank')
+                                    ->label('Issuing Bank')
+                                    ->icon('heroicon-m-building-library'),
+                            ])->columns(3),
 
                         \Filament\Infolists\Components\TextEntry::make('attachment_paths')
-                            ->label('Invoices / Receipts')
+                            ->label('Supporting Evidence')
                             ->columnSpanFull()
                             ->formatStateUsing(fn (string $state): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString(
-                                '<a href="' . asset('storage/' . implode('/', array_map('rawurlencode', explode('/', $state)))) . '" target="_blank" class="text-primary-600 underline flex items-center gap-2">' .
+                                '<a href="' . asset('storage/' . implode('/', array_map('rawurlencode', explode('/', $state)))) . '" target="_blank" class="text-primary-600 dark:text-primary-400 hover:underline inline-flex items-center gap-1.5 font-medium italic underline decoration-primary-500/30 underline-offset-4">' .
                                 '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>' .
                                 basename($state) . '</a>'
                             ))
                             ->html()
                             ->listWithLineBreaks(),
-                    ])->columns(4),
-
-                \Filament\Infolists\Components\Section::make('Voucher Line Items')
-                    ->schema([
-                        \Filament\Infolists\Components\RepeatableEntry::make('items')
-                            ->label('')
-                            ->schema([
-                                \Filament\Infolists\Components\Grid::make(12)
-                                    ->schema([
-                                        \Filament\Infolists\Components\TextEntry::make('entry_type')
-                                            ->label('Type')
-                                            ->badge()
-                                            ->color(fn ($state) => $state === 'debit' ? 'success' : 'danger')
-                                            ->formatStateUsing(fn ($state) => strtoupper($state))
-                                            ->columnSpan(1),
-                                        \Filament\Infolists\Components\TextEntry::make('account_code')
-                                            ->label('Account')
-                                            ->columnSpan(5),
-                                        \Filament\Infolists\Components\TextEntry::make('trn')
-                                            ->label('TRN/Supplier')
-                                            ->placeholder('—')
-                                            ->columnSpan(4),
-                                        \Filament\Infolists\Components\TextEntry::make('amount')
-                                            ->label('Amount')
-                                            ->money('AED')
-                                            ->extraAttributes(['class' => 'font-mono font-bold text-right'])
-                                            ->columnSpan(2),
-                                        
-                                        \Filament\Infolists\Components\TextEntry::make('po_number')
-                                            ->label('PO #')
-                                            ->placeholder('—')
-                                            ->columnSpan(6),
-                                        \Filament\Infolists\Components\TextEntry::make('invoice_number')
-                                            ->label('Invoice #')
-                                            ->placeholder('—')
-                                            ->columnSpan(6),
-                                    ])
-                            ])
-                            ->columns(1)
                     ]),
 
-                // ── CASH DENOMINATIONS: Displayed if filled ──────────────────────
-                \Filament\Infolists\Components\Section::make('Cash Denominations breakdown')
+                // ── LINE ITEMS: Heavy Tabular View ──────────────────────────────────────────
+                \Filament\Infolists\Components\Section::make('Line Items')
+                    ->icon('heroicon-o-list-bullet')
+                    ->schema([
+                        \Filament\Infolists\Components\ViewEntry::make('items')
+                            ->label('')
+                            ->view('filament.infolists.voucher-items-table')
+                            ->columnSpanFull(),
+                    ]),
+
+                // ── OPTIONAL: Cash Breakdown ────────────────────────────────────────────────
+                \Filament\Infolists\Components\Section::make('Physical Cash Breakdown')
                     ->icon('heroicon-o-banknotes')
                     ->visible(fn ($record) => $record->denominations !== null)
                     ->collapsed()
@@ -1241,40 +1294,31 @@ class VoucherResource extends Resource
                             'bill_10' => 10, 'bill_5' => 5, 'coin_1' => 1,
                             'coin_0_50' => 0.50, 'coin_0_25' => 0.25
                         ];
-                        
                         $fields = [];
                         foreach ($denoms as $col => $val) {
                             $fields[] = \Filament\Infolists\Components\TextEntry::make("denominations.{$col}")
-                                ->label(str_contains($col, 'coin') ? "AED " . number_format($val, 2) . " (Coin)" : "AED {$val} (Bill)")
-                                ->formatStateUsing(fn ($state) => "{$state} qty = AED " . number_format($state * $val, 2))
+                                ->label(str_contains($col, 'coin') ? "AED " . number_format($val, 2) : "AED {$val} Banknote")
+                                ->formatStateUsing(fn ($state) => "{$state} units × AED " . number_format(\App\Models\Voucher::find(1)->denominations->{$col} ?? 0, 0) . " = AED " . number_format($state * $val, 2))
                                 ->visible(fn ($record) => optional($record->denominations)->{$col} > 0);
                         }
-                        
                         $fields[] = \Filament\Infolists\Components\TextEntry::make('denominations.total_amount')
-                                ->label('Total Cash')
+                                ->label('Total Cash Value')
                                 ->weight(\Filament\Support\Enums\FontWeight::Bold)
                                 ->color('success')
                                 ->money('AED')
                                 ->columnSpanFull();
-
-                        $fields[] = \Filament\Infolists\Components\TextEntry::make('denominations.remarks')
-                                ->label('Remarks / Notes')
-                                ->visible(fn ($record) => !empty(optional($record->denominations)->remarks))
-                                ->columnSpanFull();
-
                         return $fields;
                     })->columns(['sm' => 2, 'md' => 4]),
 
-                // ── ACTIVITY LOG: Full width chronological timeline ──────────────────────
-                \Filament\Infolists\Components\Section::make('Activity Log')
-                    ->compact()
+                // ── FOOTER: Historical Timeline ─────────────────────────────────────────────
+                \Filament\Infolists\Components\Section::make('System Log / History')
+                    ->icon('heroicon-o-clock')
                     ->schema([
                         \Filament\Infolists\Components\ViewEntry::make('activity_log')
                             ->label('')
                             ->view('filament.infolists.activity-log'),
                     ])
                     ->collapsed(),
-
             ])->columns(1);
     }
 }

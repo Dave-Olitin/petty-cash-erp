@@ -14,8 +14,9 @@ class StatsOverview extends BaseWidget
 
     protected static ?int $sort = 1;
 
-    // Auto-refresh every 15 seconds to show new pending requests
-    protected static ?string $pollingInterval = '15s';
+    // Refresh every 60s — balances freshness with DB load.
+    // 15s was too aggressive and caused continuous background queries.
+    protected static ?string $pollingInterval = '60s';
 
     public static function canView(): bool
     {

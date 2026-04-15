@@ -23,7 +23,7 @@ class TopUnliquidatedTableWidget extends BaseWidget
                 Voucher::query()
                     ->join('liquidations', 'vouchers.id', '=', 'liquidations.voucher_id')
                     ->where('liquidations.status', 'pending')
-                    ->selectRaw('MIN(vouchers.id) as id, vouchers.payee, COUNT(vouchers.id) as pending_advances, SUM(vouchers.amount) as total_outstanding, MIN(liquidations.due_date) as next_due_date')
+                    ->selectRaw('MIN(vouchers.id) as id, vouchers.payee, GROUP_CONCAT(vouchers.voucher_number SEPARATOR ", ") as voucher_numbers, COUNT(vouchers.id) as pending_advances, SUM(vouchers.amount) as total_outstanding, MIN(liquidations.due_date) as next_due_date')
                     ->groupBy('vouchers.payee')
                     ->orderByDesc('total_outstanding')
                     ->limit(5)
@@ -35,6 +35,12 @@ class TopUnliquidatedTableWidget extends BaseWidget
                     ->label('Employee / Payee')
                     ->searchable()
                     ->weight('bold'),
+                Tables\Columns\TextColumn::make('voucher_numbers')
+                    ->label('References')
+                    ->wrap()
+                    ->fontFamily('mono')
+                    ->color('gray')
+                    ->size('xs'),
                 Tables\Columns\TextColumn::make('total_outstanding')
                     ->label('Total Unliquidated')
                     ->money('AED')

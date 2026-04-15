@@ -276,22 +276,20 @@ class ViewVoucher extends ViewRecord
                 ->label(fn () => $record->type === 'receipt' ? 'Collect Funds' : 'Disburse Funds')
                 ->icon('heroicon-m-banknotes')
                 ->color('success')
-                ->modalHeading(fn () => $record->type === 'payment' ? 'Disburse via Cheque / Bank' : ($record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations'))
+                ->modalHeading(fn () => in_array($record->type, ['payment', 'bank_encashment']) ? 'Disburse via Cheque / Bank' : ($record->type === 'receipt' ? 'Collect Cash Denominations' : 'Disburse Cash Denominations'))
                 ->modalSubmitActionLabel('Process & Mark Paid')
-                ->mountUsing(function (Forms\Form $form) use ($record) {
-                    $form->fill([
-                        'voucher_amount' => $record->amount,
-                        'cheque_no'      => $record->cheque_no,
-                        'cheque_date'    => $record->cheque_date,
-                        'bank'           => $record->bank,
-                    ]);
-                })
+                ->mountUsing(fn (Forms\Form $form) => $form->fill([
+                    'voucher_amount' => $record->amount,
+                    'cheque_no'      => $record->cheque_no,
+                    'cheque_date'    => $record->cheque_date,
+                    'bank'           => $record->bank,
+                ]))
                 ->form([
                     Forms\Components\Hidden::make('voucher_amount'),
                     
                     Forms\Components\Section::make('Cheque / Bank Transfer Details')
                         ->description('Confirm the final payment references for this voucher.')
-                        ->visible(fn () => $record->type === 'payment')
+                        ->visible(fn () => in_array($record->type, ['payment', 'bank_encashment']))
                         ->schema([
                             Forms\Components\TextInput::make('cheque_no')
                                 ->label('Cheque / Ref No.')
@@ -304,70 +302,98 @@ class ViewVoucher extends ViewRecord
                                 ->maxLength(100),
                         ])->columns(3),
 
-                    Forms\Components\Section::make('Cash Handover / Collection')
-                        ->description(fn () => new \Illuminate\Support\HtmlString("Voucher Amount: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Enter the bills/coins you hand over. Change back is auto-calculated."))
-                        ->visible(fn () => $record->type !== 'payment')
+                    Forms\Components\Section::make('Physical Cash Breakdown')
+                        ->description(fn () => new \Illuminate\Support\HtmlString("Voucher Total: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Please count the currency notes and coins."))
+                        ->visible(fn () => !in_array($record->type, ['payment', 'bank_encashment']))
                         ->schema([
-                            Forms\Components\Grid::make(3)->schema([
-                                Forms\Components\TextInput::make('bill_1000')->label('1000 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('bill_500')->label('500 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('bill_200')->label('200 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('bill_100')->label('100 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('bill_50')->label('50 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('bill_20')->label('20 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('bill_10')->label('10 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('bill_5')->label('5 Bills')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('coin_1')->label('1 Coins')->numeric()->default(0)->live()->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('coin_0_50')->label('0.50 Coins')->numeric()->default(0)->live()->step('1')->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                                Forms\Components\TextInput::make('coin_0_25')->label('0.25 Coins')->numeric()->default(0)->live()->step('1')->minValue(0)
-                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
-                            ]),
-                            Forms\Components\Grid::make(2)->schema([
-                                Forms\Components\TextInput::make('change_given')
-                                    ->label('Change Received Back (AED)')
-                                    ->numeric()
-                                    ->default(0)
-                                    ->readOnly()
-                                    ->helperText('Auto-calculated: Cash tendered minus voucher amount. Adjust denominations above to update.'),
-                                Forms\Components\Placeholder::make('net_summary')
-                                    ->label('Live Summary')
-                                    ->content(function (Forms\Get $get) {
-                                        $total  = ((int) $get('bill_1000') * 1000) + ((int) $get('bill_500') * 500) + ((int) $get('bill_200') * 200) + ((int) $get('bill_100') * 100) + ((int) $get('bill_50') * 50) + ((int) $get('bill_20') * 20) + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1) + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
-                                        $change = (float) ($get('change_given') ?? 0);
-                                        $net    = $total - $change;
-                                        return new \Illuminate\Support\HtmlString(
-                                            "<div style='line-height:1.9'>" .
-                                            "💵 <strong>Cash Tendered:</strong> AED " . number_format($total, 2) . "<br>" .
-                                            "🔄 <strong>Change Back:</strong> AED " . number_format($change, 2) . "<br>" .
-                                            "✅ <strong>Net Disbursed:</strong> AED " . number_format($net, 2) .
-                                            "</div>"
-                                        );
-                                    }),
-                                Forms\Components\Textarea::make('remarks')
-                                    ->label('Remarks / Notes')
-                                    ->placeholder('Optional: explain differences in denominations or general notes.')
-                                    ->columnSpanFull(),
-                                Forms\Components\Toggle::make('is_change_received')
-                                    ->label('Employee has already returned the exact change for this transaction.')
-                                    ->default(true)
-                                    ->visible(fn (Forms\Get $get) => (float)($get('change_given') ?? 0) > 0)
-                                    ->columnSpanFull(),
-                            ]),
+                            \Filament\Forms\Components\Fieldset::make('Currency Notes (Bills)')
+                                ->schema([
+                                    Forms\Components\TextInput::make('bill_1000')->label('1000s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('bill_500')->label('500s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('bill_200')->label('200s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('bill_100')->label('100s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('bill_50')->label('50s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('bill_20')->label('20s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('bill_10')->label('10s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('bill_5')->label('5s')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                ])->columns(4),
+
+                            \Filament\Forms\Components\Fieldset::make('Coins')
+                                ->schema([
+                                    Forms\Components\TextInput::make('coin_1')->label('1.00')->numeric()->default(0)->live()->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('coin_0_50')->label('0.50')->numeric()->default(0)->live()->step('1')->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                    Forms\Components\TextInput::make('coin_0_25')->label('0.25')->numeric()->default(0)->live()->step('1')->minValue(0)
+                                        ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+                                ])->columns(3),
+
+                            \Filament\Forms\Components\Card::make()
+                                ->schema([
+                                    Forms\Components\Grid::make(3)->schema([
+                                        Forms\Components\TextInput::make('change_given')
+                                            ->label('Cash Return / Change Due')
+                                            ->numeric()
+                                            ->default(0)
+                                            ->readOnly()
+                                            ->extraInputAttributes(['class' => 'font-bold text-lg text-primary-600'])
+                                            ->helperText('Change automatically calculated based on tendered amount.'),
+                                        
+                                        Forms\Components\Placeholder::make('net_summary')
+                                            ->label('Financial Summary')
+                                            ->columnSpan(2)
+                                            ->content(function (Forms\Get $get) use ($record) {
+                                                $tendered = ((int) $get('bill_1000') * 1000) + ((int) $get('bill_500') * 500) + ((int) $get('bill_200') * 200) + ((int) $get('bill_100') * 100) + ((int) $get('bill_50') * 50) + ((int) $get('bill_20') * 20) + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1) + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
+                                                $target   = (float) $record->amount;
+                                                $change   = (float) ($get('change_given') ?? 0);
+                                                $net      = round($tendered - $change, 2);
+                                                $diff     = round($net - $target, 2);
+
+                                                $statusBadge = match(true) {
+                                                    abs($diff) < 0.01 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 decoration-none">✓ BALANCED</span>',
+                                                    $diff < 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 decoration-none">⚠ SHORT BY AED '.number_format(abs($diff), 2).'</span>',
+                                                    $diff > 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 decoration-none">ℹ EXCESS BY AED '.number_format($diff, 2).'</span>',
+                                                };
+
+                                                return new \Illuminate\Support\HtmlString(
+                                                    "<div class='p-3 bg-gray-50 dark:bg-gray-800/80 rounded-lg border border-gray-100 dark:border-gray-700'>" .
+                                                    "<div class='grid grid-cols-2 gap-y-1 text-sm'>" .
+                                                    "<div class='text-gray-500'>Cash Tendered:</div><div class='text-right font-mono font-bold'>AED " . number_format($tendered, 2) . "</div>" .
+                                                    "<div class='text-gray-500'>Voucher Total:</div><div class='text-right font-mono font-bold'>AED " . number_format($target, 2) . "</div>" .
+                                                    "<div class='col-span-2 my-2 border-t border-dashed border-gray-300 dark:border-gray-600'></div>" .
+                                                    "<div class='font-bold self-center'>Verification:</div><div class='text-right'>{$statusBadge}</div>" .
+                                                    "</div>" .
+                                                    "</div>"
+                                                );
+                                            }),
+                                    ]),
+
+                                    Forms\Components\Grid::make(2)->schema([
+                                        Forms\Components\Textarea::make('remarks')
+                                            ->label('Remarks / Notes')
+                                            ->placeholder('Brief notes about physical cash state if needed...')
+                                            ->columnSpanFull(),
+                                        Forms\Components\Toggle::make('is_change_received')
+                                            ->label('Exact change has been verified and accounted for.')
+                                            ->inline(false)
+                                            ->default(true)
+                                            ->visible(fn (Forms\Get $get) => (float)($get('change_given') ?? 0) > 0)
+                                            ->columnSpanFull(),
+                                    ]),
+                                ])
                         ])
                 ])
                 ->visible(fn (): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
                 ->action(function (array $data) use ($record) {
-                    if ($record->type === 'payment') {
+                    if (in_array($record->type, ['payment', 'bank_encashment'])) {
                         $record->update([
                             'cheque_no' => $data['cheque_no'] ?? null,
                             'cheque_date' => $data['cheque_date'] ?? null,
@@ -379,7 +405,7 @@ class ViewVoucher extends ViewRecord
                             Notification::make()->title($error)->danger()->send();
                             return;
                         }
-                        Notification::make()->title('Payment Voucher successfully disbursed')->success()->send();
+                        Notification::make()->title('Voucher successfully disbursed via Bank/Cheque')->success()->send();
                         $record->refresh();
                         return;
                     }

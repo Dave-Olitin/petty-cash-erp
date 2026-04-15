@@ -45,6 +45,61 @@ class EditVoucher extends EditRecord
             }
         }
 
+        // ── Regenerate voucher number if type changed ──────────────────────────
+        $newType = $data['type'] ?? $voucher->type;
+        if ($newType !== $voucher->type) {
+            $newTemplateId = $data['voucher_template_id'] ?? null;
+
+            if ($newType === 'petty_cash') {
+                $prefix = 'PCV NO: ' . date('y') . '-';
+                $padLength = 5;
+                $startAt = 4001;
+            } elseif ($newType === 'receipt') {
+                $prefix = 'RV NO: ';
+                $padLength = 4;
+                $startAt = 776;
+            } else {
+                if ($newTemplateId) {
+                    $template = \App\Models\VoucherTemplate::find($newTemplateId);
+                    $prefix = $template ? $template->prefix . '-' : 'PV NO: ';
+                } else {
+                    $prefix = 'PV NO: ';
+                }
+                $padLength = 4;
+                $startAt = 1;
+            }
+
+            $lock = \Illuminate\Support\Facades\Cache::lock('voucher_number_generation', 5);
+            try {
+                $lock->block(5, function () use (&$data, $voucher, $prefix, $padLength, $startAt) {
+                    $latest = \App\Models\Voucher::withTrashed()
+                        ->where('voucher_number', 'like', $prefix . '%')
+                        ->where('id', '!=', $voucher->id) // exclude self
+                        ->orderBy('id', 'desc')
+                        ->first();
+
+                    $number = $latest
+                        ? intval(substr($latest->voucher_number, strlen($prefix))) + 1
+                        : $startAt;
+
+                    $data['voucher_number'] = $prefix . str_pad($number, $padLength, '0', STR_PAD_LEFT);
+                });
+            } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+                \Filament\Notifications\Notification::make()
+                    ->title('Number Generation Failed')
+                    ->body('Could not regenerate the voucher number due to system load. Please try saving again.')
+                    ->danger()
+                    ->send();
+                $this->halt();
+            }
+
+            \Filament\Notifications\Notification::make()
+                ->title('Voucher Number Updated')
+                ->body("The voucher number has been updated to {$data['voucher_number']} to match the new type.")
+                ->info()
+                ->send();
+        }
+
         // SCENARIO 1: Voucher was already APPROVED or mid-approver-chain.
         // Wipe all signatures and restart the approval chain.
         if (in_array($voucher->status, ['approved', 'pending_approver'])) {
