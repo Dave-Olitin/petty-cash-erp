@@ -80,6 +80,11 @@ class Voucher extends Model implements HasMedia
         return $this->belongsTo(PurchaseEntry::class);
     }
 
+    public function purchaseEntries(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(PurchaseEntry::class);
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(VoucherItem::class)->orderBy('sort_order');

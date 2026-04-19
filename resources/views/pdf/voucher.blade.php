@@ -346,9 +346,45 @@
 </div>
 @endif
 
+@if($voucher->purchaseEntries && $voucher->purchaseEntries->count() > 0)
+<div style="margin-top: 20px; font-size: 10px;">
+    <strong>LINKED PURCHASE ENTRIES (SYSTEM):</strong>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 5px; border: 1px solid #000;">
+        <thead>
+            <tr style="border-bottom: 1px solid #000; background-color: #f8f8f8;">
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Entry No.</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Supplier</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">PO #</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">INV #</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Description</th>
+                <th style="padding: 4px; text-align: right;">Amount (AED)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @php $peTotal = 0; @endphp
+            @foreach($voucher->purchaseEntries as $pe)
+                @php $peTotal += (float) ($pe->grand_total ?? $pe->total_amount ?? 0); @endphp
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->entry_no ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->taxRegistration?->name ?? $pe->supplier_name ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->lpo_number ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->supplier_invoice_number ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000;">{{ strtoupper($pe->description ?? '—') }}</td>
+                    <td style="padding: 4px; text-align: right;">{{ number_format((float) ($pe->grand_total ?? $pe->total_amount ?? 0), 2) }}</td>
+                </tr>
+            @endforeach
+            <tr style="border-top: 1px solid #000;">
+                <td colspan="5" style="padding: 4px; font-weight: bold; text-align: right; border-right: 1px solid #000;">TOTAL LINKED ENTRIES:</td>
+                <td style="padding: 4px; text-align: right; font-weight: bold;">{{ number_format($peTotal, 2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+@endif
+
 @if(!empty($voucher->invoice_breakdown))
 <div style="margin-top: 20px; font-size: 10px;">
-    <strong>INVOICE / PO BREAKDOWN:</strong>
+    <strong>INVOICE / PO BREAKDOWN (MANUAL):</strong>
     <table style="width: 100%; border-collapse: collapse; margin-top: 5px; border: 1px solid #000;">
         <thead>
             <tr style="border-bottom: 1px solid #000; background-color: #f8f8f8;">

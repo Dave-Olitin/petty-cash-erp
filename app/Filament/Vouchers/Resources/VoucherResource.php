@@ -190,16 +190,17 @@ class VoucherResource extends Resource
                                                 }
                                             }),
 
-                                        Forms\Components\Select::make('purchase_entry_id')
-                                            ->label('Linked Purchase Entry')
-                                            ->relationship('purchaseEntry', 'entry_no')
+                                        Forms\Components\Select::make('purchaseEntries')
+                                            ->label('Linked Purchase Entries')
+                                            ->relationship('purchaseEntries', 'entry_no')
+                                            ->multiple()
                                             ->getOptionLabelFromRecordUsing(fn ($record) =>
-                                                $record->entry_no . ' — ' . ($record->supplier_name ?? 'No Supplier') . ' — AED ' . number_format($record->total_amount ?? 0, 2)
+                                                $record->entry_no . ' — ' . ($record->taxRegistration?->name ?? $record->supplier_name ?? 'No Supplier') . ' — AED ' . number_format($record->grand_total ?? $record->total_amount ?? 0, 2)
                                             )
                                             ->searchable()
                                             ->preload()
                                             ->nullable()
-                                            ->placeholder('Optional — link a purchase entry'),
+                                            ->placeholder('Optional — link purchase entries'),
 
                                         Forms\Components\Select::make('department')
                                             ->label('Department')

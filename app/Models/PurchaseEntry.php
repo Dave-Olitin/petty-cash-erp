@@ -180,4 +180,9 @@ class PurchaseEntry extends Model
         return $query->where('due_date', '<', now()->toDateString())
                      ->whereIn('payment_status', [self::STATUS_UNPAID, self::STATUS_PARTIAL]);
     }
+
+    public function vouchers()
+    {
+        return $this->belongsToMany(Voucher::class);
+    }
 }
