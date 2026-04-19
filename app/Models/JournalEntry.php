@@ -6,9 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
+use App\Observers\JournalEntryObserver;
 
+#[ObservedBy(JournalEntryObserver::class)]
 class JournalEntry extends Model
 {
     use HasFactory;
@@ -23,6 +26,7 @@ class JournalEntry extends Model
         'total_debit',
         'total_credit',
         'voucher_id',
+        'created_by',
     ];
 
     protected function casts(): array

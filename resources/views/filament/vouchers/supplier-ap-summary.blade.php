@@ -2,12 +2,16 @@
     $supplier = $record;
     $entries = $supplier->purchaseEntries;
 
-    $totalBilled  = $entries->where('entry_type', 'bill')->sum('grand_total');
-    $totalReturns = abs($entries->where('entry_type', 'return')->sum('grand_total'));
+    $totalBilled  = $entries->where('entry_type', '!=', 'return')->sum(fn($e) => $e->grand_total ?? $e->total_amount ?? 0);
+    $totalReturns = abs($entries->where('entry_type', 'return')->sum(fn($e) => $e->grand_total ?? $e->total_amount ?? 0));
     $totalPaid    = $entries->sum('amount_paid');
-    $netBalance   = $entries->sum('balance_due');
+    
+    $netBalance = $entries->sum(function($e) {
+        $bal = $e->balance_due ?? (($e->grand_total ?? $e->total_amount ?? 0) - ($e->amount_paid ?? 0));
+        return $e->entry_type === 'return' ? -abs($bal) : $bal;
+    });
 
-    $openCount    = $entries->whereIn('payment_status', ['unpaid', 'partial'])->count();
+    $openCount    = $entries->where('payment_status', '!=', 'paid')->count();
     $totalBills   = $entries->count();
 
     $balanceColor = $netBalance > 0.01

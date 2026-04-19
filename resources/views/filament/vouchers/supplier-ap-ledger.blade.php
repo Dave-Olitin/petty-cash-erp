@@ -74,11 +74,19 @@
         @endforeach
     </tbody>
     <tfoot>
+        @php
+            $footerBilled = $entries->where('entry_type', '!=', 'return')->sum(fn($e) => $e->grand_total ?? $e->total_amount ?? 0);
+            $footerPaid = $entries->sum('amount_paid');
+            $footerBalance = $entries->sum(function($e) {
+                $bal = $e->balance_due ?? (($e->grand_total ?? $e->total_amount ?? 0) - ($e->amount_paid ?? 0));
+                return $e->entry_type === 'return' ? -abs($bal) : $bal;
+            });
+        @endphp
         <tr style="border-top:2px solid #e5e7eb; background:#f9fafb; font-weight:700;">
             <td colspan="6" style="padding:8px 10px; font-size:11px; text-align:right; color:#374151;">TOTALS:</td>
-            <td style="padding:8px 10px; text-align:right; font-family:monospace;">AED {{ number_format($entries->where('entry_type','bill')->sum('grand_total'), 2) }}</td>
-            <td style="padding:8px 10px; text-align:right; font-family:monospace; color:#059669;">AED {{ number_format($entries->sum('amount_paid'), 2) }}</td>
-            <td style="padding:8px 10px; text-align:right; font-family:monospace; color:#dc2626;">AED {{ number_format($entries->sum('balance_due'), 2) }}</td>
+            <td style="padding:8px 10px; text-align:right; font-family:monospace;">AED {{ number_format($footerBilled, 2) }}</td>
+            <td style="padding:8px 10px; text-align:right; font-family:monospace; color:#059669;">AED {{ number_format($footerPaid, 2) }}</td>
+            <td style="padding:8px 10px; text-align:right; font-family:monospace; color:{{ $footerBalance > 0.01 ? '#dc2626' : '#15803d' }};">AED {{ number_format($footerBalance, 2) }}</td>
             <td></td>
         </tr>
     </tfoot>

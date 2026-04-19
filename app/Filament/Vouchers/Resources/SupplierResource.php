@@ -39,13 +39,16 @@ class SupplierResource extends Resource
     {
         return parent::getEloquentQuery()
             ->withSum(
-                ['purchaseEntries as total_billed' => fn ($q) => $q->where('entry_type', 'bill')],
+                ['purchaseEntries as total_billed' => fn ($q) => $q->where('entry_type', '!=', 'return')],
                 'grand_total'
             )
             ->withSum('purchaseEntries as total_paid', 'amount_paid')
-            ->withSum('purchaseEntries as net_balance', 'balance_due')
+            ->addSelect([
+                'net_balance' => \App\Models\PurchaseEntry::selectRaw('COALESCE(SUM(CASE WHEN entry_type = "return" THEN -1 * COALESCE(balance_due, grand_total - amount_paid, 0) ELSE COALESCE(balance_due, grand_total - amount_paid, 0) END), 0)')
+                    ->whereColumn('tax_registration_id', 'tax_registrations.id')
+            ])
             ->withCount(
-                ['purchaseEntries as open_invoices' => fn ($q) => $q->whereIn('payment_status', ['unpaid', 'partial'])]
+                ['purchaseEntries as open_invoices' => fn ($q) => $q->where('payment_status', '!=', 'paid')]
             );
     }
 
