@@ -69,7 +69,7 @@ Route::middleware(['auth'])->group(function () {
             abort(403);
         }
 
-        $voucher->load(['user', 'category', 'approvals.user', 'template', 'items.category']);
+        $voucher->load(['user', 'category', 'approvals.user', 'template', 'items.category', 'purchaseEntries.taxRegistration']);
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.voucher', ['voucher' => $voucher])->stream($voucher->voucher_number . '.pdf');
     })->name('voucher.pdf');
