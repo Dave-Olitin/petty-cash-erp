@@ -31,7 +31,10 @@ class AgingReportExport implements FromCollection, WithHeadings, WithMapping, Sh
 
         foreach ($this->data['rows'] as $supplierRow) {
             foreach ($supplierRow['entries'] as $entry) {
-                $rows->push((object) array_merge(['supplier_name' => $supplierRow['supplier_name']], $entry));
+                $rows->push((object) array_merge([
+                    'supplier_name' => $supplierRow['supplier_name'],
+                    'supplier_trn'  => $supplierRow['supplier_trn']
+                ], $entry));
             }
         }
 
@@ -42,6 +45,7 @@ class AgingReportExport implements FromCollection, WithHeadings, WithMapping, Sh
     {
         return [
             'SUPPLIER',
+            'TRN',
             'ENTRY NO.',
             'INVOICE #',
             'BILL DATE',
@@ -68,6 +72,7 @@ class AgingReportExport implements FromCollection, WithHeadings, WithMapping, Sh
 
         return [
             $row->supplier_name,
+            $row->supplier_trn,
             $row->entry_no,
             $row->invoice_no,
             $row->date,

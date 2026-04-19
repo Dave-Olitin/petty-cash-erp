@@ -128,10 +128,19 @@ class AgingReportPage extends Page implements HasForms
         $grandTotals['count'] = 0;
 
         foreach ($grouped as $supplierId => $supplierEntries) {
-            $supplierName = $supplierEntries->first()?->taxRegistration?->name ?? 'Unknown Supplier';
+            $firstEntry = $supplierEntries->first();
+            
+            $supplierName = $firstEntry?->taxRegistration?->name 
+                         ?? $firstEntry?->supplier_name 
+                         ?? 'Unknown Supplier';
+                         
+            $supplierTrn = $firstEntry?->taxRegistration?->trn 
+                        ?? $firstEntry?->supplier_trn 
+                        ?? '—';
 
             $row = [
                 'supplier_name' => $supplierName,
+                'supplier_trn'  => $supplierTrn,
                 'entries'       => [],
                 'count'         => $supplierEntries->count(),
                 'total'         => 0.0,
