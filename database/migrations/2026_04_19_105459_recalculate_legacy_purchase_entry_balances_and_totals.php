@@ -11,42 +11,60 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Repair Lines first
-        $lines = \App\Models\PurchaseEntryLine::all();
+        // 1. Repair Lines first using DB facade to avoid Eloquent strictness
+        $lines = \Illuminate\Support\Facades\DB::table('purchase_entry_lines')->get();
+        
         foreach ($lines as $line) {
-            if ((float)$line->total == 0 && ((float)$line->debit > 0 || (float)$line->credit > 0)) {
-                $line->total = max((float)$line->debit, (float)$line->credit);
-                $line->amount = $line->total;
+            $total = (float) ($line->total ?? 0);
+            $debit = (float) ($line->debit ?? 0);
+            $credit = (float) ($line->credit ?? 0);
+            
+            if ($total == 0 && ($debit > 0 || $credit > 0)) {
+                $total = max($debit, $credit);
             }
-            // Ensure amount matches total/max
-            $line->amount = max((float)$line->total, (float)$line->debit, (float)$line->credit);
-            $line->save(); 
+            
+            $amount = max($total, $debit, $credit);
+            
+            \Illuminate\Support\Facades\DB::table('purchase_entry_lines')
+                ->where('id', $line->id)
+                ->update([
+                    'total' => $total,
+                    'amount' => $amount,
+                ]);
         }
 
         // 2. Repair Parent entries
-        $entries = \App\Models\PurchaseEntry::all();
+        $entries = \Illuminate\Support\Facades\DB::table('purchase_entries')->get();
         foreach ($entries as $entry) {
-            $lineData = $entry->lines()->get();
-            $grandTotal = $lineData->sum(fn($l) => max((float)$l->total, (float)$l->debit, (float)$l->credit));
-            $vatTotal = $lineData->sum(fn($l) => (float)$l->tax_amount);
+            $lineData = \Illuminate\Support\Facades\DB::table('purchase_entry_lines')
+                ->where('purchase_entry_id', $entry->id)
+                ->get();
+                
+            $grandTotal = $lineData->sum(fn($l) => max((float)($l->total ?? 0), (float)($l->debit ?? 0), (float)($l->credit ?? 0)));
+            $vatTotal = $lineData->sum(fn($l) => (float)($l->tax_amount ?? 0));
             
-            // The saving hook on PurchaseEntry will automatically calculate balance_due
-            $entry->grand_total = $grandTotal;
-            $entry->total_vat = $vatTotal;
-            $entry->total_amount = $grandTotal - $vatTotal;
+            $totalAmount = $grandTotal - $vatTotal;
+            $amountPaid = (float) ($entry->amount_paid ?? 0);
+            $balanceDue = max(0, $grandTotal - $amountPaid);
             
+            $paymentStatus = 'unpaid';
             if ($grandTotal > 0) {
-                $paid = (float) $entry->amount_paid;
-                if ($paid >= $grandTotal) {
-                    $entry->payment_status = \App\Models\PurchaseEntry::STATUS_PAID;
-                } elseif ($paid > 0) {
-                    $entry->payment_status = \App\Models\PurchaseEntry::STATUS_PARTIAL;
-                } else {
-                    $entry->payment_status = \App\Models\PurchaseEntry::STATUS_UNPAID;
+                if ($amountPaid >= $grandTotal) {
+                    $paymentStatus = 'paid';
+                } elseif ($amountPaid > 0) {
+                    $paymentStatus = 'partial';
                 }
             }
             
-            $entry->save(); 
+            \Illuminate\Support\Facades\DB::table('purchase_entries')
+                ->where('id', $entry->id)
+                ->update([
+                    'grand_total' => $grandTotal,
+                    'total_vat' => $vatTotal,
+                    'total_amount' => $totalAmount,
+                    'balance_due' => $balanceDue,
+                    'payment_status' => $paymentStatus,
+                ]);
         }
     }
 
