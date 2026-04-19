@@ -462,7 +462,8 @@ class PurchaseEntryResource extends Resource
                 Tables\Columns\TextColumn::make('entry_no')
                     ->label('Entry No.')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('entry_type')
                     ->label('Type')
@@ -474,12 +475,14 @@ class PurchaseEntryResource extends Resource
                 Tables\Columns\TextColumn::make('entity')
                     ->label('Entity')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true), // Hiding by default to simplify view out of the box
 
                 Tables\Columns\TextColumn::make('date')
                     ->label('Bill Date')
                     ->date()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('due_date')
                     ->label('Due Date')
@@ -489,7 +492,8 @@ class PurchaseEntryResource extends Resource
                         if ($record->payment_status === 'paid') return 'success';
                         if ($record->due_date && $record->due_date->isPast()) return 'danger';
                         return null;
-                    }),
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true), // Hiding by default to simplify view
 
                 Tables\Columns\TextColumn::make('taxRegistration.name')
                     ->label('Supplier')
@@ -521,14 +525,16 @@ class PurchaseEntryResource extends Resource
                     ->formatStateUsing(fn ($state, $record) => $record->entry_type === 'return' ? '- AED ' . number_format($state, 2) : 'AED ' . number_format($state, 2))
                     ->sortable()
                     ->color(fn ($record) => $record->entry_type === 'return' ? 'warning' : null)
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('balance_due')
                     ->label('Balance Due')
                     ->formatStateUsing(fn ($state, $record) => $record->entry_type === 'return' ? '- AED ' . number_format($state, 2) : 'AED ' . number_format($state, 2))
                     ->sortable()
                     ->color(fn ($record) => $record->entry_type === 'return' ? 'warning' : ((float) $record->balance_due > 0 ? 'danger' : 'success'))
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('price_type')
                     ->label('Price Type')
