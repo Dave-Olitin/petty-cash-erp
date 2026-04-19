@@ -28,4 +28,9 @@ class TaxRegistration extends Model
     {
         return "{$this->trn} — {$this->name}";
     }
+
+    public function purchaseEntries()
+    {
+        return $this->hasMany(\App\Models\PurchaseEntry::class, 'tax_registration_id');
+    }
 }

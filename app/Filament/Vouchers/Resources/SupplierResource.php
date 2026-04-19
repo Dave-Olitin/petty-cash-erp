@@ -9,15 +9,16 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class SupplierResource extends Resource
 {
     protected static ?string $model = TaxRegistration::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
-    
+
     protected static ?string $navigationGroup = 'Accounting';
-    
+
     protected static ?string $modelLabel = 'Supplier Entry';
     protected static ?string $pluralModelLabel = 'Supplier Entries';
     protected static ?string $navigationLabel = 'Supplier Entries';
@@ -31,6 +32,21 @@ class SupplierResource extends Resource
     public static function canAccess(): bool
     {
         return static::canViewAny();
+    }
+
+    // Eagerly aggregate AP totals directly in the main query so balance columns are sortable
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withSum(
+                ['purchaseEntries as total_billed' => fn ($q) => $q->where('entry_type', 'bill')],
+                'grand_total'
+            )
+            ->withSum('purchaseEntries as total_paid', 'amount_paid')
+            ->withSum('purchaseEntries as net_balance', 'balance_due')
+            ->withCount(
+                ['purchaseEntries as open_invoices' => fn ($q) => $q->whereIn('payment_status', ['unpaid', 'partial'])]
+            );
     }
 
     public static function form(Form $form): Form
@@ -79,44 +95,55 @@ class SupplierResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->recordUrl(fn ($record) => static::getUrl('view', ['record' => $record]))
             ->columns([
                 Tables\Columns\TextColumn::make('row_number')
-                    ->label('SL.NO')
+                    ->label('#')
                     ->rowIndex(),
+                Tables\Columns\TextColumn::make('name')
+                    ->label('SUPPLIER NAME')
+                    ->searchable()
+                    ->sortable()
+                    ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
                 Tables\Columns\TextColumn::make('trn')
                     ->label('TRN')
                     ->searchable()
                     ->sortable()
                     ->copyable()
-                    ->placeholder('-'),
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('supplier_code')
-                    ->label('SUPPLIER CODE')
+                    ->label('CODE')
                     ->searchable()
-                    ->sortable()
-                    ->placeholder('-'),
-                Tables\Columns\TextColumn::make('name')
-                    ->label('SUPPLIER NAME')
-                    ->searchable()
-                    ->sortable(),
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('payment_terms')
                     ->label('PAYMENT TERMS')
-                    ->placeholder('-'),
-                Tables\Columns\TextColumn::make('contact_name')
-                    ->label('CONTACT NAME')
-                    ->placeholder('-'),
-                Tables\Columns\TextColumn::make('phone')
-                    ->label('PHONE')
-                    ->placeholder('-'),
-                Tables\Columns\TextColumn::make('email')
-                    ->label('EMAIL')
-                    ->placeholder('-'),
-                Tables\Columns\TextColumn::make('entity')
-                    ->label('ENTITY')
-                    ->placeholder('-'),
-                Tables\Columns\TextColumn::make('started_date')
-                    ->label('STARTED DATE')
-                    ->date('d-m-Y')
-                    ->placeholder('-'),
+                    ->placeholder('—'),
+                Tables\Columns\TextColumn::make('total_billed')
+                    ->label('TOTAL BILLED')
+                    ->formatStateUsing(fn ($state) => $state ? 'AED ' . number_format((float) $state, 2) : '—')
+                    ->sortable()
+                    ->alignRight()
+                    ->color('primary'),
+                Tables\Columns\TextColumn::make('total_paid')
+                    ->label('PAID')
+                    ->formatStateUsing(fn ($state) => $state ? 'AED ' . number_format((float) $state, 2) : '—')
+                    ->sortable()
+                    ->alignRight()
+                    ->color('success'),
+                Tables\Columns\TextColumn::make('net_balance')
+                    ->label('BALANCE DUE')
+                    ->formatStateUsing(fn ($state) => 'AED ' . number_format((float) $state, 2))
+                    ->sortable()
+                    ->alignRight()
+                    ->color(fn ($state) => ((float) $state > 0.01) ? 'danger' : 'success')
+                    ->weight(\Filament\Support\Enums\FontWeight::Bold),
+                Tables\Columns\TextColumn::make('open_invoices')
+                    ->label('OPEN BILLS')
+                    ->badge()
+                    ->color(fn ($state) => $state > 0 ? 'warning' : 'success')
+                    ->formatStateUsing(fn ($state) => $state > 0 ? $state . ' open' : '✓ Clear')
+                    ->alignCenter(),
                 Tables\Columns\ToggleColumn::make('is_active')
                     ->label('STATUS')
                     ->onColor('success')
@@ -138,10 +165,15 @@ class SupplierResource extends Resource
                             ->toArray();
                     })
                     ->searchable(),
+                Tables\Filters\Filter::make('has_balance')
+                    ->label('Has Outstanding Balance')
+                    ->toggle()
+                    ->query(fn (Builder $query) => $query->having('net_balance', '>', 0)),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ViewAction::make()->iconButton(),
+                Tables\Actions\EditAction::make()->iconButton(),
+                Tables\Actions\DeleteAction::make()->iconButton(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -154,6 +186,7 @@ class SupplierResource extends Resource
     {
         return [
             'index' => Pages\ManageSuppliers::route('/'),
+            'view'  => Pages\ViewSupplier::route('/{record}'),
         ];
     }
 }
