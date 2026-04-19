@@ -18,7 +18,7 @@
         </x-filament::section>
 
         {{-- ── Summary Cards ───────────────────────────────────────────────── --}}
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 mt-8 mb-8">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" style="margin-top: 2rem; margin-bottom: 2rem;">
             @foreach($bucketKeys as $i => $key)
             @php
                 $borderCol = match($key) {
