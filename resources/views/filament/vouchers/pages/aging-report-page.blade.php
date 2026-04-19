@@ -18,7 +18,7 @@
         </x-filament::section>
 
         {{-- ── Summary Cards ───────────────────────────────────────────────── --}}
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6 mt-6">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 mt-4">
             @foreach($bucketKeys as $i => $key)
             @php
                 $borderCol = match($key) {
@@ -30,17 +30,17 @@
                     default   => 'border-gray-300'
                 };
             @endphp
-            <div class="rounded-xl border-l-4 {{ $borderCol }} bg-white dark:bg-gray-900 shadow-sm p-4 ring-1 ring-gray-950/5">
-                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">{{ $bucketLabels[$i] }}</p>
-                <p class="mt-2 text-xl font-mono font-black text-gray-900 dark:text-gray-100">
+            <div class="rounded-lg border-l-4 {{ $borderCol }} bg-white dark:bg-gray-900 shadow-sm p-3 ring-1 ring-gray-950/5">
+                <p class="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">{{ $bucketLabels[$i] }}</p>
+                <p class="mt-1 text-base font-mono font-black text-gray-900 dark:text-gray-100">
                     {{ number_format($gt[$key], 2) }}
                 </p>
             </div>
             @endforeach
 
-            <div class="rounded-xl border-l-4 border-primary-500 bg-primary-50/50 dark:bg-primary-900/10 shadow-sm p-4 ring-1 ring-primary-500/10">
-                <p class="text-[10px] font-bold uppercase tracking-widest text-primary-600 dark:text-primary-400">Total AP</p>
-                <p class="mt-2 text-xl font-mono font-black text-primary-700 dark:text-primary-300">
+            <div class="rounded-lg border-l-4 border-primary-500 bg-primary-50/50 dark:bg-primary-900/10 shadow-sm p-3 ring-1 ring-primary-500/10">
+                <p class="text-[9px] font-bold uppercase tracking-widest text-primary-600 dark:text-primary-400">Total AP</p>
+                <p class="mt-1 text-base font-mono font-black text-primary-700 dark:text-primary-300">
                     {{ number_format($gt['total'], 2) }}
                 </p>
             </div>

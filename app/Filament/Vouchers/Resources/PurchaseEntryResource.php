@@ -518,14 +518,17 @@ class PurchaseEntryResource extends Resource
 
                 Tables\Columns\TextColumn::make('grand_total')
                     ->label('Grand Total')
-                    ->money('AED')
-                    ->sortable(),
+                    ->formatStateUsing(fn ($state, $record) => $record->entry_type === 'return' ? '- AED ' . number_format($state, 2) : 'AED ' . number_format($state, 2))
+                    ->sortable()
+                    ->color(fn ($record) => $record->entry_type === 'return' ? 'warning' : null)
+                    ->weight('bold'),
 
                 Tables\Columns\TextColumn::make('balance_due')
                     ->label('Balance Due')
-                    ->money('AED')
+                    ->formatStateUsing(fn ($state, $record) => $record->entry_type === 'return' ? '- AED ' . number_format($state, 2) : 'AED ' . number_format($state, 2))
                     ->sortable()
-                    ->color(fn ($record) => (float) $record->balance_due > 0 ? 'danger' : 'success'),
+                    ->color(fn ($record) => $record->entry_type === 'return' ? 'warning' : ((float) $record->balance_due > 0 ? 'danger' : 'success'))
+                    ->weight('bold'),
 
                 Tables\Columns\TextColumn::make('price_type')
                     ->label('Price Type')
