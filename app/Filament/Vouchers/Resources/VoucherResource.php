@@ -192,7 +192,11 @@ class VoucherResource extends Resource
 
                                         Forms\Components\Select::make('purchaseEntries')
                                             ->label('Linked Purchase Entries')
-                                            ->relationship('purchaseEntries', 'entry_no')
+                                            ->relationship(
+                                                'purchaseEntries', 
+                                                'entry_no', 
+                                                fn (\Illuminate\Database\Eloquent\Builder $query) => $query->with('taxRegistration')
+                                            )
                                             ->multiple()
                                             ->getOptionLabelFromRecordUsing(fn ($record) =>
                                                 $record->entry_no . ' — ' . ($record->taxRegistration?->name ?? $record->supplier_name ?? 'No Supplier') . ' — AED ' . number_format($record->grand_total ?? $record->total_amount ?? 0, 2)
