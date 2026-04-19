@@ -17,20 +17,30 @@
             {{ $this->form }}
         </x-filament::section>
 
-        {{-- ── Summary Metrics Strip ─────────────────────────────────────────── --}}
-        <div class="mt-4 flex flex-wrap items-center bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-800 overflow-hidden">
+        {{-- ── Summary Cards ───────────────────────────────────────────────── --}}
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 mt-8 mb-8">
             @foreach($bucketKeys as $i => $key)
-            <div class="flex-1 min-w-[33%] sm:min-w-0 p-3 flex flex-col items-center justify-center">
-                <p class="text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ $bucketLabels[$i] }}</p>
-                <p class="mt-1 text-sm font-mono font-bold text-gray-900 dark:text-gray-100">
+            @php
+                $borderCol = match($key) {
+                    'current' => 'border-success-500',
+                    'b1_30'   => 'border-info-500',
+                    'b31_60'  => 'border-warning-500',
+                    'b61_90'  => 'border-danger-500',
+                    'b90plus' => 'border-gray-800',
+                    default   => 'border-gray-300'
+                };
+            @endphp
+            <div class="rounded-lg border-l-4 {{ $borderCol }} bg-white dark:bg-gray-900 shadow-sm p-3 ring-1 ring-gray-950/5">
+                <p class="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">{{ $bucketLabels[$i] }}</p>
+                <p class="mt-1 text-sm font-mono font-bold text-gray-800 dark:text-gray-200">
                     {{ number_format($gt[$key], 2) }}
                 </p>
             </div>
             @endforeach
 
-            <div class="flex-1 min-w-[50%] sm:min-w-[150px] p-3 flex flex-col items-center justify-center bg-primary-50/50 dark:bg-primary-900/10">
-                <p class="text-[10px] font-bold uppercase tracking-widest text-primary-600 dark:text-primary-400">Total AP</p>
-                <p class="mt-1 text-base font-mono font-black text-primary-700 dark:text-primary-300">
+            <div class="rounded-lg border-l-4 border-primary-500 bg-primary-50/50 dark:bg-primary-900/10 shadow-sm p-3 ring-1 ring-primary-500/10">
+                <p class="text-[9px] font-bold uppercase tracking-widest text-primary-600 dark:text-primary-400">Total AP</p>
+                <p class="mt-1 text-sm font-mono font-bold text-primary-700 dark:text-primary-300">
                     {{ number_format($gt['total'], 2) }}
                 </p>
             </div>
