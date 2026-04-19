@@ -918,19 +918,24 @@ class VoucherResource extends Resource
                                                     $net      = round($tendered - $change, 2);
                                                     $diff     = round($net - $target, 2);
 
+                                                    $panelColor = match(true) {
+                                                        abs($diff) < 0.01 => 'background-color:#f0fdf4; border-color:#86efac;',
+                                                        $diff < 0         => 'background-color:#fef2f2; border-color:#fca5a5;',
+                                                        default           => 'background-color:#eff6ff; border-color:#93c5fd;',
+                                                    };
                                                     $statusBadge = match(true) {
-                                                        abs($diff) < 0.01 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 decoration-none">✓ BALANCED</span>',
-                                                        $diff < 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 decoration-none">⚠ SHORT BY AED '.number_format(abs($diff), 2).'</span>',
-                                                        $diff > 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 decoration-none">ℹ EXCESS BY AED '.number_format($diff, 2).'</span>',
+                                                        abs($diff) < 0.01 => '<span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#dcfce7;color:#15803d;">✓ BALANCED</span>',
+                                                        $diff < 0         => '<span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#fee2e2;color:#b91c1c;">⚠ SHORT BY AED '.number_format(abs($diff), 2).'</span>',
+                                                        $diff > 0         => '<span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8;">ℹ EXCESS BY AED '.number_format($diff, 2).'</span>',
                                                     };
 
                                                     return new \Illuminate\Support\HtmlString(
-                                                        "<div class='p-3 bg-gray-50 dark:bg-gray-800/80 rounded-lg border border-gray-100 dark:border-gray-700'>" .
-                                                        "<div class='grid grid-cols-2 gap-y-1 text-sm'>" .
-                                                        "<div class='text-gray-500'>Cash Tendered:</div><div class='text-right font-mono font-bold'>AED " . number_format($tendered, 2) . "</div>" .
-                                                        "<div class='text-gray-500'>Voucher Total:</div><div class='text-right font-mono font-bold'>AED " . number_format($target, 2) . "</div>" .
-                                                        "<div class='col-span-2 my-2 border-t border-dashed border-gray-300 dark:border-gray-600'></div>" .
-                                                        "<div class='font-bold self-center'>Verification:</div><div class='text-right'>{$statusBadge}</div>" .
+                                                        "<div style='padding:12px;border-radius:8px;border:1px solid;{$panelColor}'>" .
+                                                        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:4px 0;font-size:13px;'>" .
+                                                        "<div style='color:#6b7280;'>Cash Tendered:</div><div style='text-align:right;font-family:monospace;font-weight:700;'>AED " . number_format($tendered, 2) . "</div>" .
+                                                        "<div style='color:#6b7280;'>Voucher Total:</div><div style='text-align:right;font-family:monospace;font-weight:700;'>AED " . number_format($target, 2) . "</div>" .
+                                                        "<div style='grid-column:span 2;margin:6px 0;border-top:1px dashed #d1d5db;'></div>" .
+                                                        "<div style='font-weight:700;'>Verification:</div><div style='text-align:right;'>{$statusBadge}</div>" .
                                                         "</div>" .
                                                         "</div>"
                                                     );

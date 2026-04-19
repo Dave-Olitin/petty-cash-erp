@@ -143,19 +143,25 @@ class LiquidationResource extends Resource
                             $accounted = $spent + $returned;
                             $diff = round($accounted - $original, 2);
 
+                            $panelStyle = match (true) {
+                                abs($diff) <= 0.01 => 'background-color:#f0fdf4; border-color:#86efac;',
+                                $diff < 0          => 'background-color:#fef2f2; border-color:#fca5a5;',
+                                default            => 'background-color:#eff6ff; border-color:#93c5fd;',
+                            };
+
                             $statusMsg = match (true) {
-                                abs($diff) <= 0.01 => '<span class="text-success-600 font-bold">✅ Exact — Ready to Liquidate</span>',
-                                $diff < 0          => '<span class="text-danger-600 font-bold">🔴 Short by AED ' . number_format(abs($diff), 2) . '</span>',
-                                $diff > 0          => '<span class="text-primary-600 font-bold">🔵 Excess by AED ' . number_format($diff, 2) . '</span>',
+                                abs($diff) <= 0.01 => '<span style="padding:2px 10px;border-radius:6px;font-size:11px;font-weight:700;background:#dcfce7;color:#15803d;">✅ Exact — Ready to Liquidate</span>',
+                                $diff < 0          => '<span style="padding:2px 10px;border-radius:6px;font-size:11px;font-weight:700;background:#fee2e2;color:#b91c1c;">🔴 Short by AED ' . number_format(abs($diff), 2) . '</span>',
+                                $diff > 0          => '<span style="padding:2px 10px;border-radius:6px;font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8;">🔵 Excess by AED ' . number_format($diff, 2) . '</span>',
                                 default            => '—',
                             };
 
                             return new \Illuminate\Support\HtmlString(
-                                "<div class='p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 font-mono space-y-1'>" .
-                                "<div>Original: AED " . number_format($original, 2) . "</div>" .
-                                "<div>Spent:    AED " . number_format($spent, 2) . "</div>" .
-                                "<div>Returned: AED " . number_format($returned, 2) . "</div>" .
-                                "<div class='pt-2 border-t border-gray-200 dark:border-gray-600 mt-2 font-sans'>Status: {$statusMsg}</div>" .
+                                "<div style='padding:14px;border-radius:10px;border:1px solid;{$panelStyle}font-family:monospace;'>" .
+                                "<div style='margin-bottom:4px;'>Original: AED " . number_format($original, 2) . "</div>" .
+                                "<div style='margin-bottom:4px;'>Spent:    AED " . number_format($spent, 2) . "</div>" .
+                                "<div style='margin-bottom:8px;'>Returned: AED " . number_format($returned, 2) . "</div>" .
+                                "<div style='padding-top:8px;border-top:1px solid #e5e7eb;font-family:sans-serif;'>Status: {$statusMsg}</div>" .
                                 "</div>"
                             );
                         }),

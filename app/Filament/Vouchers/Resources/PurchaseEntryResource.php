@@ -97,7 +97,7 @@ class PurchaseEntryResource extends Resource
 
                     Forms\Components\Select::make('tax_registration_id')
                         ->label('Supplier')
-                        ->relationship('taxRegistration', 'name')
+                        ->relationship('taxRegistration', 'name', fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('is_active', true))
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->name)
                         ->searchable()
                         ->preload()
