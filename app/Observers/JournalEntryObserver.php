@@ -38,8 +38,13 @@ class JournalEntryObserver
 
         $existingLiquidation = $voucher->liquidation;
 
-        // Safety: if there is already a MANUAL liquidation (no auto-tag in remarks), leave it alone
-        if ($existingLiquidation && ! str_contains($existingLiquidation->remarks ?? '', '[auto-liquidated]')) {
+        // Guard: only skip if the liquidation is already COMPLETE and was set manually
+        // (i.e., it has no auto-liquidated tag — an accountant already settled it by hand)
+        if (
+            $existingLiquidation
+            && $existingLiquidation->status === 'complete'
+            && ! str_contains($existingLiquidation->remarks ?? '', '[auto-liquidated]')
+        ) {
             return;
         }
 
