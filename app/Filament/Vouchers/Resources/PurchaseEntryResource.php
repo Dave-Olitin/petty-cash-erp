@@ -518,17 +518,19 @@ class PurchaseEntryResource extends Resource
 
                 Tables\Columns\TextColumn::make('grand_total')
                     ->label('Grand Total')
-                    ->formatStateUsing(fn ($state, $record) => $record->entry_type === 'return' ? '- AED ' . number_format($state, 2) : 'AED ' . number_format($state, 2))
+                    ->getStateUsing(fn ($record) => $record->isReturn() ? -(float)$record->grand_total : (float)$record->grand_total)
+                    ->money('AED')
                     ->sortable()
-                    ->color(fn ($record) => $record->entry_type === 'return' ? 'warning' : null)
+                    ->color(fn ($record) => $record->isReturn() ? 'warning' : null)
                     ->weight('bold')
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('balance_due')
                     ->label('Balance Due')
-                    ->formatStateUsing(fn ($state, $record) => $record->entry_type === 'return' ? '- AED ' . number_format($state, 2) : 'AED ' . number_format($state, 2))
+                    ->getStateUsing(fn ($record) => $record->isReturn() ? -(float)$record->balance_due : (float)$record->balance_due)
+                    ->money('AED')
                     ->sortable()
-                    ->color(fn ($record) => $record->entry_type === 'return' ? 'warning' : ((float) $record->balance_due > 0 ? 'danger' : 'success'))
+                    ->color(fn ($record) => $record->isReturn() ? 'warning' : ((float) $record->balance_due > 0 ? 'danger' : 'success'))
                     ->weight('bold')
                     ->toggleable(),
 
