@@ -92,7 +92,6 @@ class AgingReportPage extends Page implements HasForms
 
         $query = PurchaseEntry::query()
             ->with('taxRegistration')
-            ->where('entry_type', PurchaseEntry::TYPE_PURCHASE)   // only purchase bills, not returns
             ->whereIn('payment_status', [
                 PurchaseEntry::STATUS_UNPAID,
                 PurchaseEntry::STATUS_PARTIAL,
@@ -155,6 +154,11 @@ class AgingReportPage extends Page implements HasForms
                 $balance  = (float) $entry->balance_due;
                 $overdue  = $dueDate ? max(0, (int) $asOf->diffInDays($dueDate, false) * -1) : 0;
 
+                // Deduct if it's a Return
+                if ($entry->entry_type === PurchaseEntry::TYPE_RETURN) {
+                    $balance = -$balance;
+                }
+
                 // Classify into bucket
                 if ($overdue <= 0) {
                     $row['current'] += $balance;
@@ -183,7 +187,7 @@ class AgingReportPage extends Page implements HasForms
                     'days_overdue'   => $overdue,
                     'grand_total'    => (float) $entry->grand_total,
                     'amount_paid'    => (float) $entry->amount_paid,
-                    'balance_due'    => $balance,
+                    'balance_due'    => $balance, // Export and view will see it as negative if a return
                     'payment_status' => $entry->payment_status,
                     'invoice_no'     => $entry->invoice_no ?? '—',
                 ];

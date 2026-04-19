@@ -226,23 +226,14 @@ class PurchaseEntryResource extends Resource
                                     // ── ROW 2: Accounting ──────────────────
                                     Forms\Components\Grid::make(12)
                                         ->schema([
-                                            // ── Debit Account (DR) ──────────────
+                                            // ── Expense/Item Account ──────────────
                                             Forms\Components\Select::make('debit_account_id')
                                                 ->relationship('debitAccount', 'code')
-                                                ->label('Debit Account (DR)')
+                                                ->label('Account')
                                                 ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
-                                                ->searchable()
+                                                ->searchable(['code', 'name'])
                                                 ->native(false)
-                                                ->columnSpan(3),
-
-                                            // ── Credit Account (CR) ─────────────
-                                            Forms\Components\Select::make('credit_account_id')
-                                                ->relationship('creditAccount', 'code')
-                                                ->label('Credit Account (CR)')
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
-                                                ->searchable()
-                                                ->native(false)
-                                                ->columnSpan(3),
+                                                ->columnSpan(6),
 
                                             // ── DR Amount ───────────────────────
                                             Forms\Components\TextInput::make('debit')
