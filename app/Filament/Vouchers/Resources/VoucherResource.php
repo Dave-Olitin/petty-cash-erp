@@ -190,22 +190,6 @@ class VoucherResource extends Resource
                                                 }
                                             }),
 
-                                        Forms\Components\Select::make('purchaseEntries')
-                                            ->label('Linked Purchase Entries')
-                                            ->relationship(
-                                                'purchaseEntries', 
-                                                'entry_no', 
-                                                fn (\Illuminate\Database\Eloquent\Builder $query) => $query->with('taxRegistration')
-                                            )
-                                            ->multiple()
-                                            ->getOptionLabelFromRecordUsing(fn ($record) =>
-                                                $record->entry_no . ' — ' . ($record->taxRegistration?->name ?? $record->supplier_name ?? 'No Supplier') . ' — AED ' . number_format($record->grand_total ?? $record->total_amount ?? 0, 2)
-                                            )
-                                            ->searchable()
-                                            ->preload()
-                                            ->nullable()
-                                            ->placeholder('Optional — link purchase entries'),
-
                                         Forms\Components\Select::make('department')
                                             ->label('Department')
                                             ->options(\App\Models\Department::active()->pluck('name', 'name')->toArray())
@@ -264,6 +248,25 @@ class VoucherResource extends Resource
                                             ->required()
                                             ->maxLength(255)
                                             ->live(debounce: 500),
+
+
+
+                                        Forms\Components\Select::make('purchaseEntries')
+                                            ->label('Linked Purchase Entries')
+                                            ->relationship(
+                                                'purchaseEntries', 
+                                                'entry_no', 
+                                                fn (\Illuminate\Database\Eloquent\Builder $query) => $query->with('taxRegistration')
+                                            )
+                                            ->multiple()
+                                            ->getOptionLabelFromRecordUsing(fn ($record) =>
+                                                $record->entry_no . ' — ' . ($record->taxRegistration?->name ?? $record->supplier_name ?? 'No Supplier') . ' — AED ' . number_format($record->grand_total ?? $record->total_amount ?? 0, 2)
+                                            )
+                                            ->searchable()
+                                            ->preload()
+                                            ->nullable()
+                                            ->placeholder('Optional — link purchase entries')
+                                            ->columnSpanFull(),
 
                                         Forms\Components\Textarea::make('description')
                                             ->label('Being (Purpose)')
