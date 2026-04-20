@@ -1096,6 +1096,7 @@ class VoucherResource extends Resource
     {
         return [
             RelationManagers\ActivitiesRelationManager::class,
+            RelationManagers\PurchaseEntriesRelationManager::class,
         ];
     }
 
