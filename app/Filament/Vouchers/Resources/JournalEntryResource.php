@@ -87,15 +87,13 @@ class JournalEntryResource extends Resource
                                 ->relationship('accountCode', 'code')
                                 ->label('Account')
                                 ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
-                                ->searchable()
-                                ->native(false)
-                                ->columnSpan(2),
+                                ->searchable(['code', 'name'])
+                                ->native(false),
                             Forms\Components\Select::make('branch')
                                 ->label('Branch')
                                 ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
                                 ->searchable()
-                                ->preload()
-                                ->columnSpan(1),
+                                ->preload(),
                             Forms\Components\Select::make('supplier_name')
                                 ->label('Supplier')
                                 ->options(\App\Models\TaxRegistration::pluck('name', 'name'))
@@ -108,22 +106,19 @@ class JournalEntryResource extends Resource
                                             $set('trn', $tax->trn);
                                         }
                                     }
-                                })
-                                ->columnSpan(2),
+                                }),
                             Forms\Components\TextInput::make('trn')
                                 ->label('TRN')
-                                ->maxLength(255)
-                                ->columnSpan(1),
+                                ->maxLength(255),
                             Forms\Components\TextInput::make('remarks')
                                 ->label('Description')
-                                ->columnSpan(2),
+                                ->columnSpanFull(),
                             Forms\Components\TextInput::make('debit')
                                 ->label('Debit')
                                 ->numeric()
                                 ->default(0)
                                 ->required()
                                 ->prefix('DR')
-                                ->columnSpan(1)
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                     if ((float)$state > 0) $set('credit', 0);
@@ -134,12 +129,11 @@ class JournalEntryResource extends Resource
                                 ->default(0)
                                 ->required()
                                 ->prefix('CR')
-                                ->columnSpan(1)
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                     if ((float)$state > 0) $set('debit', 0);
                                 }),
-                        ])->columns(10)
+                        ])->columns(2)
                         ->rule(function () {
                             return function (string $attribute, $value, \Closure $fail) {
                                 // Ensure user provides balanced lines before saving
