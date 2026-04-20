@@ -20,6 +20,7 @@ class PeriodCloseResource extends Resource
     protected static ?string $navigationLabel = 'Period Closes';
     protected static ?string $modelLabel = 'Period Close';
     protected static ?int $navigationSort = 6;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function canAccess(): bool
     {

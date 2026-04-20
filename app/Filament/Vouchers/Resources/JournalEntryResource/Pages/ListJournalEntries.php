@@ -13,6 +13,11 @@ class ListJournalEntries extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('period_close')
+                ->label('Period Close')
+                ->icon('heroicon-o-archive-box-arrow-down')
+                ->color('info')
+                ->url(fn () => \App\Filament\Vouchers\Resources\PeriodCloseResource::getUrl('index')),
             Actions\CreateAction::make(),
         ];
     }
