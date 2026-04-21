@@ -28,6 +28,7 @@ class PurchaseEntriesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->with('lines'))
             ->columns([
                 Tables\Columns\TextColumn::make('entry_no')
                     ->label('Entry No.')
@@ -40,21 +41,21 @@ class PurchaseEntriesRelationManager extends RelationManager
                     ->default(fn ($record) => $record->supplier_name ?? '—')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('supplier_invoice_number')
+                Tables\Columns\TextColumn::make('invoice_no')
                     ->label('INV #')
                     ->default('—')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('lpo_number')
+                Tables\Columns\TextColumn::make('po_number')
                     ->label('PO #')
                     ->default('—')
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('description')
                     ->label('Description')
-                    ->default('—')
+                    ->getStateUsing(fn ($record) => $record->lines->first()?->description ?? '—')
                     ->limit(50)
-                    ->tooltip(fn ($record) => $record->description),
+                    ->tooltip(fn ($record) => $record->lines->first()?->description ?? '—'),
 
                 Tables\Columns\TextColumn::make('date')
                     ->label('Date')
@@ -63,9 +64,10 @@ class PurchaseEntriesRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('grand_total')
                     ->label('Amount')
                     ->money('AED')
-                    ->getStateUsing(fn ($record) => $record->grand_total ?? $record->total_amount ?? 0)
+                    ->getStateUsing(fn ($record) => $record->isReturn() ? -(float)($record->grand_total ?? $record->total_amount ?? 0) : (float)($record->grand_total ?? $record->total_amount ?? 0))
                     ->alignRight()
-                    ->weight(\Filament\Support\Enums\FontWeight::Bold),
+                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                    ->color(fn ($record) => $record->isReturn() ? 'warning' : null),
             ])
             ->defaultSort('date', 'desc')
             ->paginated(false)

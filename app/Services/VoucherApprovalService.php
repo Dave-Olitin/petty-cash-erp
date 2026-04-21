@@ -227,6 +227,14 @@ class VoucherApprovalService
                 'current_approval_step' => null,
             ]);
 
+            // Auto-settle linked purchase entries (Option 1 behavior)
+            $locked->purchaseEntries()->each(function ($pe) {
+                $pe->update([
+                    'amount_paid'    => $pe->grand_total,
+                    'payment_status' => \App\Models\PurchaseEntry::STATUS_PAID,
+                ]);
+            });
+
             // Record in approval trail
             $comment = $previousStatus !== VoucherStatus::Approved->value
                 ? 'Paid early (was ' . ucwords(str_replace('_', ' ', $previousStatus)) . ')'
