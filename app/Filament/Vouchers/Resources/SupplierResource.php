@@ -19,9 +19,9 @@ class SupplierResource extends Resource
 
     protected static ?string $navigationGroup = 'Accounting';
 
-    protected static ?string $modelLabel = 'Supplier Entry';
-    protected static ?string $pluralModelLabel = 'Supplier Entries';
-    protected static ?string $navigationLabel = 'Supplier Entries';
+    protected static ?string $modelLabel = 'Supplier Details';
+    protected static ?string $pluralModelLabel = 'Supplier Details';
+    protected static ?string $navigationLabel = 'Supplier Details';
     protected static ?int $navigationSort = 3;
 
     public static function canViewAny(): bool

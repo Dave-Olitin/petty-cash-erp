@@ -12,6 +12,11 @@ class ViewSupplier extends ViewRecord
 {
     protected static string $resource = SupplierResource::class;
 
+    public function getMaxContentWidth(): \Filament\Support\Enums\MaxWidth|string|null
+    {
+        return \Filament\Support\Enums\MaxWidth::Full;
+    }
+
     protected function getHeaderActions(): array
     {
         return [

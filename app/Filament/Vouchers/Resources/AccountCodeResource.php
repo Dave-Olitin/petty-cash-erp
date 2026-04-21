@@ -18,8 +18,8 @@ class AccountCodeResource extends Resource
     protected static ?string $model = AccountCode::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-list-bullet';
-    protected static ?string $cluster = \App\Filament\Vouchers\Clusters\Settings::class;
-    protected static ?int $navigationSort = 30;
+    protected static ?string $navigationGroup = 'Accounting';
+    protected static ?int $navigationSort = 4;
 
     public static function canViewAny(): bool
     {
