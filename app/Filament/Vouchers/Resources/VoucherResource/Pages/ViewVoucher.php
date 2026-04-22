@@ -14,6 +14,22 @@ class ViewVoucher extends ViewRecord
 {
     protected static string $resource = VoucherResource::class;
 
+    public function mount(int | string $record): void
+    {
+        parent::mount($record);
+
+        // Record the view for the current user
+        \App\Models\VoucherView::updateOrCreate(
+            [
+                'voucher_id' => $this->getRecord()->id,
+                'user_id' => auth()->id(),
+            ],
+            [
+                'updated_at' => now(),
+            ]
+        );
+    }
+
     public function getTitle(): string | \Illuminate\Contracts\Support\Htmlable
     {
         return $this->getRecord()->voucher_number ?? 'View Voucher';
@@ -612,6 +628,59 @@ class ViewVoucher extends ViewRecord
 
                     \Filament\Notifications\Notification::make()->title('Denominations successfully permanently overridden.')->success()->send();
                     $record->refresh();
+                }),
+                
+            Actions\Action::make('void_only')
+                ->label('Void Only')
+                ->icon('heroicon-m-no-symbol')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalHeading('Void Transaction')
+                ->modalDescription('WARNING: This will permanently void this disbursed voucher and reverse its accounting. It will NOT create a new draft.')
+                ->form([
+                    Forms\Components\Textarea::make('reason')
+                        ->label('Reason for Voiding')
+                        ->required()
+                        ->placeholder('e.g. Transaction was fully cancelled/refunded.'),
+                ])
+                ->visible(fn (): bool => $record->status === 'paid' && auth()->user()->can('voucher.void_only'))
+                ->action(function (array $data) use ($record) {
+                    $result = app(\App\Services\VoucherApprovalService::class)->voidVoucher($record, auth()->user(), $data['reason'], false);
+                    
+                    if (is_string($result)) {
+                        Notification::make()->title($result)->danger()->send();
+                        return;
+                    }
+                    
+                    Notification::make()->title("Voucher successfully voided.")->success()->send();
+                    $record->refresh();
+                }),
+                
+            Actions\Action::make('void_and_reissue')
+                ->label('Void & Reissue')
+                ->icon('heroicon-m-arrow-path-rounded-square')
+                ->color('warning')
+                ->requiresConfirmation()
+                ->modalHeading('Void & Reissue Voucher')
+                ->modalDescription('WARNING: This will permanently void this disbursed voucher, reverse its accounting, and clone a new draft for you to fix and re-submit.')
+                ->form([
+                    Forms\Components\Textarea::make('reason')
+                        ->label('Reason for Voiding')
+                        ->required()
+                        ->placeholder('e.g. Incorrect amount. Needs to be 50.00 instead of 500.00.'),
+                ])
+                ->visible(fn (): bool => $record->status === 'paid' && auth()->user()->can('voucher.void_and_reissue'))
+                ->action(function (array $data) use ($record) {
+                    $result = app(\App\Services\VoucherApprovalService::class)->voidVoucher($record, auth()->user(), $data['reason'], true);
+                    
+                    if (is_string($result)) {
+                        Notification::make()->title($result)->danger()->send();
+                        return;
+                    }
+                    
+                    Notification::make()->title("Voucher voided. Cloned as {$result->voucher_number}.")->success()->send();
+                    
+                    redirect()->to(\App\Filament\Vouchers\Resources\VoucherResource::getUrl('edit', ['record' => $result->id]));
                 }),
                 
             Actions\EditAction::make()

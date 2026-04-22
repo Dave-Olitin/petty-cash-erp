@@ -98,23 +98,37 @@
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: -0.5rem;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     }
     
     .approval-timeline-title-row {
         display: flex;
-        flex-direction: column;
-        gap: 0.125rem;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
     }
     .approval-timeline-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #111827;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #0f172a;
         margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
     }
     .approval-timeline-time {
         font-size: 0.8125rem;
-        color: #9ca3af;
-        font-weight: 500;
+        color: #64748b;
+        font-weight: 600;
+        background: #f1f5f9;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
     }
     
     /* Detail Rows (User & Comment) */
@@ -122,39 +136,115 @@
         display: flex;
         align-items: flex-start;
         gap: 0.5rem;
-        color: #6b7280;
-        font-size: 0.875rem;
+        color: #475569;
+        font-size: 0.9rem;
+        word-break: break-word;
+    }
+
+    /* Fluid Responsiveness */
+    .approval-timeline-title-row {
+        gap: 0.5rem;
+        flex-wrap: wrap; /* Automatically stacks when narrow */
+    }
+    
+    @media (max-width: 640px) {
+        .approval-timeline-title {
+            font-size: 1rem; /* Slightly smaller on mobile */
+        }
+        .approval-timeline-time {
+            width: fit-content;
+        }
     }
     .approval-timeline-detail svg {
-        width: 1.125rem;
-        height: 1.125rem;
-        color: #9ca3af;
+        width: 1.25rem;
+        height: 1.25rem;
+        color: #94a3b8;
         margin-top: 0.125rem;
         flex-shrink: 0;
     }
     .approval-timeline-user-name {
-        font-weight: 500;
+        font-weight: 700;
+        color: #334155;
     }
     
     /* Pending Specifics */
+    .approval-timeline-item.is-pending .approval-timeline-content {
+        background-color: transparent;
+        border: 1px dashed #cbd5e1;
+        box-shadow: none;
+    }
     .approval-timeline-item.is-pending .approval-timeline-title {
-        color: #6b7280;
+        color: #94a3b8;
     }
     
 
     /* Dark Mode Overrides */
+    .dark .approval-timeline-content { background-color: #1e293b; border-color: #334155; }
+    .dark .approval-timeline-title-row { border-color: #334155; }
+    .dark .approval-timeline-title { color: #f8fafc; }
+    .dark .approval-timeline-time { background: #334155; color: #cbd5e1; }
+    .dark .approval-timeline-detail { color: #cbd5e1; }
+    .dark .approval-timeline-user-name { color: #f8fafc; }
     .dark .approval-timeline-list::before { background-color: #374151; }
     .dark .approval-timeline-node { background-color: #1f2937; }
-    .dark .approval-timeline-title { color: #f3f4f6; }
-    .dark .approval-timeline-time { color: #9ca3af; }
-    .dark .approval-timeline-detail { color: #9ca3af; }
-    .dark .approval-timeline-detail svg { color: #6b7280; }
     
     .dark .node-success { background-color: rgba(59, 130, 246, 0.1); }
     .dark .node-warning { background-color: rgba(249, 115, 22, 0.1); }
     .dark .node-danger { background-color: rgba(239, 68, 68, 0.1); }
     .dark .node-pending { background-color: #1f2937; }
     .dark .node-pending .approval-timeline-node-inner { background-color: #4b5563; }
+
+    /* Seen By Section */
+    .seen-by-section {
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid #f1f5f9;
+    }
+    .dark .seen-by-section { border-top-color: #334155; }
+    
+    .seen-by-header {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin-bottom: 0.75rem;
+        color: #64748b;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .seen-by-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .seen-by-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.625rem;
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        color: #475569;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    .dark .seen-by-badge {
+        background-color: #1e293b;
+        border-color: #334155;
+        color: #cbd5e1;
+    }
+    .seen-by-badge svg {
+        width: 0.875rem;
+        height: 0.875rem;
+        color: #94a3b8;
+    }
+    .seen-by-time {
+        color: #94a3b8;
+        font-weight: 400;
+        margin-left: 0.125rem;
+    }
 </style>
 
 <div class="approval-timeline">
@@ -169,7 +259,7 @@
                 <!-- Node Icon -->
                 <div class="approval-timeline-node 
                     @if(in_array($approval->action, ['approved', 'paid'])) node-success
-                    @elseif($approval->action === 'rejected') node-danger
+                    @elseif(in_array($approval->action, ['rejected', 'voided'])) node-danger
                     @else node-warning
                     @endif">
                     <div class="approval-timeline-node-inner">
@@ -177,7 +267,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                               <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
                             </svg>
-                        @elseif($approval->action === 'rejected')
+                        @elseif(in_array($approval->action, ['rejected', 'voided']))
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
                             </svg>
@@ -289,4 +379,39 @@
             </div>
         @endforeach
     </div>
+
+    {{-- Seen By Block (WhatsApp Style) --}}
+    @php
+        $voucherCreatorId = $getRecord()->user_id;
+
+        $views = $getRecord()->views()
+            ->with('user.roles')
+            ->where('user_id', '!=', $voucherCreatorId) // Exclude the requester (obvious they've seen it)
+            ->whereHas('user', function ($q) {
+                // Exclude Super Admin users — they are system administrators, not reviewers
+                $q->whereDoesntHave('roles', fn ($r) => $r->where('name', 'Super Admin'));
+            })
+            ->orderBy('updated_at', 'desc')
+            ->get();
+    @endphp
+
+    @if($views->count() > 0)
+        <div class="seen-by-section">
+            <div class="seen-by-header">
+                <x-heroicon-m-eye class="w-4 h-4" />
+                <span>Seen By</span>
+            </div>
+            <div class="seen-by-list">
+                @foreach($views as $view)
+                    <div class="seen-by-badge" title="Last seen: {{ $view->updated_at->format('d M Y, H:i') }}">
+                        <x-heroicon-s-user-circle />
+                        <span>
+                            {{ $view->user->name === auth()->user()->name ? 'You' : explode(' ', $view->user->name)[0] }}
+                            <span class="seen-by-time">&bull; {{ $view->updated_at->diffForHumans(short: true) }}</span>
+                        </span>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
 </div>

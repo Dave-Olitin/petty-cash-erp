@@ -190,4 +190,9 @@ class Voucher extends Model implements HasMedia
             });
         });
     }
+
+    public function views(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(VoucherView::class);
+    }
 }

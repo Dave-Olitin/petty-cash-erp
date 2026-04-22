@@ -11,6 +11,7 @@ use Spatie\Permission\Traits\HasRoles;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use NotificationChannels\WebPush\HasPushSubscriptions;
+use App\Models\VoucherView;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -74,5 +75,10 @@ class User extends Authenticatable implements FilamentUser
 
         // Deny access to any unrecognised panel by default
         return false;
+    }
+
+    public function voucherViews()
+    {
+        return $this->hasMany(VoucherView::class);
     }
 }

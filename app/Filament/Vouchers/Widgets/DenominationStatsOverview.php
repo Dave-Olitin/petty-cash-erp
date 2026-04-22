@@ -20,7 +20,8 @@ class DenominationStatsOverview extends BaseWidget
         // Amount added to box from receipt vouchers (collecting funds)
         $receipts = Denomination::where('denominatable_type', Voucher::class)
             ->whereHasMorph('denominatable', [Voucher::class], function ($query) {
-                $query->where('type', 'receipt');
+                $query->where('type', 'receipt')
+                      ->where('status', 'paid');
             })
             ->get()
             ->sum(fn ($d) => $d->total_amount - $d->change_given); // Net cash kept
@@ -28,8 +29,9 @@ class DenominationStatsOverview extends BaseWidget
         // Amount removed from box by payment vouchers and petty cash (disbursing funds)
         $payments = Denomination::where('denominatable_type', Voucher::class)
             ->whereHasMorph('denominatable', [Voucher::class], function ($query) {
-                // Include empty (legacy), payment, and petty_cash
-                $query->whereIn('type', ['payment', 'petty_cash'])->orWhereNull('type');
+                $query->where(function ($q) {
+                    $q->whereIn('type', ['payment', 'petty_cash'])->orWhereNull('type');
+                })->where('status', 'paid');
             })
             ->get()
             // Only add back the change if it was officially marked as received back in the box!

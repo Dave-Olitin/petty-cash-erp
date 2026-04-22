@@ -88,9 +88,23 @@ class VoucherObserver
             // ── Petty Cash: low balance check + liquidation trigger ────────────
             if ($voucher->type === 'petty_cash') {
                 $totalReplenishing = \App\Models\FloatReplenishment::sum('amount');
-                $totalSpent = \App\Models\Voucher::where('type', 'petty_cash')
-                    ->where('status', VoucherStatus::Paid->value)
-                    ->sum('amount');
+
+                // Use denomination records for accurate physical cash disbursed.
+                // "amount" on the voucher != cash actually given out (change may have been returned).
+                $totalSpent = \App\Models\Denomination::where('denominatable_type', \App\Models\Voucher::class)
+                    ->whereHasMorph('denominatable', [\App\Models\Voucher::class], function ($q) {
+                        $q->where('type', 'petty_cash')
+                          ->where('status', VoucherStatus::Paid->value); // voided are excluded (status != paid)
+                    })
+                    ->get()
+                    ->sum(fn ($d) => $d->total_amount - ($d->is_change_received ? $d->change_given : 0));
+
+                // Fallback: if no denomination records exist, use voucher amounts directly
+                if ($totalSpent === 0.0) {
+                    $totalSpent = \App\Models\Voucher::where('type', 'petty_cash')
+                        ->where('status', VoucherStatus::Paid->value)
+                        ->sum('amount');
+                }
 
                 $currentBalance = (float) $totalReplenishing - (float) $totalSpent;
 

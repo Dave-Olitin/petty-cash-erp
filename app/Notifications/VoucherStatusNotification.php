@@ -16,7 +16,7 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
 
     public function __construct(
         public readonly Voucher $voucher,
-        public readonly string $event, // 'submitted' | 'checked' | 'approved' | 'rejected' | 'paid'
+        public readonly string $event, // 'submitted'|'checked'|'approved'|'rejected'|'paid'|'early_disbursement'|'pending_fyi'
         public readonly ?string $comments = null,
     ) {}
 
@@ -48,6 +48,8 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             'approved'        => "✅ " . ($isReceipt ? "Receipt" : "Voucher") . " Approved: {$this->voucher->voucher_number}",
             'rejected'        => "❌ " . ($isReceipt ? "Receipt" : "Voucher") . " Rejected: {$this->voucher->voucher_number}",
             'paid'            => "💰 " . ($isReceipt ? "Receipt Collected" : "Voucher Paid") . ": {$this->voucher->voucher_number}",
+            'early_disbursement' => "⚠️ Early Disbursement Alert: {$this->voucher->voucher_number}",
+            'pending_fyi'        => "👀 Heads Up: Voucher {$this->voucher->voucher_number} Is In Your Queue",
             'reminder_checker' => "⏰ Action Required: " . ($isReceipt ? "Receipt" : "Voucher") . " {$this->voucher->voucher_number} Awaiting Check",
             'reminder_approver' => "⏰ Action Required: " . ($isReceipt ? "Receipt" : "Voucher") . " {$this->voucher->voucher_number} Awaiting Approval",
             default           => ($isReceipt ? "Receipt" : "Voucher") . " Update: {$this->voucher->voucher_number}",
@@ -59,6 +61,8 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             'approved'        => "Your " . ($isReceipt ? "receipt voucher" : "voucher") . " has been approved and will be processed.",
             'rejected'        => "Your " . ($isReceipt ? "receipt voucher" : "voucher") . " has been returned with comments. Please review and resubmit.",
             'paid'            => "Your " . ($isReceipt ? "receipt voucher has been officially collected." : "voucher has been marked as paid."),
+            'early_disbursement' => "⚠️ ALERT: Voucher {$this->voucher->voucher_number} (AED " . number_format($this->voucher->amount, 2) . ") was disbursed BEFORE full approval. This requires your immediate review and acknowledgment.",
+            'pending_fyi'        => "FYI: Voucher {$this->voucher->voucher_number} has been submitted for approval and is working its way through the chain. You will receive an action-required notification when it reaches your step.",
             'reminder_checker' => "⏰ Reminder: This " . ($isReceipt ? "receipt voucher" : "voucher") . " has been pending your review for over 24 hours. Please take action.",
             'reminder_approver' => "⏰ Reminder: This " . ($isReceipt ? "receipt voucher" : "voucher") . " has been pending your approval for over 24 hours. Please take action.",
             default           => "There is an update on your " . ($isReceipt ? "receipt voucher" : "voucher") . ".",
@@ -84,21 +88,26 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             'approved'        => "Voucher Approved",
             'rejected'        => "Voucher Rejected",
             'paid'            => "Voucher Paid",
+            'early_disbursement' => "⚠️ Early Disbursement Alert",
             'reminder_checker' => "Action Required: Pending Check",
             'reminder_approver' => "Action Required: Pending Approval",
             default           => "Voucher Update",
         };
 
         $icon = match ($this->event) {
-            'approved', 'paid' => 'heroicon-o-check-circle',
-            'rejected'         => 'heroicon-o-x-circle',
+            'approved', 'paid'  => 'heroicon-o-check-circle',
+            'rejected'          => 'heroicon-o-x-circle',
+            'early_disbursement' => 'heroicon-o-exclamation-triangle',
+            'pending_fyi'       => 'heroicon-o-eye',
             'submitted', 'checked' => 'heroicon-o-clock',
-            default            => 'heroicon-o-information-circle',
+            default             => 'heroicon-o-information-circle',
         };
 
         $color = match ($this->event) {
             'approved', 'paid' => 'success',
             'rejected'         => 'danger',
+            'early_disbursement' => 'warning',
+            'pending_fyi'      => 'info',
             'submitted', 'checked' => 'warning',
             default            => 'gray',
         };
@@ -131,6 +140,8 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             'approved'        => "Voucher Approved",
             'rejected'        => "Voucher Rejected",
             'paid'            => "Voucher Paid",
+            'early_disbursement' => "⚠️ Early Disbursement Alert",
+            'pending_fyi'     => "👀 Heads Up: Voucher In Your Queue",
             'reminder_checker' => "Action Required: Pending Check",
             'reminder_approver' => "Action Required: Pending Approval",
             default           => "Voucher Update",

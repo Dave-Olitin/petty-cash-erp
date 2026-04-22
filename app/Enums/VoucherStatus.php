@@ -21,6 +21,7 @@ enum VoucherStatus: string
     case Approved        = 'approved';
     case Rejected        = 'rejected';
     case Paid            = 'paid';
+    case Voided          = 'voided';
 
     /**
      * States that are considered "in-flight" (awaiting action from someone).
@@ -45,7 +46,7 @@ enum VoucherStatus: string
      */
     public function isTerminal(): bool
     {
-        return in_array($this, [self::Approved, self::Rejected, self::Paid]);
+        return in_array($this, [self::Approved, self::Rejected, self::Paid, self::Voided]);
     }
 
     public function label(): string
@@ -57,6 +58,7 @@ enum VoucherStatus: string
             self::Approved        => 'Approved',
             self::Rejected        => 'Rejected',
             self::Paid            => 'Paid',
+            self::Voided          => 'Voided',
         };
     }
 }

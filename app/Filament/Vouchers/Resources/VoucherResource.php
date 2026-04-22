@@ -641,6 +641,7 @@ class VoucherResource extends Resource
                         'approved' => 'heroicon-m-check-circle',
                         'rejected' => 'heroicon-m-x-circle',
                         'paid' => 'heroicon-m-banknotes',
+                        'voided' => 'heroicon-m-no-symbol',
                         default => 'heroicon-m-question-mark-circle',
                     })
                     ->color(fn (string $state): string => match ($state) {
@@ -650,6 +651,7 @@ class VoucherResource extends Resource
                         'approved' => 'success',
                         'rejected' => 'danger',
                         'paid' => 'success',
+                        'voided' => 'danger',
                         default => 'gray',
                     })
                     ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
@@ -667,6 +669,7 @@ class VoucherResource extends Resource
                         'approved' => 'Approved',
                         'rejected' => 'Rejected',
                         'paid' => 'Paid',
+                        'voided' => 'Voided',
                     ]),
                 Tables\Filters\SelectFilter::make('type')
                     ->options([

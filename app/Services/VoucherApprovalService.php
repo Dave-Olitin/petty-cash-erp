@@ -74,7 +74,21 @@ class VoucherApprovalService
             try {
                 $firstStep = ApprovalWorkflow::getApproverAtStep(1);
                 if ($firstStep) {
+                    // Step 1: Action Required
                     $firstStep->user->notify(new VoucherStatusNotification($locked, 'checked'));
+
+                    // Steps 2+: FYI preview — "it's coming your way"
+                    $totalSteps = ApprovalWorkflow::totalSteps();
+                    for ($i = 2; $i <= $totalSteps; $i++) {
+                        $laterStep = ApprovalWorkflow::getApproverAtStep($i);
+                        if ($laterStep && $laterStep->user_id !== $firstStep->user_id) {
+                            try {
+                                $laterStep->user->notify(new VoucherStatusNotification($locked, 'pending_fyi'));
+                            } catch (\Throwable $fyi) {
+                                \Illuminate\Support\Facades\Log::warning("FYI notify failed for step {$i}: " . $fyi->getMessage());
+                            }
+                        }
+                    }
                 } else {
                     User::role('Approver')->get()->each->notify(
                         new VoucherStatusNotification($locked, 'checked')
@@ -254,11 +268,21 @@ class VoucherApprovalService
                 if ($previousStatus !== VoucherStatus::Approved->value) {
                     $approvers = User::role(['Approver', 'Admin', 'Super Admin'])->get();
                     if ($approvers->isNotEmpty()) {
+                        // In-app Filament notification (for users currently on the platform)
                         \Filament\Notifications\Notification::make()
                             ->title('Early Disbursement Alert')
-                            ->body("Voucher {$locked->voucher_number} was disbursed early by {$actor->name}. Please review.")
+                            ->body("Voucher {$locked->voucher_number} was disbursed early by {$actor->name} before full approval. Please review.")
                             ->warning()
                             ->sendToDatabase($approvers);
+
+                        // Email/push notification (for users NOT currently on the platform)
+                        foreach ($approvers as $approver) {
+                            try {
+                                $approver->notify(new VoucherStatusNotification($locked, 'early_disbursement'));
+                            } catch (\Throwable $notifyEx) {
+                                \Illuminate\Support\Facades\Log::warning("Early disbursement notify failed for {$approver->email}: " . $notifyEx->getMessage());
+                            }
+                        }
                     }
                 }
             } catch (\Throwable $e) {
@@ -266,6 +290,93 @@ class VoucherApprovalService
             }
 
             return null;
+        });
+    }
+
+    /**
+     * Voids a disbursed (paid) voucher.
+     * If $reissue is true, prepares and returns a re-issued draft clone.
+     * Returns true on pure void success, the newly created clone Voucher if reissued, or an error string if invalid.
+     */
+    public function voidVoucher(Voucher $voucher, User $actor, string $reason, bool $reissue = false): Voucher|string|true
+    {
+        return DB::transaction(function () use ($voucher, $actor, $reason, $reissue) {
+            $locked = Voucher::lockForUpdate()->find($voucher->id);
+
+            if ($locked->status !== VoucherStatus::Paid->value) {
+                return 'Only paid/disbursed vouchers can be voided.';
+            }
+
+            // The actor needs the specific void permissions
+            if ($reissue && !$actor->can('voucher.void_and_reissue')) {
+                return 'Unauthorized: You lack the required permission to void and reissue a voucher.';
+            }
+
+            if (!$reissue && !$actor->can('voucher.void_only')) {
+                return 'Unauthorized: You lack the required permission to void a voucher.';
+            }
+
+            // 1. Mark Liquidation as Voided if exists
+            if ($locked->liquidation) {
+                $locked->liquidation->update(['status' => 'voided']);
+            }
+
+            // 2. Revert Purchase Entries (un-pay them so they show balance again)
+            $locked->purchaseEntries()->each(function ($pe) {
+                $pe->update([
+                    'amount_paid'    => 0,
+                    'payment_status' => \App\Models\PurchaseEntry::STATUS_UNPAID,
+                ]);
+            });
+
+            // 3. Handle physical denominations if any exist
+            // By changing the voucher status to Voided, the dashboard/float calculators 
+            // will automatically ignore this voucher's denomination records.
+
+            // 4. Update the current Voucher to Voided
+            $locked->update([
+                'status' => VoucherStatus::Voided->value,
+                'liquidation_status' => 'not_required', 
+            ]);
+
+            $locked->approvals()->create([
+                'user_id'  => $actor->id,
+                'action'   => 'voided',
+                'comments' => 'Reason: ' . $reason,
+            ]);
+
+            if (!$reissue) {
+                activity()
+                    ->performedOn($locked)
+                    ->causedBy($actor)
+                    ->log("Voucher voided. Reason: {$reason}");
+                    
+                return true;
+            }
+
+            // 5. Clone and Reissue
+            // NOTE: Do NOT set voucher_number here.
+            // VoucherObserver::creating() fires on ->save() and will correctly generate
+            // the number using the proper prefix and padding for the voucher type.
+            $newVoucher = $locked->replicate(['voucher_number', 'status', 'liquidation_status', 'parent_voucher_id', 'created_at', 'updated_at', 'deleted_at', 'attachment_paths']);
+            $newVoucher->status = VoucherStatus::Draft->value;
+            $newVoucher->liquidation_status = 'not_required';
+            $newVoucher->parent_voucher_id = $locked->id;
+            $newVoucher->save(); // Observer generates voucher_number here
+
+            // 6. Replicate line items
+            foreach ($locked->items as $item) {
+                $newItem = $item->replicate(['voucher_id']);
+                $newVoucher->items()->save($newItem);
+            }
+
+            // Log AFTER save so we record the observer-generated number
+            activity()
+                ->performedOn($locked)
+                ->causedBy($actor)
+                ->log("Voucher voided and re-issued as {$newVoucher->voucher_number}. Reason: {$reason}");
+
+            return $newVoucher;
         });
     }
 }

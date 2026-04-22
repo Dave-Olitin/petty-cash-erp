@@ -22,36 +22,36 @@ class ListVouchers extends ListRecords
     {
         $user = auth()->user();
 
+        // Avoid multiple heavy count queries. Only count actionable small subsets.
         $actionCount = \App\Models\Voucher::actionRequired($user)->count();
         $draftCount = \App\Models\Voucher::where('status', 'draft')->where('user_id', $user->id)->count();
 
         $tabs = [
-            'action_required' => \Filament\Resources\Components\Tab::make('Action Required')
+            'action_required' => \Filament\Resources\Components\Tab::make('Needs My Action')
+                ->icon('heroicon-m-exclamation-circle')
                 ->modifyQueryUsing(fn ($query) => $query->actionRequired($user))
                 ->badge($actionCount)
                 ->badgeColor($actionCount > 0 ? 'danger' : 'gray'),
-                
-            'all' => \Filament\Resources\Components\Tab::make('All')
-                ->badge(\App\Models\Voucher::count())
-                ->badgeColor('gray'),
         ];
 
         if ($draftCount > 0) {
             $tabs['draft'] = \Filament\Resources\Components\Tab::make('My Drafts')
+                ->icon('heroicon-m-pencil-square')
                 ->modifyQueryUsing(fn ($query) => $query->where('status', 'draft')->where('user_id', $user->id))
                 ->badge($draftCount)
                 ->badgeColor('gray');
         }
 
-        $tabs['in_progress'] = \Filament\Resources\Components\Tab::make('Processing & Completed')
-            ->modifyQueryUsing(fn ($query) => $query->whereIn('status', [
-                'pending_checker', 
-                'pending_approver', 
-                'approved', 
-                'paid'
-            ]))
-            ->badge(\App\Models\Voucher::whereIn('status', ['pending_checker', 'pending_approver', 'approved', 'paid'])->count())
-            ->badgeColor('primary');
+        $tabs['in_progress'] = \Filament\Resources\Components\Tab::make('In Progress')
+            ->icon('heroicon-m-arrow-path')
+            ->modifyQueryUsing(fn ($query) => $query->whereIn('status', ['pending_checker', 'pending_approver']));
+
+        $tabs['completed'] = \Filament\Resources\Components\Tab::make('Processed & Paid')
+            ->icon('heroicon-m-check-badge')
+            ->modifyQueryUsing(fn ($query) => $query->whereIn('status', ['approved', 'paid']));
+
+        $tabs['all'] = \Filament\Resources\Components\Tab::make('All Records')
+            ->icon('heroicon-m-queue-list');
 
         return $tabs;
     }

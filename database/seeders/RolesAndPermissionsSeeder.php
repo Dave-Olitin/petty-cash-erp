@@ -33,6 +33,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'voucher.approve',    // Can give final approval (Approver/CEO)
             'voucher.reject',     // Can reject/return a voucher
             'voucher.pay',        // Can pay a voucher (any payable status)
+            'voucher.void_only',  // Can completely void a paid voucher without cloning
+            'voucher.void_and_reissue', // Can void and clone a paid voucher
 
             // Float management
             'voucher.manage_float', // Can view/add head office float replenishments
@@ -86,6 +88,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'voucher.check',
             'voucher.reject',
             'voucher.pay',
+            'voucher.void_only',
+            'voucher.void_and_reissue',
             'voucher.manage_float',
             'journal_entry.view',
             'journal_entry.create',
