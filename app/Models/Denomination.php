@@ -24,6 +24,7 @@ class Denomination extends Model
         'coin_0_25',
         'total_amount',
         'change_given',
+        'prior_deduction',
         'is_change_received',
         'remarks',
     ];
@@ -33,6 +34,7 @@ class Denomination extends Model
         return [
             'total_amount'       => 'decimal:2',
             'change_given'       => 'decimal:2',
+            'prior_deduction'    => 'decimal:2',
             'is_change_received' => 'boolean',
             'bill_1000'          => 'integer',
             'bill_500'           => 'integer',

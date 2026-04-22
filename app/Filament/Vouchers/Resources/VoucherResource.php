@@ -33,11 +33,13 @@ class VoucherResource extends Resource
 
         // 'voucher_amount' is used in the action modal (hidden field via mountUsing).
         // 'amount' is used if called from the main form context.
-        $voucherAmount = (float) ($get('voucher_amount') ?: $get('amount') ?: 0);
+        $targetAmount = (float) ($get('voucher_amount') ?: $get('amount') ?: 0);
+        $deduction    = (float) ($get('prior_deduction') ?: 0);
+        $cashToPay    = max(0, $targetAmount - $deduction);
         
-        // Final calculation for change is tendered - voucherAmount, but we only show it as change if it's positive.
+        // Final calculation for change is tendered - cashToPay, but we only show it as change if it's positive.
         // If it's negative, it means we are 'short'.
-        $change = max(0, round($tendered - $voucherAmount, 2));
+        $change = max(0, round($tendered - $cashToPay, 2));
         $set('change_given', $change);
     }
 
@@ -903,9 +905,18 @@ class VoucherResource extends Resource
                                             ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
                                     ])->columns(3),
 
-                                \Filament\Forms\Components\Card::make()
+                                \Filament\Forms\Components\Section::make()
                                     ->schema([
                                         Forms\Components\Grid::make(3)->schema([
+                                            Forms\Components\TextInput::make('prior_deduction')
+                                                ->label('Cash Advance / Prior Deduction')
+                                                ->numeric()
+                                                ->default(0)
+                                                ->live()
+                                                ->prefix('AED')
+                                                ->extraInputAttributes(['class' => 'font-bold'])
+                                                ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => self::recomputeChange($get, $set)),
+
                                             Forms\Components\TextInput::make('change_given')
                                                 ->label('Cash Return / Change Due')
                                                 ->numeric()
@@ -916,13 +927,15 @@ class VoucherResource extends Resource
                                             
                                             Forms\Components\Placeholder::make('net_summary')
                                                 ->label('Financial Summary')
-                                                ->columnSpan(2)
                                                 ->content(function (Forms\Get $get, Voucher $record) {
                                                     $tendered = ((int) $get('bill_1000') * 1000) + ((int) $get('bill_500') * 500) + ((int) $get('bill_200') * 200) + ((int) $get('bill_100') * 100) + ((int) $get('bill_50') * 50) + ((int) $get('bill_20') * 20) + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1) + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
                                                     $target   = (float) $record->amount;
+                                                    $deduction = (float) ($get('prior_deduction') ?? 0);
+                                                    $netCashTarget = max(0, round($target - $deduction, 2));
+                                                    
                                                     $change   = (float) ($get('change_given') ?? 0);
-                                                    $net      = round($tendered - $change, 2);
-                                                    $diff     = round($net - $target, 2);
+                                                    $netPhysical = round($tendered - $change, 2);
+                                                    $diff     = round($netPhysical - $netCashTarget, 2);
 
                                                     $panelColor = match(true) {
                                                         abs($diff) < 0.01 => 'background-color:#f0fdf4; border-color:#86efac;',
@@ -938,9 +951,12 @@ class VoucherResource extends Resource
                                                     return new \Illuminate\Support\HtmlString(
                                                         "<div style='padding:12px;border-radius:8px;border:1px solid;{$panelColor}'>" .
                                                         "<div style='display:grid;grid-template-columns:1fr 1fr;gap:4px 0;font-size:13px;'>" .
-                                                        "<div style='color:#6b7280;'>Cash Tendered:</div><div style='text-align:right;font-family:monospace;font-weight:700;'>AED " . number_format($tendered, 2) . "</div>" .
-                                                        "<div style='color:#6b7280;'>Voucher Total:</div><div style='text-align:right;font-family:monospace;font-weight:700;'>AED " . number_format($target, 2) . "</div>" .
-                                                        "<div style='grid-column:span 2;margin:6px 0;border-top:1px dashed #d1d5db;'></div>" .
+                                                        "<div style='color:#6b7280;'>Voucher Total (Gross):</div><div style='text-align:right;font-family:monospace;'>AED " . number_format($target, 2) . "</div>" .
+                                                        "<div style='color:#6b7280;'>Less: Cash Advance:</div><div style='text-align:right;font-family:monospace; color:#b91c1c;'>- AED " . number_format($deduction, 2) . "</div>" .
+                                                        "<div style='grid-column:span 2;margin:4px 0;border-top:1px dashed #d1d5db;'></div>" .
+                                                        "<div style='font-weight:700;'>Net Cash to Pay:</div><div style='text-align:right;font-family:monospace;font-weight:700; font-size:14px;'>AED " . number_format($netCashTarget, 2) . "</div>" .
+                                                        "<div style='color:#6b7280;'>Physical Cash:</div><div style='text-align:right;font-family:monospace;'>AED " . number_format($netPhysical, 2) . "</div>" .
+                                                        "<div style='grid-column:span 2;margin:6px 0;border-top:1px solid #d1d5db;'></div>" .
                                                         "<div style='font-weight:700;'>Verification:</div><div style='text-align:right;'>{$statusBadge}</div>" .
                                                         "</div>" .
                                                         "</div>"
@@ -995,17 +1011,19 @@ class VoucherResource extends Resource
                             + ((int) ($data['coin_0_25'] ?? 0) * 0.25);
 
                         $changeGiven = round((float) ($data['change_given'] ?? 0), 2);
-                        $net         = round($tendered - $changeGiven, 2);
+                        $deduction   = round((float) ($data['prior_deduction'] ?? 0), 2);
+                        $netPhysical = round($tendered - $changeGiven, 2);
+                        $targetWithDeduction = round((float)$record->amount - $deduction, 2);
 
-                        if ($net !== round((float) $record->amount, 2)) {
+                        if (abs($netPhysical - $targetWithDeduction) > 0.01) {
                             Notification::make()
                                 ->title('Denomination validation failed')
                                 ->danger()
-                                ->body('Net amount (Cash Tendered − Change) must equal the voucher amount. ' .
+                                ->body('Net Physical Cash (Tendered − Change) must equal the Net target (Voucher − Deduction). ' .
                                        'You tendered AED ' . number_format($tendered, 2) .
                                        ', change back AED ' . number_format($changeGiven, 2) .
-                                       ', net AED ' . number_format($net, 2) .
-                                       ' ≠ voucher AED ' . number_format((float) $record->amount, 2) . '.')
+                                       ', net physical AED ' . number_format($netPhysical, 2) .
+                                       ' ≠ net target AED ' . number_format($targetWithDeduction, 2) . '.')
                                 ->send();
                             throw \Illuminate\Validation\ValidationException::withMessages([
                                 'bill_1000' => 'Net amount mismatch.'
@@ -1027,6 +1045,7 @@ class VoucherResource extends Resource
                             'coin_0_25'    => $data['coin_0_25'] ?: 0,
                             'total_amount' => $tendered,
                             'change_given' => $changeGiven,
+                            'prior_deduction' => $deduction,
                             'is_change_received' => $data['is_change_received'] ?? true,
                             'remarks'      => $data['remarks'] ?? null,
                         ]);
@@ -1315,15 +1334,35 @@ class VoucherResource extends Resource
                         foreach ($denoms as $col => $val) {
                             $fields[] = \Filament\Infolists\Components\TextEntry::make("denominations.{$col}")
                                 ->label(str_contains($col, 'coin') ? "AED " . number_format($val, 2) : "AED {$val} Banknote")
-                                ->formatStateUsing(fn ($state) => "{$state} units × AED " . number_format(\App\Models\Voucher::find(1)->denominations->{$col} ?? 0, 0) . " = AED " . number_format($state * $val, 2))
+                                ->formatStateUsing(fn ($state) => "{$state} units × AED " . number_format($val, (str_contains($col, 'coin') && $val < 1 ? 2 : 0)) . " = AED " . number_format($state * $val, 2))
                                 ->visible(fn ($record) => optional($record->denominations)->{$col} > 0);
                         }
                         $fields[] = \Filament\Infolists\Components\TextEntry::make('denominations.total_amount')
-                                ->label('Total Cash Value')
+                                ->label('Physical Cash Counted')
+                                ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                ->color('primary')
+                                ->money('AED');
+
+                        $fields[] = \Filament\Infolists\Components\TextEntry::make('denominations.change_given')
+                                ->label('Less: Change Returned')
+                                ->color('warning')
+                                ->money('AED')
+                                ->visible(fn ($record) => optional($record->denominations)->change_given > 0);
+
+                        $fields[] = \Filament\Infolists\Components\TextEntry::make('denominations.prior_deduction')
+                                ->label('Plus: Cash Advance / Deductions')
+                                ->color('danger')
+                                ->money('AED')
+                                ->visible(fn ($record) => optional($record->denominations)->prior_deduction > 0);
+
+                        $fields[] = \Filament\Infolists\Components\TextEntry::make('denominations.final_balanced_amount')
+                                ->label('Total Balanced Amount')
                                 ->weight(\Filament\Support\Enums\FontWeight::Bold)
                                 ->color('success')
                                 ->money('AED')
+                                ->state(fn ($record) => (optional($record->denominations)->total_amount - optional($record->denominations)->change_given) + optional($record->denominations)->prior_deduction)
                                 ->columnSpanFull();
+
                         return $fields;
                     })->columns(['sm' => 2, 'md' => 4]),
 
