@@ -7,37 +7,40 @@ use Illuminate\Http\Request;
 class PushSubscriptionController extends Controller
 {
     /**
-     * Store the web push subscription for the authenticated user.
+     * Store the Push Subscription.
      */
     public function subscribe(Request $request)
     {
         $request->validate([
-            'endpoint' => 'required',
-            'keys.auth' => 'required',
-            'keys.p256dh' => 'required'
+            'endpoint'    => 'required|string',
+            'keys.auth'   => 'required|string',
+            'keys.p256dh' => 'required|string'
         ]);
 
-        $endpoint = $request->input('endpoint');
-        $key      = $request->input('keys.p256dh');
-        $token    = $request->input('keys.auth');
+        $user = $request->user();
 
-        // This method comes from the HasPushSubscriptions trait on the User model
-        $request->user()->updatePushSubscription($endpoint, $key, $token);
+        $user->updatePushSubscription(
+            $request->endpoint,
+            $request->keys['p256dh'],
+            $request->keys['auth']
+        );
 
-        return response()->json(['success' => true], 200);
+        return response()->json(['success' => true]);
     }
 
     /**
-     * Remove the web push subscription.
+     * Delete the specified subscription.
      */
     public function unsubscribe(Request $request)
     {
         $request->validate([
-            'endpoint' => 'required',
+            'endpoint' => 'required|string'
         ]);
 
-        $request->user()->deletePushSubscription($request->endpoint);
+        $user = $request->user();
 
-        return response()->json(['success' => true], 200);
+        $user->deletePushSubscription($request->endpoint);
+
+        return response()->json(['success' => true]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
@@ -53,7 +54,8 @@ class TransactionPolicy
         }
 
         // Branch users can ONLY update if it's still pending AND belongs to their branch
-        return $user->branch_id === $transaction->branch_id && $transaction->status === 'pending';
+        return $user->branch_id === $transaction->branch_id
+            && $transaction->status === TransactionStatus::Pending->value;
     }
 
     /**

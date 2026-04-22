@@ -34,6 +34,11 @@ class ExpensesByCategoryChart extends ChartWidget
         return "Total Expenses: AED " . number_format($total, 2);
     }
 
+    public static function canView(): bool
+    {
+        return auth()->user()->can('access_petty_cash_panel');
+    }
+
     protected function getData(): array
     {
         $user      = auth()->user();

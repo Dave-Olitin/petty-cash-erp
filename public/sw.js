@@ -1,4 +1,5 @@
-const CACHE_NAME = 'petty-cash-erp-v1-fixed';
+// Service Worker v3 — 2026-03-01
+const CACHE_NAME = 'petty-cash-erp-v3';
 const urlsToCache = [
     '/manifest.json',
     '/manifest-vouchers.json',
@@ -9,7 +10,22 @@ const urlsToCache = [
 self.addEventListener('install', (event) => {
     self.skipWaiting();
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
+        caches.open(CACHE_NAME)
+            .then((cache) => cache.addAll(urlsToCache))
+    );
+});
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((name) => {
+                    if (name !== CACHE_NAME) {
+                        return caches.delete(name);
+                    }
+                })
+            );
+        }).then(() => self.clients.claim())
     );
 });
 
@@ -23,63 +39,68 @@ self.addEventListener('fetch', (event) => {
     );
 });
 
-self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then((cacheNames) => Promise.all(
-            cacheNames.map((cacheName) => {
-                if (cacheName !== CACHE_NAME) return caches.delete(cacheName);
-            })
-        )).then(() => self.clients.claim())
-    );
-});
+// ── Push Notification Handler ───────────────────────────────────────────
+// CRITICAL: We MUST call event.waitUntil(showNotification(...)) in every
+// code-path, otherwise Chrome shows "This site has been updated in the
+// background" instead of the actual notification.
+self.addEventListener('push', function (event) {
+    var title = 'Petty Cash ERP';
+    var options = {
+        body: 'You have a new notification.',
+        icon: '/images/icon-192.png',
+        badge: '/images/icon-192.png',
+        tag: 'petty-cash-notification',
+        data: { url: '/' }
+    };
 
-// --- PUSH NOTIFICATION LISTENER ---
-self.addEventListener('push', function (e) {
-    if (!(self.Notification && self.Notification.permission === 'granted')) {
-        return;
-    }
-
-    let data = {};
-    if (e.data) {
+    if (event.data) {
         try {
-            data = e.data.json();
-        } catch (err) {
-            data = { title: 'Notification', body: e.data.text() };
+            var payload = event.data.json();
+            title = payload.title || title;
+            options.body = payload.body || options.body;
+            options.icon = payload.icon || options.icon;
+            options.badge = payload.badge || options.badge;
+            options.tag = payload.tag || options.tag;
+            if (payload.data) {
+                options.data = payload.data;
+            }
+        } catch (e) {
+            // Payload wasn't JSON — use the raw text as body
+            var text = event.data.text();
+            if (text) {
+                options.body = text;
+            }
         }
     }
 
-    const title = data.title || 'Petty Cash Notification';
-    const options = {
-        body: data.body || 'You have a new update.',
-        icon: data.icon || '/images/icon-192.png',
-        badge: '/images/icon-192.png',
-        data: {
-            url: data.action || '/'
-        },
-        vibrate: data.vibrate || [100, 50, 100]
-    };
-
-    e.waitUntil(self.registration.showNotification(title, options));
+    // Always show a notification — this is the critical line
+    event.waitUntil(
+        self.registration.showNotification(title, options)
+    );
 });
 
-// --- NOTIFICATION CLICK LISTENER ---
+// ── Notification Click Handler ──────────────────────────────────────────
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
 
-    const urlToOpen = event.notification.data.url || '/';
+    var targetUrl = '/';
+    if (event.notification.data && event.notification.data.url) {
+        targetUrl = event.notification.data.url;
+    }
 
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-            // Check if there is already a window/tab open with the target URL
-            for (let i = 0; i < windowClients.length; i++) {
-                const client = windowClients[i];
-                if (client.url === urlToOpen && 'focus' in client) {
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
+            // Focus an existing tab if one is open
+            for (var i = 0; i < clientList.length; i++) {
+                var client = clientList[i];
+                if ((client.url.indexOf('/admin') !== -1 || client.url.indexOf('/vouchers') !== -1) && 'focus' in client) {
+                    client.navigate(targetUrl);
                     return client.focus();
                 }
             }
-            // If not, open a new window/tab
+            // Otherwise open a new window
             if (clients.openWindow) {
-                return clients.openWindow(urlToOpen);
+                return clients.openWindow(targetUrl);
             }
         })
     );

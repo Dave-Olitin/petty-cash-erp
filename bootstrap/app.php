@@ -22,36 +22,25 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-
-        // ── Fix #1: Handle MySQL deadlocks & lock timeouts with a friendly message ──
-        // TransactionObserver uses lockForUpdate() heavily; concurrent requests can
-        // deadlock. Without this, users see a generic 500. With it, they get a clear
-        // "please retry" prompt.
-        $exceptions->render(function (QueryException $e, \Illuminate\Http\Request $request) {
-            $deadlockCodes = [1205, 1213]; // Lock wait timeout & Deadlock found
-            if (in_array($e->getCode(), $deadlockCodes)) {
-                $message = 'The system is busy processing another request. Please try again in a moment.';
-                if ($request->expectsJson()) {
-                    return response()->json(['message' => $message], 409);
-                }
-                return back()->withErrors(['amount' => $message])->withInput();
-            }
-        });
-
-        $exceptions->render(function (LockTimeoutException $e, \Illuminate\Http\Request $request) {
-            $message = 'Could not acquire a database lock. Please try submitting again.';
-            if ($request->expectsJson()) {
-                return response()->json(['message' => $message], 409);
-            }
-            return back()->withErrors(['amount' => $message])->withInput();
-        });
-
-        // ── Existing: CSRF token expiry handler ──
         $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            // A 419 Token Mismatch occurred (typically page expired).
+            // Instead of showing the default error page, we return a response that reloads the page.
             if ($request->expectsJson()) {
                 return response()->json(['message' => 'CSRF token mismatch. Please refresh.'], 419);
             }
+            
+            // Redirect back with a flash message if possible, or just back.
+            // A simple back() will often just reload the same page with a fresh token.
             return back()->with('error', 'Your session expired. Please try submitting again.');
         });
 
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, \Illuminate\Http\Request $request) {
+            $msg = $e->getMessage();
+            if ($e->getCode() === '40001' || str_contains($msg, 'Lock wait timeout') || str_contains($msg, 'Deadlock')) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'amount' => 'The system is heavily loaded or processing concurrent requests. Please wait a few seconds and try again.',
+                    'voucher_template_id' => 'The system is heavily loaded or processing concurrent requests. Please wait a few seconds and try again.',
+                ]);
+            }
+        });
     })->create();

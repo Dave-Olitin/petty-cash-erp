@@ -60,11 +60,12 @@ public static function form(Form $form): Form
 
                     // Category Select Removed - Moved to Items Repeater
                     
-                    // Amount moved to bottom with VAT
-                    Forms\Components\DateTimePicker::make('created_at')
+                    // Dedicated business date — separate from the system-managed created_at audit timestamp.
+                    // This lets users set the actual date of the expense without corrupting the audit trail.
+                    Forms\Components\DateTimePicker::make('transaction_date')
                         ->label('Date & Time')
                         ->default(now())
-                        ->seconds(false) // Optional: clean up UI
+                        ->seconds(false)
                         ->required(),
                         
                     Forms\Components\TextInput::make('payee')
@@ -94,37 +95,53 @@ public static function form(Form $form): Form
                                 )
                                 ->searchable(['code', 'name'])
                                 ->preload()
+<<<<<<< feature-hq-portal
+                                ->required()
+                                ->visible(fn () => auth()->user()->isHeadOffice()), // Only HO can see/set
+=======
                                 ->nullable()
                                 ->placeholder('Select account...')
                                 ->visible(fn () => auth()->user()->isHeadOffice()), // HQ-only
                             Forms\Components\TextInput::make('name')
                                 ->required(),
+>>>>>>> main
                             Forms\Components\TextInput::make('quantity')
+                                ->label('Qty')
                                 ->numeric()
                                 ->default(1)
                                 ->required()
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat'))),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat')))
+                                ->prefix('x')
+                                ->columnSpan(1),
                             Forms\Components\TextInput::make('unit_price')
+                                ->label('Unit Price')
                                 ->numeric()
                                 ->default(0)
                                 ->required()
                                 ->prefix('AED')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat'))),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat')))
+                                ->columnSpan(1)
+                                ->extraInputAttributes(['class' => 'font-mono']),
                             Forms\Components\TextInput::make('vat')
                                 ->label('VAT')
                                 ->numeric()
                                 ->default(0)
-                                ->prefix('AED')
+                                ->prefix('Σ')
                                 ->live(onBlur: true)
-                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state)),
+                                ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state))
+                                ->columnSpan(1)
+                                ->extraInputAttributes(['class' => 'font-mono']),
                             Forms\Components\TextInput::make('total_price')
+                                ->label('Line Total')
                                 ->numeric()
                                 ->readOnly()
                                 ->prefix('AED')
                                 ->default(0)
-                                ->dehydrated(),
+                                ->dehydrated()
+                                ->columnSpan(1)
+                                ->extraInputAttributes(['class' => 'font-mono font-bold text-primary-600']),
                         ])
                         ->columns(['default' => 1, 'md' => 2, 'lg' => 3]) // 3 columns, 2 rows for better width
                         ->columnSpanFull()
@@ -136,56 +153,19 @@ public static function form(Form $form): Form
                             $set('amount', $itemTotal + $globalVat);
                         }),
                     
-                    Forms\Components\Group::make()
+                    Forms\Components\Grid::make(3)
                         ->schema([
-                            Forms\Components\TextInput::make('vat')
-                                ->label('VAT (Receipt Level)')
-                                ->helperText('Use this if VAT is applied to the receipt total, not per item.')
-                                ->numeric()
-                                ->default(0)
-                                ->prefix('AED')
-                                ->live(onBlur: true)
-                                ->afterStateUpdated(function (callable $get, callable $set) {
-                                    $items = $get('items');
-                                    $itemTotal = collect($items)->sum(fn($item) => ((float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)) + (float) ($item['vat'] ?? 0));
-                                    $globalVat = (float) $get('vat');
-                                    $set('amount', $itemTotal + $globalVat);
-                                }),
-
-                            Forms\Components\TextInput::make('amount')
+                            Forms\Components\Placeholder::make('vat_placeholder')
+                                ->label('Receipt VAT')
+                                ->content(fn ($get) => new \Illuminate\Support\HtmlString('<div class="text-lg font-mono">' . number_format((float)$get('vat'), 2) . ' <span class="text-xs">AED</span></div>')),
+                            
+                            Forms\Components\Placeholder::make('amount_placeholder')
                                 ->label('Grand Total')
-                                ->numeric()
-                                ->prefix('AED')
-                                ->readOnly()
-                                ->required()
-                                ->live()
-                                ->default(0)
-                                ->dehydrated()
-                                ->rule(function (callable $get) {
-                                    return function (string $attribute, $value, \Closure $fail) use ($get) {
-                                        $type = $get('type');
-                                        $branchId = $get('branch_id') ?? auth()->user()->branch_id;
-                                        
-                                        if (!$branchId) return;
+                                ->content(fn ($get) => new \Illuminate\Support\HtmlString('<div class="text-3xl font-mono font-bold text-primary-600">' . number_format((float)$get('amount'), 2) . ' <span class="text-xs font-normal">AED</span></div>')),
 
-                                        $branch = \App\Models\Branch::find($branchId);
-
-                                        // Rule 1: Replenishment -> No limits
-                                        if ($type === 'REPLENISHMENT') return;
-
-                                        // Rule 2: Expense -> Check Balance
-                                        if ($value > $branch->current_balance) {
-                                            $fail("Insufficient funds! The branch only has AED {$branch->current_balance}.");
-                                        }
-
-                                        // Rule 3: Expense -> Check Transaction Limit
-                                        if ($branch->transaction_limit && $value > $branch->transaction_limit) {
-                                            $fail("Amount exceeds the branch transaction limit of AED {$branch->transaction_limit}.");
-                                        }
-                                    };
-                                }),
+                            Forms\Components\Hidden::make('vat')->default(0),
+                            Forms\Components\Hidden::make('amount')->default(0),
                         ])
-                        ->columns(2)
                         ->columnSpanFull(),
 
                     Forms\Components\Textarea::make('description')
@@ -234,9 +214,9 @@ public static function form(Form $form): Form
                             Infolists\Components\Grid::make(2)
                                 ->schema([
                                     Infolists\Components\Group::make([
-                                        Infolists\Components\TextEntry::make('created_at')
-                                            ->date()
-                                            ->label('Date'),
+                                        Infolists\Components\TextEntry::make('transaction_date')
+                                            ->dateTime('M j, Y h:i A')
+                                            ->label('Transaction Date'),
                                         Infolists\Components\TextEntry::make('status')
                                             ->badge()
                                             ->color(fn (string $state): string => match ($state) {
@@ -286,6 +266,37 @@ public static function form(Form $form): Form
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('items')
                             ->schema([
+<<<<<<< feature-hq-portal
+                                Infolists\Components\Grid::make(12)
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('category.name')
+                                            ->label('Category')
+                                            ->default('N/A')
+                                            ->columnSpan(2),
+                                        Infolists\Components\TextEntry::make('name')
+                                            ->label('Item')
+                                            ->columnSpan(3),
+                                        Infolists\Components\TextEntry::make('quantity')
+                                            ->label('Qty')
+                                            ->columnSpan(1),
+                                        Infolists\Components\TextEntry::make('unit_price')
+                                            ->label('Unit Price')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono text-gray-600'])
+                                            ->columnSpan(2),
+                                        Infolists\Components\TextEntry::make('vat')
+                                            ->label('VAT')
+                                            ->money('AED')
+                                            ->extraAttributes(['class' => 'font-mono text-gray-600 text-xs'])
+                                            ->columnSpan(2),
+                                        Infolists\Components\TextEntry::make('total_price')
+                                            ->label('Line Total')
+                                            ->money('AED')
+                                            ->weight('bold')
+                                            ->extraAttributes(['class' => 'font-mono text-primary-600'])
+                                            ->columnSpan(2),
+                                    ])
+=======
                                 Infolists\Components\TextEntry::make('accountCode.name')
                                     ->label('Account Name')
                                     ->formatStateUsing(fn ($state, $record) => $record->accountCode
@@ -299,8 +310,9 @@ public static function form(Form $form): Form
                                 Infolists\Components\TextEntry::make('unit_price')->money('AED')->label('Unit Price'),
                                 Infolists\Components\TextEntry::make('vat')->money('AED')->label('VAT'),
                                 Infolists\Components\TextEntry::make('total_price')->money('AED')->label('Total'),
+>>>>>>> main
                             ])
-                            ->columns(5),
+                            ->columns(1),
                     ]),
 
                 Infolists\Components\Section::make('Receipt')
@@ -330,12 +342,19 @@ public static function form(Form $form): Form
 
 public static function table(Table $table): Table
 {
-        return $table
-            ->striped()
-            ->columns([
-            Tables\Columns\TextColumn::make('created_at')
+    return $table
+        ->recordAction(\Filament\Tables\Actions\ViewAction::class)
+        ->columns([
+            Tables\Columns\TextColumn::make('transaction_date')
+                ->label('Date')
                 ->dateTime('M j, Y h:i A')
                 ->sortable(),
+            Tables\Columns\TextColumn::make('created_at')
+                ->label('Recorded At')
+                ->dateTime('M j, Y h:i A')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true)
+                ->tooltip('System timestamp — when the record was actually entered'),
                 // Category Column Removed
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
@@ -499,6 +518,10 @@ public static function table(Table $table): Table
                     ->color('success')
                     ->visible(fn (Transaction $record) => $record->status === 'pending' && auth()->user()->branch_id === null)
                     ->action(function (Transaction $record) {
+                        // Server-side guard: visible() only hides the UI, it does NOT block direct Livewire calls.
+                        abort_unless(auth()->user()->isHeadOffice(), 403, 'Only HQ staff can approve transactions.');
+                        abort_unless($record->status === 'pending', 403, 'Only pending transactions can be approved.');
+
                         $record->update(['status' => 'approved']);
                         \Filament\Notifications\Notification::make()
                             ->title('Transaction Approved')
@@ -519,6 +542,10 @@ public static function table(Table $table): Table
                             ->maxLength(65535),
                     ])
                     ->action(function (Transaction $record, array $data) {
+                        // Server-side guard: visible() only hides the UI, it does NOT block direct Livewire calls.
+                        abort_unless(auth()->user()->isHeadOffice(), 403, 'Only HQ staff can reject transactions.');
+                        abort_unless(in_array($record->status, ['pending', 'approved']), 403, 'This transaction cannot be rejected in its current state.');
+
                         $originalData = $record->fresh()->toArray(); // Capture before mutation
 
                         $record->update([
@@ -548,14 +575,9 @@ public static function table(Table $table): Table
                     ->action(function (Transaction $record) {
                         $path = $record->receipt_path;
                         
-                        // Check 'local' disk (New secure files)
+                        // Check 'local' disk (Secure files)
                         if (\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) {
                             return response()->download(\Illuminate\Support\Facades\Storage::disk('local')->path($path));
-                        }
-
-                        // Check 'public' disk (Legacy insecure files)
-                        if (\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
-                            return response()->download(\Illuminate\Support\Facades\Storage::disk('public')->path($path));
                         }
 
                         // File not found
@@ -666,9 +688,10 @@ public static function table(Table $table): Table
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListTransactions::route('/'),
+            'index'  => Pages\ListTransactions::route('/'),
             'create' => Pages\CreateTransaction::route('/create'),
-            'edit' => Pages\EditTransaction::route('/{record}/edit'),
+            'view'   => Pages\ViewTransaction::route('/{record}'),
+            'edit'   => Pages\EditTransaction::route('/{record}/edit'),
         ];
     }
     public static function getEloquentQuery(): Builder

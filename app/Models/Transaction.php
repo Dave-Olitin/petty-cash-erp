@@ -15,6 +15,7 @@ class Transaction extends Model
         'branch_id',
         'user_id',
         'type',
+        'transaction_date', // User-selected business date. Separate from created_at (system audit timestamp).
         'amount',
         'payee',
         'supplier',
@@ -25,18 +26,18 @@ class Transaction extends Model
         'status',
         'rejection_reason',
         'accounting_remarks',
-        'category_id',
         'vat',
     ];
 
     protected function casts(): array
     {
         return [
-            'amount'     => 'decimal:2',
-            'vat'        => 'decimal:2',
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
+            'amount'           => 'decimal:2',
+            'vat'              => 'decimal:2',
+            'transaction_date' => 'datetime',
+            'created_at'       => 'datetime',
+            'updated_at'       => 'datetime',
+            'deleted_at'       => 'datetime',
         ];
     }
 

@@ -26,8 +26,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/branches/{id}/balance', function (Request $request, $id) {
         $user = $request->user();
         
-        // Security: Branch users can only query their own branch
-        if ($user->branch_id && $user->branch_id != $id) {
+        // Security: Branch users can only query their own branch.
+        // Cast $id to int — URL params are always strings; strict !== prevents type-juggling bypass.
+        if ($user->branch_id && $user->branch_id !== (int) $id) {
             abort(403, 'Unauthorized access to branch balance.');
         }
 

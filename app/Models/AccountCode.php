@@ -6,25 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class AccountCode extends Model
 {
-    // Shared with the Voucher panel — columns: id, code, name
-    protected $fillable = [
-        'code',
-        'name',
-    ];
+    protected $fillable = ['code', 'name'];
 
-    /**
-     * Categories that use this account code.
-     */
-    public function categories()
+    public function voucherItems()
     {
-        return $this->hasMany(Category::class);
-    }
-
-    /**
-     * Transaction items that use this account code.
-     */
-    public function transactionItems()
-    {
-        return $this->hasMany(TransactionItem::class);
+        return $this->hasMany(\App\Models\VoucherItem::class, 'account_code', 'code');
     }
 }

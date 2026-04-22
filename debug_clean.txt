@@ -1,0 +1,7 @@
+ID: 1 | amt: 25000.00 | date: 2026-04-02 00:00:00 | crt: 2026-04-02 17:33:22
+
+ID: 1 | amt: 25000.00 | type: payment | upd: 2026-04-02 17:31:41
+ID: 2 | amt: 3480.75 | type: payment | upd: 2026-04-03 00:31:14
+ID: 3 | amt: 43.00 | type: petty_cash | upd: 2026-04-03 01:15:12
+ID: 4 | amt: 40.50 | type: petty_cash | upd: 2026-04-03 01:16:36
+ID: 5 | amt: 2981.00 | type: petty_cash | upd: 2026-04-03 01:12:42

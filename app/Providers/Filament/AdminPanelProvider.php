@@ -25,12 +25,13 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
-            ->path('admin')
+            ->path('admin-hidden')
             ->login(\App\Filament\Pages\Auth\CustomLogin::class)
             ->favicon(asset('images/icon-192.png'))
             ->passwordReset()   // Enables the "Forgot Password?" flow via email
             ->brandName('Erick Trading Co.')
             ->brandLogoHeight('3rem')
+            ->maxContentWidth(\Filament\Support\Enums\MaxWidth::Full)
             ->sidebarCollapsibleOnDesktop()
             ->defaultThemeMode(\Filament\Enums\ThemeMode::Light)
             ->colors([
@@ -44,6 +45,8 @@ class AdminPanelProvider extends PanelProvider
                 // Pages\Dashboard::class, // Replaced by our custom Dashboard
                 \App\Filament\Pages\Dashboard::class,
             ])
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('10s')
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 // Widgets\AccountWidget::class,
@@ -61,6 +64,10 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->font('Cairo')
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::SIDEBAR_NAV_END,
+                fn () => view('filament.hooks.admin-sidebar-quick-actions')
+            )
             ->renderHook(
                 'panels::head.end',
                 fn () => view('filament.hooks.custom-styles')

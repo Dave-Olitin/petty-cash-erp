@@ -36,6 +36,7 @@ class CategoryResource extends Resource
                     ->options([
                         'expense' => 'Expense',
                         'replenishment' => 'Replenishment',
+                        'petty_cash' => 'Petty Cash',
                     ])
                     ->required()
                     ->default('expense'),
@@ -66,7 +67,8 @@ class CategoryResource extends Resource
                     ->color(fn (string $state): string => match ($state) {
                         'expense'       => 'warning',
                         'replenishment' => 'success',
-                        default         => 'gray',
+                        'petty_cash' => 'info',
+                        default => 'gray',
                     }),
                 Tables\Columns\IconColumn::make('is_active')->boolean(),
                 Tables\Columns\TextColumn::make('accountCode.code')
@@ -126,10 +128,5 @@ class CategoryResource extends Resource
             'create' => Pages\CreateCategory::route('/create'),
             'edit' => Pages\EditCategory::route('/{record}/edit'),
         ];
-    }
-
-    public static function canViewAny(): bool
-    {
-        return auth()->user()->branch_id === null;
     }
 }

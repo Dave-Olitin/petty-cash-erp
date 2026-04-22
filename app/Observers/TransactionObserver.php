@@ -120,17 +120,20 @@ class TransactionObserver
                 return;
             }
 
-            // Revert old amount, then apply new amount
-            if ($oldType === 'EXPENSE') {
-                $branch->increment('current_balance', $oldAmount);
-            } else {
-                $branch->decrement('current_balance', $oldAmount);
-            }
+            // Idempotency check: Only update floats if amount or type actually changed
+            if ($transaction->isDirty(['amount', 'type'])) {
+                // Revert old amount, then apply new amount
+                if ($oldType === 'EXPENSE') {
+                    $branch->increment('current_balance', $oldAmount);
+                } else {
+                    $branch->decrement('current_balance', $oldAmount);
+                }
 
-            if ($transaction->type === 'EXPENSE') {
-                $branch->decrement('current_balance', $transaction->amount);
-            } else {
-                $branch->increment('current_balance', $transaction->amount);
+                if ($transaction->type === 'EXPENSE') {
+                    $branch->decrement('current_balance', $transaction->amount);
+                } else {
+                    $branch->increment('current_balance', $transaction->amount);
+                }
             }
         });
 

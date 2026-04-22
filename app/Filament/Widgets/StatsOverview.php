@@ -14,8 +14,14 @@ class StatsOverview extends BaseWidget
 
     protected static ?int $sort = 1;
 
-    // Auto-refresh every 15 seconds to show new pending requests
-    protected static ?string $pollingInterval = '15s';
+    // Refresh every 60s — balances freshness with DB load.
+    // 15s was too aggressive and caused continuous background queries.
+    protected static ?string $pollingInterval = '60s';
+
+    public static function canView(): bool
+    {
+        return auth()->user()->can('access_petty_cash_panel');
+    }
 
     protected function getStats(): array
     {
@@ -54,20 +60,20 @@ class StatsOverview extends BaseWidget
             $pendingCount = $query()->where('status', 'pending')->count();
 
             return [
-                Stat::make('Total Expenses', new \Illuminate\Support\HtmlString('<span class="privacy-mask">AED ' . number_format($cachedStats['totalExpenses'], 2) . '</span>'))
-                    ->description('7-day trend')
+                Stat::make('Total Expenses', new \Illuminate\Support\HtmlString('<span class="privacy-mask font-normal text-3xl">AED ' . number_format($cachedStats['totalExpenses'], 2) . '</span>'))
+                    ->description(new \Illuminate\Support\HtmlString('<span style="color: #e11d48;" class="font-medium">7-day trend</span>'))
                     ->descriptionIcon('heroicon-m-arrow-trending-up')
                     ->chart($cachedStats['expenseTrend'])
                     ->color('danger'),
                 
-                Stat::make('Total Replenishments', new \Illuminate\Support\HtmlString('<span class="privacy-mask">AED ' . number_format($cachedStats['totalReplenishments'], 2) . '</span>'))
-                    ->description('7-day trend')
+                Stat::make('Total Replenishments', new \Illuminate\Support\HtmlString('<span class="privacy-mask font-normal text-3xl">AED ' . number_format($cachedStats['totalReplenishments'], 2) . '</span>'))
+                    ->description(new \Illuminate\Support\HtmlString('<span style="color: #4f46e5;" class="font-medium">7-day trend</span>'))
                     ->descriptionIcon('heroicon-m-arrow-trending-up')
                     ->chart($cachedStats['replenishTrend'])
                     ->color('success'),
 
-                Stat::make('Pending Requests', $pendingCount)
-                    ->description($pendingCount > 0 ? 'Action Required' : 'All clear')
+                Stat::make('Pending Requests', new \Illuminate\Support\HtmlString('<span class="font-normal text-3xl">' . $pendingCount . '</span>'))
+                    ->description(new \Illuminate\Support\HtmlString('<span style="color: #d97706;" class="font-medium">' . ($pendingCount > 0 ? 'Action Required' : 'All clear') . '</span>'))
                     ->icon('heroicon-o-bell-alert')
                     ->color($pendingCount > 0 ? 'warning' : 'gray'),
             ];
@@ -78,18 +84,18 @@ class StatsOverview extends BaseWidget
             $balance = $branch ? $branch->current_balance : 0;
 
             return [
-                Stat::make('Current Balance', new \Illuminate\Support\HtmlString('<span class="privacy-mask">AED ' . number_format($balance, 2) . '</span>'))
-                    ->description('Available funds')
+                Stat::make('Current Balance', new \Illuminate\Support\HtmlString('<span class="privacy-mask font-normal text-3xl">AED ' . number_format($balance, 2) . '</span>'))
+                    ->description(new \Illuminate\Support\HtmlString('<span style="color: #4f46e5;" class="font-medium">Available funds</span>'))
                     ->icon('heroicon-o-banknotes')
                     ->color($balance < 1000 ? 'danger' : 'success'),
 
-                Stat::make('Expenses', new \Illuminate\Support\HtmlString('<span class="privacy-mask">AED ' . number_format($cachedStats['totalExpenses'], 2) . '</span>'))
-                    ->description('7-day trend')
+                Stat::make('Expenses', new \Illuminate\Support\HtmlString('<span class="privacy-mask font-normal text-3xl">AED ' . number_format($cachedStats['totalExpenses'], 2) . '</span>'))
+                    ->description(new \Illuminate\Support\HtmlString('<span style="color: #e11d48;" class="font-medium">7-day trend</span>'))
                     ->chart($cachedStats['expenseTrend'])
                     ->color('danger'),
                 
-                Stat::make('Replenishments', new \Illuminate\Support\HtmlString('<span class="privacy-mask">AED ' . number_format($cachedStats['totalReplenishments'], 2) . '</span>'))
-                    ->description('Total received')
+                Stat::make('Replenishments', new \Illuminate\Support\HtmlString('<span class="privacy-mask font-normal text-3xl">AED ' . number_format($cachedStats['totalReplenishments'], 2) . '</span>'))
+                    ->description(new \Illuminate\Support\HtmlString('<span style="color: #059669;" class="font-medium">Total received</span>'))
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success'),
             ];
@@ -105,7 +111,7 @@ class StatsOverview extends BaseWidget
         $from = $startDate ? \Carbon\Carbon::parse($startDate) : now()->subDays(7);
         $to   = $endDate   ? \Carbon\Carbon::parse($endDate)->endOfDay() : now();
 
-        return Transaction::query()
+        $trend = Transaction::query()
             ->where('type', $type)
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->whereBetween('created_at', [$from, $to])
@@ -114,5 +120,9 @@ class StatsOverview extends BaseWidget
             ->orderBy('date')
             ->pluck('total')
             ->toArray();
+
+        // Filament requires at least 2 data points to render an SVG sparkline trend, 
+        // otherwise it throws a Division By Zero error.
+        return count($trend) < 2 ? [0, 0] : $trend;
     }
 }

@@ -16,152 +16,165 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 0. Cleanup — using cross-database compatible FK disable
         \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
-        Transaction::truncate();
-        TransactionItem::truncate();
+        \App\Models\Voucher::truncate();
+        \App\Models\VoucherApproval::truncate();
+        \App\Models\ApprovalWorkflow::truncate();
+        \Illuminate\Support\Facades\DB::table('model_has_roles')->truncate();
+        \Illuminate\Support\Facades\DB::table('model_has_permissions')->truncate();
+        \Illuminate\Support\Facades\DB::table('role_has_permissions')->truncate();
+        \Illuminate\Support\Facades\DB::table('permissions')->truncate();
+        \Illuminate\Support\Facades\DB::table('roles')->truncate();
+        User::truncate();
         \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
 
-        // 1. Create Head Office Admin
+        $this->call(RolesAndPermissionsSeeder::class);
+
+        // 1. Create 5 Required Users
+        
+        // 1.1 Super Admin (Full Access)
         $admin = User::firstOrCreate(
             ['email' => 'admin@pettycash.com'],
             [
-                'name'      => 'Head Office Admin',
-                'password'  => Hash::make(env('ADMIN_SEED_PASSWORD', \Illuminate\Support\Str::random(32))),
-                'branch_id' => null,
+                'name'      => 'Super Admin',
+                'password'  => Hash::make('password'),
             ]
         );
+        $admin->assignRole('Admin');
 
-        // 2. Create Branches
-        $branches = [
-            ['name' => 'Dubai Branch', 'current_balance' => 0, 'limit' => 5000],
-            ['name' => 'Abu Dhabi Branch', 'current_balance' => 0, 'limit' => 5000],
-            ['name' => 'Sharjah Branch', 'current_balance' => 0, 'limit' => 3000],
-        ];
+        // 1.2 General Manager (Approver)
+        $gm = User::firstOrCreate(
+            ['email' => 'gm@pettycash.com'],
+            [
+                'name'      => 'General Manager',
+                'password'  => Hash::make('password'),
+            ]
+        );
+        $gm->assignRole('Approver');
 
-        $branchModels = [];
-        foreach ($branches as $b) {
-            $branch = Branch::firstOrCreate(
-                ['name' => $b['name']],
-                [
-                    'current_balance' => $b['current_balance'], 
-                    'transaction_limit' => $b['limit']
-                ]
-            );
-            // Reset balance since we truncated transactions
-            $branch->update(['current_balance' => 0]);
-            
-            $branchModels[] = $branch;
+        // 1.3 Accountant (Checker)
+        $accountant = User::firstOrCreate(
+            ['email' => 'accountant@pettycash.com'],
+            [
+                'name'      => 'Finance Accountant',
+                'password'  => Hash::make('password'),
+            ]
+        );
+        $accountant->assignRole('Accountant');
 
-            // Create Branch User
-            User::firstOrCreate(
-                ['email' => strtolower(str_replace(' ', '.', $b['name'])) . '@pettycash.com'],
-                [
-                    'name' => $b['name'] . ' Manager',
-                    'password' => Hash::make('password'),
-                    'branch_id' => $branch->id,
-                ]
-            );
-        }
+        // 1.4 & 1.5 Two Requesters
+        $requester1 = User::firstOrCreate(
+            ['email' => 'requester1@pettycash.com'],
+            [
+                'name'      => 'Staff Requester One',
+                'password'  => Hash::make('password'),
+            ]
+        );
+        $requester1->assignRole('Requester');
 
-        // 3. Create Categories
-        $expenseCategories = [
-            'Office Supplies', 'Transportation', 'Utilities', 'Entertainment', 'Maintenance', 'Pantry'
-        ];
-        $replenishmentCategories = [
-            'Bank Withdrawal', 'Petty Cash Top-up'
-        ];
+        $requester2 = User::firstOrCreate(
+            ['email' => 'requester2@pettycash.com'],
+            [
+                'name'      => 'Staff Requester Two',
+                'password'  => Hash::make('password'),
+            ]
+        );
+        $requester2->assignRole('Requester');
 
+
+        // 2. Configure the Custom Approval Workflow Chain
+        // Step 1: Accountant Verifies
+        \App\Models\ApprovalWorkflow::create([
+            'step_order' => 1,
+            'user_id'    => $accountant->id,
+            'label'      => 'Accountant Audit',
+        ]);
+        // Step 2: GM Approves
+        \App\Models\ApprovalWorkflow::create([
+            'step_order' => 2,
+            'user_id'    => $gm->id,
+            'label'      => 'GM Approval',
+        ]);
+
+
+        // 3. Setup Basic Categories
+        $categories = ['Office Supplies', 'Transportation', 'Hardware', 'Software Licenses', 'Client Entertainment'];
         $catIds = [];
-        foreach ($expenseCategories as $cat) {
-            $c = Category::firstOrCreate(
-                ['name' => $cat],
-                ['type' => 'expense', 'is_active' => true]
-            );
-            $catIds['expense'][] = $c->id;
+        foreach ($categories as $cat) {
+            $catIds[] = Category::firstOrCreate(['name' => $cat, 'type' => 'petty_cash'])->id;
         }
-        $catIds['replenishment'] = [];
-        foreach ($replenishmentCategories as $cat) {
-            $c = Category::firstOrCreate(
-                ['name' => $cat],
-                ['type' => 'replenishment', 'is_active' => true]
-            );
-            $catIds['replenishment'][] = $c->id;
+        // 3.5. Setup Ledger Branches
+        $ledgerBranches = ['ETC','TG','SB','ICOOK','NICE DESIGN','SB MAIN','SB BR1 (AQ)','SB BR2 (AN2)','SB BR3 (MM)','SB BR4 (AN3)','SB BR5 (KF)','SB BR6 (JAMAL)','SB BR7 (TAAWUN)','SB BR8 (ABU SHAGARA)','SB BR9 (TAAWUN-2)','SB AJMAN','SB AL KHAN (JAMAL BASEET MAIN)','SB AN4 (JAMAL BASEET BR1)','SB DUBAI (SIMPLY GORGEOUS MAIN)','SB AJMAN-2 (JURF) (AL JAMAL ALBASEET LADIES BEAUTY CENTER)','SB DUBAI-BR.1 (SOBHA)','SB DUBAI-BR.2 (NAAD AL HAMAR)','SB DUBAI-BR.3 (WASL VILLAGE)','SB DUBAI-BR.4 (API BLDG)','SB DUBAI-BR.5 (MIDTOWN)','SB DUBAI-BR.6 (CVR)-ALJAMAL ALBURTEQALI LADIES SALON L.L.C','SB DUBAI-BR.7 (CREST)-ALJAMAL ALBURTEQALI LADIES SALON L.L.C','TG MAIN (ABU SHAGARA)','TG BR1 (AN1)','TG BR2 (AQ)','TG BR3 (AN2)','TG BR4 (KF)','TG BR5 (MM)','TG BR6 (AN3)','TG BR7 (JAMAL)','TG BR8 (TAAWUN)','TG BR9 (QASIMIA)','ICUT (AL QASA JAMEELA)','TG AJMAN','TG Tashteeb Main (TG AL TAAWUN-2)','TG AL KHAN (TASHTHEEB BR.)','TG AN4 (TASHTHEEB BR.2)','TG DUBAI MAIN (ELITE TRIMMERS MAIN)','TG DUBAI BR1 (ELITE TRIMMERS BR1)','TG JURF-AJMAN','TG DUBAI BR. 2 (API BLDG) (ELITE TRIMMERS BR2)'];
+        foreach ($ledgerBranches as $branchName) {
+            \App\Models\LedgerBranch::firstOrCreate(['name' => $branchName]);
         }
 
-        // 4. Generate Transactions (History)
-        $startDate = Carbon::now()->subMonths(6);
-        
-        foreach ($branchModels as $branch) {
-            // Initial Replenishment
-            Transaction::create([
-                'user_id' => $admin->id,
-                'branch_id' => $branch->id,
-                'category_id' => $catIds['replenishment'][0],
-                'type' => 'REPLENISHMENT',
-                'amount' => 15000,
-                'payee' => 'Main Bank',
-                'supplier' => 'Head Office Bank',
-                'description' => 'Initial Float',
-                'reference_number' => 'INIT-001',
-                'status' => 'approved',
-                'receipt_path' => 'receipts/sample_receipt.jpg',
-                'created_at' => $startDate->copy()->addHour(),
-                'updated_at' => $startDate->copy()->addHour(),
+        // 4. Generate Exactly 10 Vouchers
+        $requesters = [$requester1, $requester2];
+        $totalVouchersCreated = 0;
+
+        for ($i = 1; $i <= 10; $i++) {
+            $date = Carbon::now()->subDays(rand(1, 30));
+            $user = $requesters[array_rand($requesters)];
+            
+            // Randomly pick a status state
+            $statusOptions = ['draft', 'pending_checker', 'pending_approver', 'approved', 'paid', 'rejected'];
+            $status = $statusOptions[array_rand($statusOptions)];
+
+            $amount = rand(100, 2000);
+            $voucher = \App\Models\Voucher::create([
+                'user_id' => $user->id,
+                'category_id' => $catIds[array_rand($catIds)],
+                'type' => 'petty_cash',
+                'status' => $status,
+                'amount' => $amount,
+                'payee' => 'Vendor ' . rand(1, 20),
+                'description' => 'Dummy voucher seed item ' . $i,
+                'created_at' => $date,
+                'updated_at' => $date,
+                // Assign workflow step based on status
+                'current_approval_step' => match($status) {
+                    'pending_checker' => 1,
+                    'pending_approver' => 2,
+                    default => null
+                }
             ]);
 
-            // Random Transactions
-            for ($i = 0; $i < 50; $i++) {
-                $date = $startDate->copy()->addDays(rand(1, 180))->addHours(rand(8, 18));
-                
-                // 1 in 10 chance of Replenishment
-                if (rand(1, 10) === 1) {
-                    Transaction::create([
-                        'user_id' => $admin->id,
-                        'branch_id' => $branch->id,
-                        'category_id' => $catIds['replenishment'][array_rand($catIds['replenishment'])],
-                        'type' => 'REPLENISHMENT',
-                        'amount' => rand(1000, 5000),
-                        'payee' => 'Bank Transfer',
-                        'supplier' => 'Bank',
-                        'reference_number' => 'TRF-' . rand(10000, 99999),
-                        'description' => 'Top up',
-                        'status' => 'approved',
-                        'receipt_path' => 'receipts/sample_receipt.jpg',
-                        'created_at' => $date,
-                        'updated_at' => $date,
-                    ]);
-                } else {
-                    $amount = rand(50, 500);
-                    // Ensure balance
-                    if ($branch->fresh()->current_balance < $amount) continue;
+            \Illuminate\Support\Facades\Log::info("Created Voucher {$voucher->id}: status={$voucher->status}, step={$voucher->current_approval_step}");
 
-                    $txn = Transaction::create([
-                        'user_id' => User::where('branch_id', $branch->id)->first()->id,
-                        'branch_id' => $branch->id,
-                        'category_id' => $catIds['expense'][array_rand($catIds['expense'])],
-                        'type' => 'EXPENSE',
-                        'amount' => $amount,
-                        'payee' => 'Retailer ' . rand(1, 20),
-                        'supplier' => 'Supplier ' . rand(1, 20),
-                        'trn' => '100' . rand(1000000000, 9999999999),
-                        'reference_number' => 'INV-' . rand(10000, 99999),
-                        'description' => 'Misc expenses',
-                        'status' => 'approved',
-                        'receipt_path' => 'receipts/sample_receipt.jpg',
-                        'created_at' => $date,
-                        'updated_at' => $date,
-                    ]);
+            // Create Approval History
+            if (in_array($status, ['pending_approver', 'approved', 'paid'])) {
+                $voucher->approvals()->create([
+                    'user_id' => $accountant->id,
+                    'action' => 'checked',
+                    'created_at' => $date->copy()->addHours(1),
+                ]);
+            }
 
-                    // Add Items
-                    TransactionItem::create([
-                        'transaction_id' => $txn->id,
-                        'name' => 'Item 1',
-                        'quantity' => 1,
-                        'unit_price' => $amount,
-                        'total_price' => $amount,
-                    ]);
-                }
+            \Illuminate\Support\Facades\Log::info("After Approvals Voucher {$voucher->id}: step=" . $voucher->fresh()->current_approval_step);
+            if (in_array($status, ['approved', 'paid'])) {
+                $voucher->approvals()->create([
+                    'user_id' => $gm->id,
+                    'action' => 'approved',
+                    'comments' => 'Approved as GM',
+                    'created_at' => $date->copy()->addHours(3),
+                ]);
+            }
+            if ($status === 'paid') {
+                $voucher->approvals()->create([
+                    'user_id' => $admin->id,
+                    'action' => 'paid',
+                    'created_at' => $date->copy()->addHours(10),
+                ]);
+            }
+            if ($status === 'rejected') {
+                $actor = (rand(0,1) === 0) ? $accountant : $gm;
+                $voucher->approvals()->create([
+                    'user_id' => $actor->id,
+                    'action' => 'rejected',
+                    'comments' => 'Missing receipt.',
+                    'created_at' => $date->copy()->addHours(2),
+                ]);
             }
         }
     }

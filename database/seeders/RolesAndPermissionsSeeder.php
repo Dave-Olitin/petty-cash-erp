@@ -1,0 +1,138 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+
+class RolesAndPermissionsSeeder extends Seeder
+{
+    public function run(): void
+    {
+        // Reset cached roles and permissions
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+        // ─── 1. Define All Permissions ────────────────────────────────────────
+        $permissions = [
+            // Panel access
+            'access_vouchers_panel',
+            'access_petty_cash_panel',
+
+            // Voucher CRUD
+            'voucher.view',       // Can see the vouchers list and view a voucher
+            'voucher.create',     // Can create a new voucher
+            'voucher.edit',       // Can edit a draft voucher
+            'voucher.delete',     // Can delete/void a voucher
+
+            // Voucher Workflow actions
+            'voucher.submit',     // Can submit a draft voucher for checking
+            'voucher.check',      // Can verify & forward to approver (Accountant)
+            'voucher.approve',    // Can give final approval (Approver/CEO)
+            'voucher.reject',     // Can reject/return a voucher
+            'voucher.pay',        // Can pay a voucher (any payable status)
+            'voucher.void_only',  // Can completely void a paid voucher without cloning
+            'voucher.void_and_reissue', // Can void and clone a paid voucher
+
+            // Float management
+            'voucher.manage_float', // Can view/add head office float replenishments
+
+            // Accounting
+            'journal_entry.view', // Can view journal entries
+            'journal_entry.create',
+            'journal_entry.edit',
+            'journal_entry.delete',
+            
+            'purchase_entry.view', // Can view purchase entries
+            'purchase_entry.create',
+            'purchase_entry.edit',
+            'purchase_entry.delete',
+
+            // Settings
+            'manage_settings', // Can view Roles, Permissions, Categories, etc.
+
+            // Liquidations
+            'liquidation.edit_settled', // Can override settled liquidations
+
+            // Reports & Advanced
+            'report.view',
+            'voucher.edit_own_undisbursed',
+        ];
+
+        foreach ($permissions as $perm) {
+            Permission::firstOrCreate(['name' => $perm]);
+        }
+
+        // ─── 2. Create Roles & Assign Permissions ─────────────────────────────
+
+        // REQUESTER — can create/view/submit their own vouchers
+        $requesterRole = Role::firstOrCreate(['name' => 'Requester']);
+        $requesterRole->syncPermissions([
+            'access_vouchers_panel',
+            'voucher.view',
+            'voucher.create',
+            'voucher.edit',
+            'voucher.submit',
+        ]);
+
+        // ACCOUNTANT — can view all vouchers, check them, mark as paid, manage float
+        $accountantRole = Role::firstOrCreate(['name' => 'Accountant']);
+        $accountantRole->syncPermissions([
+            'access_vouchers_panel',
+            'voucher.view',
+            'voucher.create',
+            'voucher.edit',
+            'voucher.submit',
+            'voucher.check',
+            'voucher.reject',
+            'voucher.pay',
+            'voucher.void_only',
+            'voucher.void_and_reissue',
+            'voucher.manage_float',
+            'journal_entry.view',
+            'journal_entry.create',
+            'journal_entry.edit',
+            'journal_entry.delete',
+            'purchase_entry.view',
+            'purchase_entry.create',
+            'purchase_entry.edit',
+            'purchase_entry.delete',
+            'liquidation.edit_settled',
+        ]);
+
+        // APPROVER — can view and give final approval/rejection
+        $approverRole = Role::firstOrCreate(['name' => 'Approver']);
+        $approverRole->syncPermissions([
+            'access_vouchers_panel',
+            'voucher.view',
+            'voucher.approve',
+            'voucher.reject',
+        ]);
+
+        // ADMIN (Head Office) — full access to everything
+        $adminRole = Role::firstOrCreate(['name' => 'Admin']);
+        $adminRole->syncPermissions(Permission::all());
+
+        // ─── 3. Create / Update Test Users ───────────────────────────────────
+
+        $testAccountant = User::withTrashed()->updateOrCreate(
+            ['email' => 'accountant@pettycash.com'],
+            ['name' => 'Test Accountant', 'password' => Hash::make('password'), 'deleted_at' => null]
+        );
+        $testAccountant->syncRoles($accountantRole);
+
+        $testApprover = User::withTrashed()->updateOrCreate(
+            ['email' => 'approver@pettycash.com'],
+            ['name' => 'Test Approver', 'password' => Hash::make('password'), 'deleted_at' => null]
+        );
+        $testApprover->syncRoles($approverRole);
+
+        $testRequester = User::withTrashed()->updateOrCreate(
+            ['email' => 'requester@pettycash.com'],
+            ['name' => 'Test Requester', 'password' => Hash::make('password'), 'deleted_at' => null]
+        );
+        $testRequester->syncRoles($requesterRole);
+    }
+}

@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return redirect('/admin/login');
+    return redirect('/vouchers/login');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -63,10 +63,34 @@ Route::middleware(['auth'])->group(function () {
         abort(404);
     })->name('transaction.receipt');
 
+    Route::get('/admin/vouchers/{voucher}/pdf', function (\App\Models\Voucher $voucher) {
+        // Must have access to Vouchers Panel and permission to view this exact voucher
+        if (!auth()->user()->can('access_vouchers_panel') || !auth()->user()->can('view', $voucher)) {
+            abort(403);
+        }
+
+        $voucher->load(['user', 'category', 'approvals.user', 'template', 'items.category', 'purchaseEntries.taxRegistration']);
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.voucher', ['voucher' => $voucher])->stream($voucher->voucher_number . '.pdf');
+    })->name('voucher.pdf');
+
+    Route::get('/admin/float-replenishments/{replenishment}/pdf', function (\App\Models\FloatReplenishment $replenishment) {
+        // Head Office or Accountant check
+        if (!auth()->user()->isHeadOffice() && !auth()->user()->hasRole('Accountant')) {
+            abort(403);
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.replenishment', ['replenishment' => $replenishment])->stream($replenishment->reference . '.pdf');
+    })->name('replenishment.pdf');
+
 });
 
-// Push Subscription Routes — accessible from any panel
-Route::middleware(['auth'])->group(function () {
+// Push Subscription Routes — accessible from any panel (admin or vouchers).
+// Uses auth:web guard explicitly since both panels share the same User model on the web guard.
+Route::middleware(['auth:web'])->group(function () {
     Route::post('/push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'subscribe']);
     Route::post('/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe']);
 });
+
+
+

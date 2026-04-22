@@ -3,6 +3,10 @@
 namespace App\Filament\Clusters;
 
 use Filament\Clusters\Cluster;
+
+class Settings extends Cluster
+{
+    protected static ?string $navigationIcon = 'heroicon-o-squares-2x2';
 use Filament\Pages\SubNavigationPosition;
 
 class Settings extends Cluster
