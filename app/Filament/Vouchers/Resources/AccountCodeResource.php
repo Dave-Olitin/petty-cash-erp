@@ -48,15 +48,40 @@ class AccountCodeResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query
+                ->withSum('debitItems', 'debit')
+                ->withSum('creditItems', 'credit')
+            )
             ->columns([
                 Tables\Columns\TextColumn::make('code')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('voucher_count')
+                Tables\Columns\TextColumn::make('voucher_items_count')
                     ->counts('voucherItems')
                     ->label('Total Vouchers')
-                    ->sortable(query: function (Builder $query, string $direction): Builder {
-                        return $query->withCount('voucherItems')->orderBy('voucher_items_count', $direction);
-                    }),
+                    ->sortable()
+                    ->badge()
+                    ->color('primary'),
+
+                Tables\Columns\TextColumn::make('debit_items_sum_debit')
+                    ->label('Total DR')
+                    ->money('AED')
+                    ->color('success')
+                    ->sortable(query: fn (Builder $query, string $direction) =>
+                        $query->orderBy('debit_items_sum_debit', $direction)
+                    )
+                    ->default(0)
+                    ->toggleable(isToggledHiddenByDefault: false),
+
+                Tables\Columns\TextColumn::make('credit_items_sum_credit')
+                    ->label('Total CR')
+                    ->money('AED')
+                    ->color('danger')
+                    ->sortable(query: fn (Builder $query, string $direction) =>
+                        $query->orderBy('credit_items_sum_credit', $direction)
+                    )
+                    ->default(0)
+                    ->toggleable(isToggledHiddenByDefault: false),
+
                 Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
@@ -66,7 +91,9 @@ class AccountCodeResource extends Resource
                 \Filament\Tables\Actions\ImportAction::make()
                     ->importer(\App\Filament\Imports\AccountCodeImporter::class),
             ])
+            ->recordUrl(fn ($record) => AccountCodeResource::getUrl('view', ['record' => $record]))
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ])
@@ -80,16 +107,17 @@ class AccountCodeResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            RelationManagers\VoucherItemsRelationManager::class,
         ];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListAccountCodes::route('/'),
+            'index'  => Pages\ListAccountCodes::route('/'),
             'create' => Pages\CreateAccountCode::route('/create'),
-            'edit' => Pages\EditAccountCode::route('/{record}/edit'),
+            'view'   => Pages\ViewAccountCode::route('/{record}'),
+            'edit'   => Pages\EditAccountCode::route('/{record}/edit'),
         ];
     }
 }
