@@ -48,7 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transactions', function (Request $request) {
         $user = $request->user();
 
-        $query = \App\Models\Transaction::with(['items.category', 'user:id,name', 'branch:id,name'])
+        $query = \App\Models\Transaction::with(['items.category:id,name,type', 'user:id,name', 'branch:id,name'])
             ->orderBy('created_at', 'desc');
 
         // Security: Branch users can only see their branch's transactions

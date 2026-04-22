@@ -2,6 +2,7 @@
 const CACHE_NAME = 'petty-cash-erp-v3';
 const urlsToCache = [
     '/manifest.json',
+    '/manifest-vouchers.json',
     '/images/icon-192.png',
     '/images/icon-512.png'
 ];
@@ -30,7 +31,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
     if (event.request.mode === 'navigate') {
-        event.respondWith(fetch(event.request));
+        event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
         return;
     }
     event.respondWith(

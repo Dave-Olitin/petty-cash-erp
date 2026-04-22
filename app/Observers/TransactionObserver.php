@@ -4,7 +4,10 @@ namespace App\Observers;
 
 use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
+use App\Models\User;
+use App\Notifications\TransactionStatusNotification;
 
 class TransactionObserver
 {
@@ -44,6 +47,23 @@ class TransactionObserver
                 $branch->increment('current_balance', $transaction->amount);
             }
         });
+
+        // Fix #8: Wrap notification dispatch in try/catch so SMTP/queue failures
+        // don't surface as a 500 when the transaction itself saved successfully.
+        try {
+            if ($transaction->status === 'pending') {
+                $headOfficeUsers = User::whereNull('branch_id')->get();
+                Notification::send($headOfficeUsers, new TransactionStatusNotification($transaction, 'created'));
+            } elseif ($transaction->type === 'REPLENISHMENT' && $transaction->status === 'approved') {
+                // If HQ generates a replenishment (which is usually auto-approved), notify the branch users
+                $branchUsers = User::where('branch_id', $transaction->branch_id)->get();
+                if ($branchUsers->isNotEmpty()) {
+                    Notification::send($branchUsers, new TransactionStatusNotification($transaction, 'created')); // 'created' here acts as a "you received funds" notice
+                }
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Transaction created notification failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -53,6 +73,13 @@ class TransactionObserver
     public function updated(Transaction $transaction): void
     {
         if (!$transaction->branch_id) {
+            return;
+        }
+
+        // Fix #3: Skip the entire balance recalculation if no financial fields changed.
+        // This prevents unnecessary lockForUpdate() contention on non-financial edits
+        // (description, payee, receipt_path, etc.)
+        if (!$transaction->isDirty('amount', 'type', 'status')) {
             return;
         }
 
@@ -109,6 +136,29 @@ class TransactionObserver
                 }
             }
         });
+
+        // Fix #8: Wrap notification dispatch in try/catch so SMTP/queue failures
+        // don't surface as a 500 when the status update itself saved successfully.
+        try {
+            if ($oldStatus === 'pending' && $newStatus === 'approved') {
+                // Notify the user who created it
+                $transaction->user->notify(new TransactionStatusNotification($transaction, 'approved'));
+                
+                // ALSO specify to notify the whole branch if it's a Replenishment (so everyone knows funds arrived)
+                if ($transaction->type === 'REPLENISHMENT') {
+                    $branchUsers = User::where('branch_id', $transaction->branch_id)
+                        ->where('id', '!=', $transaction->user_id) // Don't notify the creator twice
+                        ->get();
+                    if ($branchUsers->isNotEmpty()) {
+                        Notification::send($branchUsers, new TransactionStatusNotification($transaction, 'approved'));
+                    }
+                }
+            } elseif ($oldStatus === 'pending' && $newStatus === 'rejected') {
+                $transaction->user->notify(new TransactionStatusNotification($transaction, 'rejected'));
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Transaction status notification failed: ' . $e->getMessage());
+        }
     }
 
     /**

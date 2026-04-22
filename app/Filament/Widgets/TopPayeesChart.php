@@ -26,7 +26,7 @@ class TopPayeesChart extends ChartWidget
     {
         $startDate = $this->filters['startDate'] ?? null;
         $endDate = $this->filters['endDate'] ?? null;
-        $branchId = $this->filters['branch_id'] ?? (auth()->user()->branch_id);
+        $branchId = auth()->user()->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : auth()->user()->branch_id;
 
         $data = \App\Models\Transaction::query()
             ->where('type', 'EXPENSE')

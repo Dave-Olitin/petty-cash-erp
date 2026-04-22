@@ -27,7 +27,7 @@ class TransactionVolumeChart extends ChartWidget
     {
         $startDate = $this->filters['startDate'] ? \Carbon\Carbon::parse($this->filters['startDate']) : now()->subDays(30);
         $endDate = $this->filters['endDate'] ? \Carbon\Carbon::parse($this->filters['endDate']) : now();
-        $branchId = $this->filters['branch_id'] ?? (auth()->user()->branch_id);
+        $branchId = auth()->user()->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : auth()->user()->branch_id;
 
         // 1. Prepare Date Range
         $period = CarbonPeriod::create($startDate, '1 day', $endDate);

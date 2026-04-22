@@ -30,7 +30,7 @@ class StatsOverview extends BaseWidget
         // Filter Logic
         $startDate = $this->filters['startDate'] ?? null;
         $endDate = $this->filters['endDate'] ?? null;
-        $branchId = $this->filters['branch_id'] ?? ($user->branch_id); // Use filter or user's branch
+        $branchId = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id; // Secure filter extraction
 
         // Common Query Helper (reused inside and outside cache)
         $query = function() use ($startDate, $endDate, $branchId) {

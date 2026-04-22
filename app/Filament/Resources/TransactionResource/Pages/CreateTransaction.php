@@ -9,6 +9,12 @@ class CreateTransaction extends CreateRecord
 {
     protected static string $resource = TransactionResource::class;
 
+    // Fix #4: Store custom date as a class property instead of session.
+    // Session storage is shared across Livewire components for the same user —
+    // submitting two tabs simultaneously would cause Tab B's date to overwrite Tab A's.
+    // A class property is per-component instance and inherently isolated.
+    protected ?string $customDate = null;
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         // Always set user_id server-side — never trust the form field.
@@ -19,9 +25,8 @@ class CreateTransaction extends CreateRecord
             $data['branch_id'] = auth()->user()->branch_id;
         }
 
-        // Store custom date aside so it doesn't hit fillable guard
-        // It is applied in afterCreate() below.
-        session()->put('_tx_custom_date', $data['created_at'] ?? null);
+        // Stash custom date on the instance, not the session.
+        $this->customDate = $data['created_at'] ?? null;
         unset($data['created_at']);
 
         return $data;
@@ -29,13 +34,11 @@ class CreateTransaction extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $customDate = session()->pull('_tx_custom_date');
-
-        if ($customDate) {
+        if ($this->customDate) {
             // Bypass fillable by updating directly on the query builder
             $this->record->newQueryWithoutScopes()
                 ->where('id', $this->record->id)
-                ->update(['created_at' => $customDate]);
+                ->update(['created_at' => $this->customDate]);
         }
     }
 }

@@ -23,6 +23,18 @@ class TransactionResource extends Resource
     protected static ?string $navigationGroup = 'Finance';
     protected static ?int $navigationSort = 1;
 
+    public static function getNavigationBadge(): ?string
+    {
+        // Show the count of pending transactions in the sidebar
+        $count = static::getEloquentQuery()->where('status', 'pending')->count();
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
 public static function form(Form $form): Form
 {
     return $form
@@ -73,20 +85,26 @@ public static function form(Form $form): Form
                     Forms\Components\Repeater::make('items')
                         ->relationship()
                         ->schema([
-                            Forms\Components\Select::make('category_id')
-                                ->relationship('category', 'name', function (Builder $query, callable $get) {
-                                    // Use the parent transaction type if possible, or defaulting to 'expense' if complicated. 
-                                    // Accessing parent state from repeater item can be tricky. 
-                                    // For now, let's allow all active categories or try to filter if feasible.
-                                    // $get('../../type') might work depending on structure.
-                                    // Let's keep it simple: Show all active categories for now.
-                                    return $query->where('is_active', true);
-                                })
-                                ->label('Category')
-                                ->searchable()
+                            Forms\Components\Select::make('account_code_id')
+                                ->label('Account Code')
+                                ->relationship('accountCode', 'name',
+                                    fn (Builder $query) => $query->orderBy('code')
+                                )
+                                ->getOptionLabelFromRecordUsing(
+                                    fn ($record) => "{$record->code} – {$record->name}"
+                                )
+                                ->searchable(['code', 'name'])
                                 ->preload()
+<<<<<<< feature-hq-portal
                                 ->required()
                                 ->visible(fn () => auth()->user()->isHeadOffice()), // Only HO can see/set
+=======
+                                ->nullable()
+                                ->placeholder('Select account...')
+                                ->visible(fn () => auth()->user()->isHeadOffice()), // HQ-only
+                            Forms\Components\TextInput::make('name')
+                                ->required(),
+>>>>>>> main
                             Forms\Components\TextInput::make('quantity')
                                 ->label('Qty')
                                 ->numeric()
@@ -125,7 +143,7 @@ public static function form(Form $form): Form
                                 ->columnSpan(1)
                                 ->extraInputAttributes(['class' => 'font-mono font-bold text-primary-600']),
                         ])
-                        ->columns(['default' => 1, 'md' => 3, 'lg' => 6]) // Progressive breakpoints for mobile/tablet/desktop
+                        ->columns(['default' => 1, 'md' => 2, 'lg' => 3]) // 3 columns, 2 rows for better width
                         ->columnSpanFull()
                         ->live()
                         ->afterStateUpdated(function (callable $get, callable $set) {
@@ -248,6 +266,7 @@ public static function form(Form $form): Form
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('items')
                             ->schema([
+<<<<<<< feature-hq-portal
                                 Infolists\Components\Grid::make(12)
                                     ->schema([
                                         Infolists\Components\TextEntry::make('category.name')
@@ -277,6 +296,21 @@ public static function form(Form $form): Form
                                             ->extraAttributes(['class' => 'font-mono text-primary-600'])
                                             ->columnSpan(2),
                                     ])
+=======
+                                Infolists\Components\TextEntry::make('accountCode.name')
+                                    ->label('Account Name')
+                                    ->formatStateUsing(fn ($state, $record) => $record->accountCode
+                                        ? $record->accountCode->name
+                                        : '—'
+                                    ),
+
+
+                                Infolists\Components\TextEntry::make('name')->label('Item'),
+                                Infolists\Components\TextEntry::make('quantity')->label('Qty'),
+                                Infolists\Components\TextEntry::make('unit_price')->money('AED')->label('Unit Price'),
+                                Infolists\Components\TextEntry::make('vat')->money('AED')->label('VAT'),
+                                Infolists\Components\TextEntry::make('total_price')->money('AED')->label('Total'),
+>>>>>>> main
                             ])
                             ->columns(1),
                     ]),
@@ -348,24 +382,28 @@ public static function table(Table $table): Table
                 ->money('AED')
                 ->extraAttributes(['class' => 'privacy-mask']),
             Tables\Columns\TextColumn::make('payee')
-                ->searchable(),
+                ->searchable()
+                ->toggleable(),
             Tables\Columns\TextColumn::make('supplier')
                 ->label('Supplier')
                 ->searchable()
                 ->toggleable(isToggledHiddenByDefault: true),
             Tables\Columns\TextColumn::make('reference_number')
                 ->label('Ref #')
-                ->searchable(),
+                ->searchable()
+                ->toggleable(),
             Tables\Columns\IconColumn::make('receipt_path')
                 ->label('Receipt')
                 ->boolean()
                 ->trueIcon('heroicon-o-document-check')
                 ->falseIcon('heroicon-o-x-mark')
-                ->color(fn ($state) => $state ? 'success' : 'gray'),
+                ->color(fn ($state) => $state ? 'success' : 'gray')
+                ->toggleable(),
             Tables\Columns\TextColumn::make('branch.name')
                 ->label('Branch')
                 ->placeholder('Head Office')
-                ->sortable(),
+                ->sortable()
+                ->toggleable(),
         ])
         ->defaultSort('created_at', 'desc')
         ->filters([
@@ -382,6 +420,17 @@ public static function table(Table $table): Table
                 ->visible(fn () => auth()->user()->branch_id === null) // Only visible to HQ
                 ->searchable()
                 ->preload(),
+
+            Tables\Filters\TernaryFilter::make('account_assignment')
+                ->label('Account Assignment')
+                ->placeholder('All Transactions')
+                ->trueLabel('Unassigned Only')
+                ->falseLabel('Fully Assigned')
+                ->queries(
+                    true: fn (Builder $query) => $query->whereHas('items', fn ($q) => $q->whereNull('account_code_id')),
+                    false: fn (Builder $query) => $query->whereDoesntHave('items', fn ($q) => $q->whereNull('account_code_id')),
+                )
+                ->visible(fn () => auth()->user()->isHeadOffice()),
 
             Tables\Filters\Filter::make('created_at')
                 ->form([
@@ -404,7 +453,64 @@ public static function table(Table $table): Table
             Tables\Actions\ViewAction::make()
                 ->slideOver() // Nice preview effect
                 ->color('info')
-                ->icon('heroicon-o-eye'),
+                ->icon('heroicon-o-eye')
+                ->extraModalFooterActions(fn (Transaction $record): array => [
+                    // Approve Action wrapped for Modal Footer
+                    Tables\Actions\Action::make('approve_modal')
+                        ->label('Approve')
+                        ->icon('heroicon-o-check')
+                        ->color('success')
+                        ->visible(fn () => $record->status === 'pending' && auth()->user()->branch_id === null)
+                        ->action(function () use ($record) {
+                            $record->update(['status' => 'approved']);
+                            \Filament\Notifications\Notification::make()
+                                ->title('Transaction Approved')
+                                ->success()
+                                ->send();
+                        }),
+
+                    // Reject Action wrapped for Modal Footer
+                    Tables\Actions\Action::make('reject_modal')
+                        ->label('Reject')
+                        ->icon('heroicon-o-x-mark')
+                        ->color('danger')
+                        ->visible(fn () => in_array($record->status, ['pending', 'approved']) && auth()->user()->branch_id === null)
+                        ->requiresConfirmation()
+                        ->form([
+                            Forms\Components\Textarea::make('rejection_reason')
+                                ->label('Reason for Rejection')
+                                ->required()
+                                ->maxLength(65535),
+                        ])
+                        ->action(function (array $data) use ($record) {
+                            $originalData = $record->fresh()->toArray();
+                            $record->update([
+                                'status'           => 'rejected',
+                                'rejection_reason' => $data['rejection_reason'],
+                            ]);
+
+                            \App\Models\TransactionHistory::create([
+                                'transaction_id' => $record->id,
+                                'user_id'        => auth()->id(),
+                                'reason'         => 'Transaction Rejected: ' . $data['rejection_reason'],
+                                'original_data'  => $originalData,
+                                'modified_data'  => $record->fresh()->toArray(),
+                            ]);
+
+                            \Filament\Notifications\Notification::make()
+                                ->title('Transaction Rejected')
+                                ->danger()
+                                ->send();
+                        }),
+                        
+                    // Print Voucher inside Modal Footer
+                    Tables\Actions\Action::make('print_modal')
+                        ->label('Print Voucher')
+                        ->icon('heroicon-o-printer')
+                        ->color('gray')
+                        ->url(fn (): string => route('transaction.print', $record))
+                        ->openUrlInNewTab(),
+                ]),
             Tables\Actions\ActionGroup::make([
                 Tables\Actions\Action::make('approve')
                     ->label('Approve')
@@ -499,7 +605,8 @@ public static function table(Table $table): Table
                 // Accounting Specs Action Removed
 
                 Tables\Actions\EditAction::make()
-                    ->slideOver(),
+                    ->slideOver()
+                    ->visible(fn (\App\Models\Transaction $record) => auth()->user()->can('update', $record)),
                 Tables\Actions\DeleteAction::make()
                     ->label('Void')
                     ->modalHeading('Void Transaction')
@@ -550,8 +657,9 @@ public static function table(Table $table): Table
                                     $record->description,
                                     $itemsSummary,
                                     $record->branch ? $record->branch->name : 'Head Office',
-                                    // Get Unique Categories from Items
-                                    $record->items->map(fn($item) => $item->category?->name)->filter()->unique()->join(', ') ?: 'N/A',
+                                    // Get Unique Account Codes from Items
+                                    $record->items->map(fn($item) => $item->accountCode ? "{$item->accountCode->code} – {$item->accountCode->name}" : null)->filter()->unique()->join(', ') ?: 'N/A',
+
                                     $record->status,
                                     $record->user ? $record->user->name : 'Unknown',
                                     $record->receipt_path ? route('transaction.receipt', $record) : '',
@@ -591,7 +699,8 @@ public static function table(Table $table): Table
         // Note: 'category' is NOT eager-loaded — Transaction has no direct category relation.
         // Categories live on transaction_items, hence 'items.category'.
         $query = parent::getEloquentQuery()
-            ->with(['branch', 'user', 'items.category']);
+            ->with(['branch', 'user', 'items.accountCode']);
+
 
         if (auth()->user()->branch_id) {
             $query->where('branch_id', auth()->user()->branch_id);

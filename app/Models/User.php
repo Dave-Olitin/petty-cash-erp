@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -16,13 +18,17 @@ use App\Models\VoucherView;
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
+<<<<<<< feature-hq-portal
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes, HasRoles, HasPushSubscriptions;
+=======
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, \NotificationChannels\WebPush\HasPushSubscriptions;
+>>>>>>> main
 
     protected $fillable = [
         'name',
         'email',
         'password',
-        'branch_id', // Required for branch scoping. Must be fillable for UserResource to save it.
+        'branch_id',
     ];
 
     protected $hidden = [
@@ -44,7 +50,6 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(Branch::class);
     }
 
-    // Helper to check if they are HQ
     public function isHeadOffice(): bool
     {
         return is_null($this->branch_id);

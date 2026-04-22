@@ -9,12 +9,15 @@ class TransactionItem extends Model
     protected $fillable = [
         'transaction_id',
         'category_id',
+        'account_code_id',
         'name',
         'quantity',
         'unit_price',
         'vat',
         'total_price',
     ];
+
+
 
     protected function casts(): array
     {
@@ -35,5 +38,10 @@ class TransactionItem extends Model
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function accountCode()
+    {
+        return $this->belongsTo(AccountCode::class);
     }
 }

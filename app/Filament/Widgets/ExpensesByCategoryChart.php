@@ -11,7 +11,28 @@ class ExpensesByCategoryChart extends ChartWidget
 
     protected static ?string $heading = 'Expenses by Category';
     protected static ?int $sort = 3;
-    protected static ?string $maxHeight = '300px';
+    protected static ?string $maxHeight = '320px';
+    protected static ?string $footer = 'Note: Amounts are shown in AED';
+
+    public function getDescription(): ?string
+    {
+        $user      = auth()->user();
+        $startDate = $this->filters['startDate'] ?? null;
+        $endDate   = $this->filters['endDate'] ?? null;
+        $branchId  = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
+
+        $total = \App\Models\TransactionItem::query()
+            ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
+            ->where('transactions.type', 'EXPENSE')
+            ->whereNull('transactions.deleted_at')
+            ->where('transactions.status', '!=', 'rejected')
+            ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
+            ->when($endDate,   fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
+            ->when($branchId,  fn($q) => $q->where('transactions.branch_id', $branchId))
+            ->sum('transaction_items.total_price');
+
+        return "Total Expenses: AED " . number_format($total, 2);
+    }
 
     public static function canView(): bool
     {
@@ -23,26 +44,20 @@ class ExpensesByCategoryChart extends ChartWidget
         $user      = auth()->user();
         $startDate = $this->filters['startDate'] ?? null;
         $endDate   = $this->filters['endDate'] ?? null;
-        $branchId  = $this->filters['branch_id'] ?? ($user->branch_id);
+        $branchId  = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
 
-        // ──────────────────────────────────────────────────────────────────────
-        // BUG FIX: The original query used INNER JOIN on categories, but
-        // transaction_items.category_id is nullable. Any item without a category
-        // was silently dropped — if NO items had a category the chart returned
-        // empty. Changed to LEFT JOIN and filtered nulls in PHP so we can still
-        // chart items that have a category while gracefully handling missing ones.
-        // ──────────────────────────────────────────────────────────────────────
         $rawData = \App\Models\TransactionItem::query()
             ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
-            ->leftJoin('categories', 'transaction_items.category_id', '=', 'categories.id')
+            ->leftJoin('account_codes', 'transaction_items.account_code_id', '=', 'account_codes.id')
             ->where('transactions.type', 'EXPENSE')
-            ->whereNull('transactions.deleted_at')           // Exclude voided
-            ->where('transactions.status', '!=', 'rejected') // Exclude rejected
+            ->whereNull('transactions.deleted_at')
+            ->where('transactions.status', '!=', 'rejected')
             ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
             ->when($endDate,   fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
             ->when($branchId,  fn($q) => $q->where('transactions.branch_id', $branchId))
-            ->selectRaw('COALESCE(categories.name, \'Uncategorised\') as category_name, SUM(transaction_items.total_price) as total')
-            ->groupBy('category_name')
+            ->selectRaw("COALESCE(account_codes.name, 'Unassigned') as label, SUM(transaction_items.total_price) as total")
+
+            ->groupBy('label')
             ->orderByDesc('total')
             ->get();
 
@@ -53,29 +68,61 @@ class ExpensesByCategoryChart extends ChartWidget
             ];
         }
 
-        $labels = $rawData->pluck('category_name');
-        $totals = $rawData->pluck('total');
+        // Cap at top 8, collapse the rest into "Others"
+        $top    = $rawData->take(8);
+        $others = $rawData->skip(8);
+
+        $labels = $top->pluck('label')->toArray();
+        $totals = $top->pluck('total')->map(fn($v) => round((float) $v, 2))->toArray();
+
+        if ($others->isNotEmpty()) {
+            $labels[] = 'Others (' . $others->count() . ')';
+            $totals[] = round($others->sum('total'), 2);
+        }
 
         $colors = [
             '#F87171', '#FB923C', '#FBBF24', '#A3E635', '#34D399',
-            '#22D3EE', '#818CF8', '#C084FC', '#F472B6', '#E879F9',
+            '#22D3EE', '#818CF8', '#C084FC', '#F472B6', '#94A3B8',
         ];
 
         return [
             'datasets' => [
                 [
-                    'label'           => 'Expenses',
-                    'data'            => $totals->toArray(),
+                    'label'           => 'Expenses (AED)',
+                    'data'            => $totals,
                     'backgroundColor' => array_slice($colors, 0, count($labels)),
-                    'hoverOffset'     => 4,
+                    'hoverOffset'     => 6,
                 ],
             ],
-            'labels' => $labels->toArray(),
+            'labels' => $labels,
         ];
     }
 
     protected function getType(): string
     {
         return 'doughnut';
+    }
+
+    protected function getOptions(): array
+    {
+        return [
+            'plugins' => [
+                'legend' => [
+                    'position' => 'right',
+                    'labels'   => [
+                        'boxWidth'  => 12,
+                        'padding'   => 10,
+                        'font'      => ['size' => 11],
+                    ],
+                ],
+                'tooltip' => [
+                    'callbacks' => [],
+                ],
+            ],
+            'scales'  => [
+                'x' => ['display' => false],
+                'y' => ['display' => false],
+            ],
+        ];
     }
 }

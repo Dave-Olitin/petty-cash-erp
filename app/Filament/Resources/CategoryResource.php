@@ -18,11 +18,12 @@ class CategoryResource extends Resource
     protected static ?string $model = Category::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
-    protected static ?string $navigationGroup = 'System Settings';
+    protected static ?string $cluster = \App\Filament\Clusters\Settings::class;
     protected static ?string $navigationLabel = 'Transaction Categories';
     protected static ?string $modelLabel = 'Transaction Category';
     protected static ?string $pluralModelLabel = 'Transaction Categories';
     protected static ?int $navigationSort = 4;
+    protected static \Filament\Pages\SubNavigationPosition $subNavigationPosition = \Filament\Pages\SubNavigationPosition::Top;
 
     public static function form(Form $form): Form
     {
@@ -42,6 +43,17 @@ class CategoryResource extends Resource
                 Forms\Components\Toggle::make('is_active')
                     ->default(true)
                     ->label('Active'),
+
+                Forms\Components\Select::make('account_code_id')
+                    ->label('Chart of Account')
+                    ->relationship('accountCode', 'name')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->code} – {$record->name}")
+                    ->searchable(['code', 'name'])
+                    ->preload()
+                    ->placeholder('Not assigned')
+                    ->helperText('Link this category to a GL account code for reporting purposes.')
+                    ->nullable(),
+
             ]);
     }
 
@@ -53,12 +65,18 @@ class CategoryResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'expense' => 'warning',
+                        'expense'       => 'warning',
                         'replenishment' => 'success',
                         'petty_cash' => 'info',
                         default => 'gray',
                     }),
                 Tables\Columns\IconColumn::make('is_active')->boolean(),
+                Tables\Columns\TextColumn::make('accountCode.code')
+                    ->label('Account Code')
+                    ->badge()
+                    ->color('primary')
+                    ->placeholder('—')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([

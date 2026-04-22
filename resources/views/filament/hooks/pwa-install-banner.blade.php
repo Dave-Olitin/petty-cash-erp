@@ -86,6 +86,8 @@
 
             {{-- Install Button --}}
             <button
+                id="pwa-install-btn"
+                name="pwa_install_button"
                 @click="install()"
                 style="
                     flex-shrink: 0;
@@ -105,6 +107,8 @@
 
             {{-- Dismiss Button --}}
             <button
+                id="pwa-dismiss-btn"
+                name="pwa_dismiss_button"
                 @click="dismiss()"
                 style="
                     flex-shrink: 0;

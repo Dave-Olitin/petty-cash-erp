@@ -15,8 +15,55 @@
         }
     }" 
     x-init="updateBody()"
-    class="flex items-center mr-4"
+    class="flex items-center gap-4 mr-4"
 >
+    <!-- Push Notifications Bell Button -->
+    <div 
+        x-data="{ 
+            showButton: false,
+            async checkStatus() {
+                if (!('Notification' in window)) return;
+                
+                // Show button if permission is default (not yet granted/denied)
+                if (Notification.permission === 'default') {
+                    this.showButton = true;
+                } else if (Notification.permission === 'granted') {
+                    // Check if actually subscribed in Service Worker
+                    if ('serviceWorker' in navigator) {
+                        try {
+                            const registration = await navigator.serviceWorker.getRegistration();
+                            if (registration) {
+                                const subscription = await registration.pushManager.getSubscription();
+                                this.showButton = !subscription; // Show if NOT subscribed
+                            }
+                        } catch (e) {
+                           console.error('Error checking subscription', e);
+                        }
+                    }
+                }
+            }
+        }"
+        x-init="
+            checkStatus();
+            // Listen for successful subscription event to hide button immediately
+            window.addEventListener('push-subscribed', () => { showButton = false; });
+        "
+        x-show="showButton"
+        style="display: none;"
+    >
+        <button 
+            type="button" 
+            onclick="subscribeToPushNotifications()"
+            class="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-primary-600 bg-primary-50 rounded-full hover:bg-primary-100 transition-colors focus:outline-none dark:bg-primary-500/10 dark:text-primary-400 dark:hover:bg-primary-500/20"
+            title="Enable Push Notifications"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 animate-pulse">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12.75 19.5v-.75a7.5 7.5 0 00-7.5-7.5H4.5m0-6.75h.75c7.87 0 14.25 6.38 14.25 14.25v.75M6 18.75a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+            </svg>
+            <span>Enable Alerts</span>
+        </button>
+    </div>
+
     <button 
         @click="toggle()"
         type="button" 
