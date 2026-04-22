@@ -439,9 +439,35 @@
                 $str[] = "AED ".number_format($val, str_contains($key, 'coin') ? 2 : 0)." x $qty = <b>" . number_format($val * $qty, 2) . "</b>";
             }
         }
+        $cashTotal = $voucher->denominations->total_amount;
+        $change = $voucher->denominations->change_given ?? 0;
+        $deduction = $voucher->denominations->prior_deduction ?? 0;
+        $finalBalanced = ($cashTotal - $change) + $deduction;
     @endphp
-    {!! implode(' &nbsp;&bull;&nbsp; ', $str) !!}
-    <br><strong>Total Cash: AED {{ number_format($voucher->denominations->total_amount, 2) }}</strong>
+    <div style="margin-bottom: 6px; line-height: 1.5;">{!! implode(' &nbsp;&bull;&nbsp; ', $str) !!}</div>
+    
+    <table style="width: 350px; font-size: 10px; border-collapse: collapse;">
+        <tr>
+            <td style="padding-bottom: 2px;">Physical Cash Tendered:</td>
+            <td style="text-align: right; padding-bottom: 2px;">AED {{ number_format($cashTotal, 2) }}</td>
+        </tr>
+        @if($change > 0)
+        <tr>
+            <td style="padding-bottom: 2px;">Less: Change Returned:</td>
+            <td style="text-align: right; padding-bottom: 2px;">(AED {{ number_format($change, 2) }})</td>
+        </tr>
+        @endif
+        @if($deduction > 0)
+        <tr>
+            <td style="padding-bottom: 2px;">Plus: Cash Advance / Prior Deduction:</td>
+            <td style="text-align: right; padding-bottom: 2px;">AED {{ number_format($deduction, 2) }}</td>
+        </tr>
+        @endif
+        <tr>
+            <td style="padding-top: 4px; font-weight: bold; border-top: 1px dashed #666;">Final Balanced Amount:</td>
+            <td style="text-align: right; font-weight: bold; padding-top: 4px; border-top: 1px dashed #666;">AED {{ number_format($finalBalanced, 2) }}</td>
+        </tr>
+    </table>
 </div>
 @endif
 

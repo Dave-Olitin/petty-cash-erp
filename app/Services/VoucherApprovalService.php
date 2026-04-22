@@ -217,7 +217,11 @@ class VoucherApprovalService
      */
     public function markPaid(Voucher $voucher, User $actor): ?string
     {
-        return DB::transaction(function () use ($voucher, $actor) {
+        // Capture all data needed for notifications BEFORE the transaction
+        // so notification sends happen after the transaction commits (non-blocking).
+        $notifyData = null;
+
+        $error = DB::transaction(function () use ($voucher, $actor, &$notifyData) {
             $locked = Voucher::lockForUpdate()->find($voucher->id);
 
             $payableStatuses = [
@@ -230,7 +234,6 @@ class VoucherApprovalService
                 return 'Voucher status changed by another user. Please refresh.';
             }
 
-            // The actor needs the voucher.pay permission
             if (!$actor->can('voucher.pay')) {
                 return 'Unauthorized: You lack the required payment permission.';
             }
@@ -241,13 +244,11 @@ class VoucherApprovalService
                 'current_approval_step' => null,
             ]);
 
-            // Auto-settle linked purchase entries (Option 1 behavior)
-            $locked->purchaseEntries()->each(function ($pe) {
-                $pe->update([
-                    'amount_paid'    => $pe->grand_total,
-                    'payment_status' => \App\Models\PurchaseEntry::STATUS_PAID,
-                ]);
-            });
+            // Bulk update all linked purchase entries in a single query
+            $locked->purchaseEntries()->update([
+                'amount_paid'    => DB::raw('grand_total'),
+                'payment_status' => \App\Models\PurchaseEntry::STATUS_PAID,
+            ]);
 
             // Record in approval trail
             $comment = $previousStatus !== VoucherStatus::Approved->value
@@ -261,21 +262,35 @@ class VoucherApprovalService
             ]);
 
             $locked->load('user');
+
+            // Store data for post-transaction notifications (avoids blocking the transaction)
+            $notifyData = [
+                'voucher'        => $locked,
+                'actor'          => $actor,
+                'previousStatus' => $previousStatus,
+            ];
+
+            return null;
+        });
+
+        // ── Notifications sent AFTER transaction commits ──────────────────────
+        // This ensures the DB commit completes before any slow email/push sends begin,
+        // keeping the HTTP response fast.
+        if ($error === null && $notifyData) {
+            ['voucher' => $locked, 'actor' => $actor, 'previousStatus' => $previousStatus] = $notifyData;
+
             try {
                 $locked->user?->notify(new VoucherStatusNotification($locked, 'paid'));
 
-                // Send early disbursement notification to Approvers if paying before final approval
                 if ($previousStatus !== VoucherStatus::Approved->value) {
                     $approvers = User::role(['Approver', 'Admin', 'Super Admin'])->get();
                     if ($approvers->isNotEmpty()) {
-                        // In-app Filament notification (for users currently on the platform)
                         \Filament\Notifications\Notification::make()
                             ->title('Early Disbursement Alert')
                             ->body("Voucher {$locked->voucher_number} was disbursed early by {$actor->name} before full approval. Please review.")
                             ->warning()
                             ->sendToDatabase($approvers);
 
-                        // Email/push notification (for users NOT currently on the platform)
                         foreach ($approvers as $approver) {
                             try {
                                 $approver->notify(new VoucherStatusNotification($locked, 'early_disbursement'));
@@ -288,9 +303,9 @@ class VoucherApprovalService
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Voucher Mark Paid Notification Failed: ' . $e->getMessage());
             }
+        }
 
-            return null;
-        });
+        return $error;
     }
 
     /**

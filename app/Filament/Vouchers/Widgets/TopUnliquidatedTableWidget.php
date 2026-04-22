@@ -23,7 +23,7 @@ class TopUnliquidatedTableWidget extends BaseWidget
                 Voucher::query()
                     ->join('liquidations', 'vouchers.id', '=', 'liquidations.voucher_id')
                     ->where('liquidations.status', 'pending')
-                    ->selectRaw('MIN(vouchers.id) as id, vouchers.payee, GROUP_CONCAT(vouchers.voucher_number SEPARATOR ", ") as voucher_numbers, COUNT(vouchers.id) as pending_advances, SUM(vouchers.amount) as total_outstanding, MIN(liquidations.due_date) as next_due_date')
+                    ->selectRaw('MIN(vouchers.id) as id, vouchers.payee, GROUP_CONCAT(vouchers.voucher_number SEPARATOR ", ") as voucher_numbers, COUNT(vouchers.id) as pending_advances, SUM(vouchers.amount - COALESCE(liquidations.prior_deduction, 0)) as total_outstanding, MIN(liquidations.due_date) as next_due_date')
                     ->groupBy('vouchers.payee')
                     ->orderByDesc('total_outstanding')
                     ->limit(5)

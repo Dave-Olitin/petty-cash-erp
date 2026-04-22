@@ -352,9 +352,18 @@ class ViewVoucher extends ViewRecord
                                         ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
                                 ])->columns(3),
 
-                            \Filament\Forms\Components\Card::make()
+                            \Filament\Forms\Components\Section::make()
                                 ->schema([
                                     Forms\Components\Grid::make(3)->schema([
+                                        Forms\Components\TextInput::make('prior_deduction')
+                                            ->label('Cash Advance / Prior Deduction')
+                                            ->numeric()
+                                            ->default(0)
+                                            ->live()
+                                            ->prefix('AED')
+                                            ->extraInputAttributes(['class' => 'font-bold'])
+                                            ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
+
                                         Forms\Components\TextInput::make('change_given')
                                             ->label('Cash Return / Change Due')
                                             ->numeric()
@@ -365,27 +374,37 @@ class ViewVoucher extends ViewRecord
                                         
                                         Forms\Components\Placeholder::make('net_summary')
                                             ->label('Financial Summary')
-                                            ->columnSpan(2)
                                             ->content(function (Forms\Get $get) use ($record) {
                                                 $tendered = ((int) $get('bill_1000') * 1000) + ((int) $get('bill_500') * 500) + ((int) $get('bill_200') * 200) + ((int) $get('bill_100') * 100) + ((int) $get('bill_50') * 50) + ((int) $get('bill_20') * 20) + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1) + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
                                                 $target   = (float) $record->amount;
+                                                $deduction = (float) ($get('prior_deduction') ?? 0);
+                                                $netCashTarget = max(0, round($target - $deduction, 2));
+                                                
                                                 $change   = (float) ($get('change_given') ?? 0);
-                                                $net      = round($tendered - $change, 2);
-                                                $diff     = round($net - $target, 2);
+                                                $netPhysical = round($tendered - $change, 2);
+                                                $diff     = round($netPhysical - $netCashTarget, 2);
 
+                                                $panelColor = match(true) {
+                                                    abs($diff) < 0.01 => 'background-color:#f0fdf4; border-color:#86efac;',
+                                                    $diff < 0         => 'background-color:#fef2f2; border-color:#fca5a5;',
+                                                    default           => 'background-color:#eff6ff; border-color:#93c5fd;',
+                                                };
                                                 $statusBadge = match(true) {
-                                                    abs($diff) < 0.01 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 decoration-none">✓ BALANCED</span>',
-                                                    $diff < 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 decoration-none">⚠ SHORT BY AED '.number_format(abs($diff), 2).'</span>',
-                                                    $diff > 0 => '<span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 decoration-none">ℹ EXCESS BY AED '.number_format($diff, 2).'</span>',
+                                                    abs($diff) < 0.01 => '<span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#dcfce7;color:#15803d;">✓ BALANCED</span>',
+                                                    $diff < 0         => '<span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#fee2e2;color:#b91c1c;">⚠ SHORT BY AED '.number_format(abs($diff), 2).'</span>',
+                                                    $diff > 0         => '<span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8;">ℹ EXCESS BY AED '.number_format($diff, 2).'</span>',
                                                 };
 
                                                 return new \Illuminate\Support\HtmlString(
-                                                    "<div class='p-3 bg-gray-50 dark:bg-gray-800/80 rounded-lg border border-gray-100 dark:border-gray-700'>" .
-                                                    "<div class='grid grid-cols-2 gap-y-1 text-sm'>" .
-                                                    "<div class='text-gray-500'>Cash Tendered:</div><div class='text-right font-mono font-bold'>AED " . number_format($tendered, 2) . "</div>" .
-                                                    "<div class='text-gray-500'>Voucher Total:</div><div class='text-right font-mono font-bold'>AED " . number_format($target, 2) . "</div>" .
-                                                    "<div class='col-span-2 my-2 border-t border-dashed border-gray-300 dark:border-gray-600'></div>" .
-                                                    "<div class='font-bold self-center'>Verification:</div><div class='text-right'>{$statusBadge}</div>" .
+                                                    "<div style='padding:12px;border-radius:8px;border:1px solid;{$panelColor}'>" .
+                                                    "<div style='display:grid;grid-template-columns:1fr 1fr;gap:4px 0;font-size:13px;'>" .
+                                                    "<div style='color:#6b7280;'>Voucher Total (Gross):</div><div style='text-align:right;font-family:monospace;'>AED " . number_format($target, 2) . "</div>" .
+                                                    "<div style='color:#6b7280;'>Less: Cash Advance:</div><div style='text-align:right;font-family:monospace; color:#b91c1c;'>- AED " . number_format($deduction, 2) . "</div>" .
+                                                    "<div style='grid-column:span 2;margin:4px 0;border-top:1px dashed #d1d5db;'></div>" .
+                                                    "<div style='font-weight:700;'>Net Cash to Pay:</div><div style='text-align:right;font-family:monospace;font-weight:700; font-size:14px;'>AED " . number_format($netCashTarget, 2) . "</div>" .
+                                                    "<div style='color:#6b7280;'>Physical Cash:</div><div style='text-align:right;font-family:monospace;'>AED " . number_format($netPhysical, 2) . "</div>" .
+                                                    "<div style='grid-column:span 2;margin:6px 0;border-top:1px solid #d1d5db;'></div>" .
+                                                    "<div style='font-weight:700;'>Verification:</div><div style='text-align:right;'>{$statusBadge}</div>" .
                                                     "</div>" .
                                                     "</div>"
                                                 );
@@ -439,17 +458,19 @@ class ViewVoucher extends ViewRecord
                         + ((int) ($data['coin_0_25'] ?? 0) * 0.25);
 
                     $changeGiven = round((float) ($data['change_given'] ?? 0), 2);
-                    $net         = round($tendered - $changeGiven, 2);
+                    $deduction   = round((float) ($data['prior_deduction'] ?? 0), 2);
+                    $netPhysical = round($tendered - $changeGiven, 2);
+                    $targetWithDeduction = round((float)$record->amount - $deduction, 2);
 
-                    if ($net !== round((float) $record->amount, 2)) {
+                    if (abs($netPhysical - $targetWithDeduction) > 0.01) {
                         Notification::make()
                             ->title('Denomination validation failed')
                             ->danger()
-                            ->body('Net amount (Cash Tendered − Change) must equal the voucher amount. ' .
+                            ->body('Net Physical Cash (Tendered − Change) must equal the Net target (Voucher − Deduction). ' .
                                    'You tendered AED ' . number_format($tendered, 2) .
                                    ', change back AED ' . number_format($changeGiven, 2) .
-                                   ', net AED ' . number_format($net, 2) .
-                                   ' ≠ voucher AED ' . number_format((float) $record->amount, 2) . '.')
+                                   ', net physical AED ' . number_format($netPhysical, 2) .
+                                   ' ≠ net target AED ' . number_format($targetWithDeduction, 2) . '.')
                             ->send();
                         throw \Illuminate\Validation\ValidationException::withMessages([
                             'bill_1000' => 'Net amount mismatch.'
@@ -471,6 +492,7 @@ class ViewVoucher extends ViewRecord
                         'coin_0_25'    => $data['coin_0_25'] ?: 0,
                         'total_amount' => $tendered,
                         'change_given' => $changeGiven,
+                        'prior_deduction' => $deduction,
                         'is_change_received' => $data['is_change_received'] ?? true,
                         'remarks'      => $data['remarks'] ?? null,
                     ]);
@@ -520,7 +542,7 @@ class ViewVoucher extends ViewRecord
                 ->mountUsing(function (Forms\Form $form) use ($record) {
                     $denom = $record->denominations()->first();
                     if ($denom) {
-                        $fill = $denom->only(['bill_1000', 'bill_500', 'bill_200', 'bill_100', 'bill_50', 'bill_20', 'bill_10', 'bill_5', 'coin_1', 'coin_0_50', 'coin_0_25', 'change_given', 'is_change_received', 'remarks']);
+                        $fill = $denom->only(['bill_1000', 'bill_500', 'bill_200', 'bill_100', 'bill_50', 'bill_20', 'bill_10', 'bill_5', 'coin_1', 'coin_0_50', 'coin_0_25', 'prior_deduction', 'change_given', 'is_change_received', 'remarks']);
                         $fill['voucher_amount'] = $record->amount;
                         $form->fill($fill);
                     }
@@ -558,6 +580,14 @@ class ViewVoucher extends ViewRecord
                                     ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
                             ]),
                             Forms\Components\Grid::make(2)->schema([
+                                Forms\Components\TextInput::make('prior_deduction')
+                                    ->label('Cash Advance / Prior Deduction')
+                                    ->numeric()
+                                    ->default(0)
+                                    ->live()
+                                    ->prefix('AED')
+                                    ->extraInputAttributes(['class' => 'font-bold'])
+                                    ->afterStateUpdated(fn (Forms\Get $get, Forms\Set $set) => \App\Filament\Vouchers\Resources\VoucherResource::recomputeChange($get, $set)),
                                 Forms\Components\TextInput::make('change_given')
                                     ->label('Change Received Back (AED)')
                                     ->numeric()
@@ -566,15 +596,19 @@ class ViewVoucher extends ViewRecord
                                     ->helperText('Auto-calculated.'),
                                 Forms\Components\Placeholder::make('net_summary')
                                     ->label('Live Summary')
-                                    ->content(function (Forms\Get $get) {
+                                    ->columnSpanFull()
+                                    ->content(function (Forms\Get $get) use ($record) {
                                         $total  = ((int) $get('bill_1000') * 1000) + ((int) $get('bill_500') * 500) + ((int) $get('bill_200') * 200) + ((int) $get('bill_100') * 100) + ((int) $get('bill_50') * 50) + ((int) $get('bill_20') * 20) + ((int) $get('bill_10') * 10) + ((int) $get('bill_5') * 5) + ((int) $get('coin_1') * 1) + ((int) $get('coin_0_50') * 0.50) + ((int) $get('coin_0_25') * 0.25);
                                         $change = (float) ($get('change_given') ?? 0);
+                                        $deduction = (float) ($get('prior_deduction') ?? 0);
                                         $net    = $total - $change;
                                         return new \Illuminate\Support\HtmlString(
-                                            "<div style='line-height:1.9'>" .
+                                            "<div style='line-height:1.9; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;'>" .
                                             "💵 <strong>Cash Tendered:</strong> AED " . number_format($total, 2) . "<br>" .
                                             "🔄 <strong>Change Back:</strong> AED " . number_format($change, 2) . "<br>" .
-                                            "✅ <strong>Net Disbursed:</strong> AED " . number_format($net, 2) .
+                                            "📉 <strong>Prior Deduction:</strong> AED " . number_format($deduction, 2) . "<br>" .
+                                            "✅ <strong>Net Disbursed physically:</strong> AED " . number_format($net, 2) . "<br>" .
+                                            "🎯 <strong>Voucher Target:</strong> AED " . number_format(max(0, $record->amount - $deduction), 2) .
                                             "</div>"
                                         );
                                     }),
@@ -593,14 +627,16 @@ class ViewVoucher extends ViewRecord
 
                     $tendered = ((int) ($data['bill_1000'] ?? 0) * 1000) + ((int) ($data['bill_500'] ?? 0) * 500) + ((int) ($data['bill_200'] ?? 0) * 200) + ((int) ($data['bill_100'] ?? 0) * 100) + ((int) ($data['bill_50'] ?? 0) * 50) + ((int) ($data['bill_20'] ?? 0) * 20) + ((int) ($data['bill_10'] ?? 0) * 10) + ((int) ($data['bill_5'] ?? 0) * 5) + ((int) ($data['coin_1'] ?? 0) * 1) + ((int) ($data['coin_0_50'] ?? 0) * 0.50) + ((int) ($data['coin_0_25'] ?? 0) * 0.25);
                     $changeGiven = round((float) ($data['change_given'] ?? 0), 2);
-                    $net = round($tendered - $changeGiven, 2);
+                    $deduction   = round((float) ($data['prior_deduction'] ?? 0), 2);
+                    $netPhysical = round($tendered - $changeGiven, 2);
+                    $targetWithDeduction = round((float)$record->amount - $deduction, 2);
 
-                    if ($net !== round((float) $record->amount, 2)) {
-                        \Filament\Notifications\Notification::make()->title('Denomination validation failed')->danger()->body('Net amount must equal voucher amount.')->send();
+                    if (abs($netPhysical - $targetWithDeduction) > 0.01) {
+                        \Filament\Notifications\Notification::make()->title('Denomination validation failed')->danger()->body('Net physical cash must equal voucher target amount minus deduction.')->send();
                         throw \Illuminate\Validation\ValidationException::withMessages(['bill_1000' => 'Net amount mismatch.']);
                     }
 
-                    $fields = ['bill_1000', 'bill_500', 'bill_200', 'bill_100', 'bill_50', 'bill_20', 'bill_10', 'bill_5', 'coin_1', 'coin_0_50', 'coin_0_25', 'change_given', 'is_change_received'];
+                    $fields = ['bill_1000', 'bill_500', 'bill_200', 'bill_100', 'bill_50', 'bill_20', 'bill_10', 'bill_5', 'coin_1', 'coin_0_50', 'coin_0_25', 'prior_deduction', 'change_given', 'is_change_received'];
                     $changes = [];
                     foreach ($fields as $field) {
                         $oldVal = $denom->{$field};
@@ -617,7 +653,7 @@ class ViewVoucher extends ViewRecord
                     }
 
                     $denom->update([
-                        'bill_1000' => $data['bill_1000'] ?: 0, 'bill_500' => $data['bill_500'] ?: 0, 'bill_200' => $data['bill_200'] ?: 0, 'bill_100' => $data['bill_100'] ?: 0, 'bill_50' => $data['bill_50'] ?: 0, 'bill_20' => $data['bill_20'] ?: 0, 'bill_10' => $data['bill_10'] ?: 0, 'bill_5' => $data['bill_5'] ?: 0, 'coin_1' => $data['coin_1'] ?: 0, 'coin_0_50' => $data['coin_0_50'] ?: 0, 'coin_0_25' => $data['coin_0_25'] ?: 0, 'total_amount' => $tendered, 'change_given' => $changeGiven, 'is_change_received' => $data['is_change_received'] ?? true, 'remarks' => $data['remarks'] ?? null,
+                        'bill_1000' => $data['bill_1000'] ?: 0, 'bill_500' => $data['bill_500'] ?: 0, 'bill_200' => $data['bill_200'] ?: 0, 'bill_100' => $data['bill_100'] ?: 0, 'bill_50' => $data['bill_50'] ?: 0, 'bill_20' => $data['bill_20'] ?: 0, 'bill_10' => $data['bill_10'] ?: 0, 'bill_5' => $data['bill_5'] ?: 0, 'coin_1' => $data['coin_1'] ?: 0, 'coin_0_50' => $data['coin_0_50'] ?: 0, 'coin_0_25' => $data['coin_0_25'] ?: 0, 'total_amount' => $tendered, 'change_given' => $changeGiven, 'prior_deduction' => $deduction, 'is_change_received' => $data['is_change_received'] ?? true, 'remarks' => $data['remarks'] ?? null,
                     ]);
 
                     activity()

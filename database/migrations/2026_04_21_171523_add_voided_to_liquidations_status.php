@@ -11,7 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE liquidations MODIFY COLUMN status ENUM('pending', 'complete', 'short', 'excess', 'voided') NOT NULL DEFAULT 'pending'");
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'sqlite') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE liquidations MODIFY COLUMN status ENUM('pending', 'complete', 'short', 'excess', 'voided') NOT NULL DEFAULT 'pending'");
+        }
     }
 
     /**
@@ -19,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE liquidations MODIFY COLUMN status ENUM('pending', 'complete', 'short', 'excess') NOT NULL DEFAULT 'pending'");
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'sqlite') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE liquidations MODIFY COLUMN status ENUM('pending', 'complete', 'short', 'excess') NOT NULL DEFAULT 'pending'");
+        }
     }
 };

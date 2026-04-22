@@ -11,7 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE voucher_approvals MODIFY COLUMN action ENUM('checked','approved','rejected','paid','voided') NOT NULL");
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'sqlite') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE voucher_approvals MODIFY COLUMN action ENUM('checked','approved','rejected','paid','voided') NOT NULL");
+        }
     }
 
     /**
@@ -19,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE voucher_approvals MODIFY COLUMN action ENUM('checked','approved','rejected','paid') NOT NULL");
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'sqlite') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE voucher_approvals MODIFY COLUMN action ENUM('checked','approved','rejected','paid') NOT NULL");
+        }
     }
 };

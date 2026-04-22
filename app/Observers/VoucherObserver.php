@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Enums\VoucherStatus;
 use App\Models\Voucher;
+use Illuminate\Support\Facades\DB;
 
 class VoucherObserver
 {
@@ -87,20 +88,27 @@ class VoucherObserver
 
             // ── Petty Cash: low balance check + liquidation trigger ────────────
             if ($voucher->type === 'petty_cash') {
+
+                // ── 1. Fetch the just-saved denomination once and re-use it ───
+                $denomination = $voucher->denominations()->latest()->first();
+                $priorDeduction = $denomination ? (float) $denomination->prior_deduction : 0.0;
+
+                // ── 2. Net balance check — pure SQL, no PHP collection loop ───
                 $totalReplenishing = \App\Models\FloatReplenishment::sum('amount');
 
-                // Use denomination records for accurate physical cash disbursed.
-                // "amount" on the voucher != cash actually given out (change may have been returned).
-                $totalSpent = \App\Models\Denomination::where('denominatable_type', \App\Models\Voucher::class)
-                    ->whereHasMorph('denominatable', [\App\Models\Voucher::class], function ($q) {
-                        $q->where('type', 'petty_cash')
-                          ->where('status', VoucherStatus::Paid->value); // voided are excluded (status != paid)
+                // Single DB aggregation: SUM(total_amount - change_given) per paid petty-cash voucher
+                $totalSpent = \Illuminate\Support\Facades\DB::table('denominations')
+                    ->join('vouchers', function ($join) {
+                        $join->on('denominations.denominatable_id', '=', 'vouchers.id')
+                             ->where('denominations.denominatable_type', \App\Models\Voucher::class);
                     })
-                    ->get()
-                    ->sum(fn ($d) => $d->total_amount - ($d->is_change_received ? $d->change_given : 0));
+                    ->where('vouchers.type', 'petty_cash')
+                    ->where('vouchers.status', VoucherStatus::Paid->value)
+                    ->selectRaw('COALESCE(SUM(denominations.total_amount - IF(denominations.is_change_received = 1, denominations.change_given, 0)), 0) as net_spent')
+                    ->value('net_spent');
 
                 // Fallback: if no denomination records exist, use voucher amounts directly
-                if ($totalSpent === 0.0) {
+                if ((float) $totalSpent === 0.0) {
                     $totalSpent = \App\Models\Voucher::where('type', 'petty_cash')
                         ->where('status', VoucherStatus::Paid->value)
                         ->sum('amount');
@@ -108,31 +116,40 @@ class VoucherObserver
 
                 $currentBalance = (float) $totalReplenishing - (float) $totalSpent;
 
+                // ── 3. Dispatch low-balance notifications to the queue ─────────
+                // Using onQueue() so the HTTP response is not blocked by email/push sends.
                 if ($currentBalance < 2000) {
                     try {
                         $managers = \App\Models\User::permission('voucher.manage_float')->get();
                         foreach ($managers as $manager) {
-                            $manager->notify(new \App\Notifications\LowBalanceNotification($currentBalance));
+                            $manager->notify(
+                                (new \App\Notifications\LowBalanceNotification($currentBalance))
+                                    ->onQueue('notifications')
+                            );
                         }
                     } catch (\Throwable $e) {
                         \Illuminate\Support\Facades\Log::error('Low Balance Notification Failed: ' . $e->getMessage());
                     }
                 }
 
-                // ── Auto-trigger liquidation ───────────────────────────────────
+                // ── 4. Auto-trigger liquidation ───────────────────────────────
                 $threshold = (float) config('liquidation.minimum_amount', 0);
                 if ((float) $voucher->amount >= $threshold) {
                     $deadlineDays = config('liquidation.deadline_days');
                     $dueDate = $deadlineDays ? now()->addDays((int) $deadlineDays)->toDateString() : null;
 
+                    // Re-use the denomination already fetched above
+                    $netToJustify = max(0, (float) $voucher->amount - $priorDeduction);
+
                     $voucher->updateQuietly(['liquidation_status' => 'pending']);
 
                     \App\Models\Liquidation::create([
                         'voucher_id'      => $voucher->id,
-                        'liquidated_by'   => $voucher->user_id, // pre-assigns to voucher creator; custodian will update
+                        'liquidated_by'   => $voucher->user_id,
                         'amount_spent'    => 0,
                         'amount_returned' => 0,
-                        'amount_short'    => (float) $voucher->amount,
+                        'prior_deduction' => $priorDeduction,
+                        'amount_short'    => $netToJustify,
                         'status'          => 'pending',
                         'due_date'        => $dueDate,
                     ]);

@@ -78,6 +78,12 @@ class LiquidationResource extends Resource
                                 $set('_voucher_payee', $voucher->payee);
                                 $set('_voucher_number', $voucher->voucher_number);
                                 $set('amount_short', $voucher->amount);
+                                // Pre-fill the prior_deduction from the latest denomination record
+                                $denom = $voucher->denominations()->latest()->first();
+                                $deduction = $denom ? (float) $denom->prior_deduction : 0.0;
+                                $set('prior_deduction', $deduction);
+                                // Recalculate amount_short to net of deduction
+                                $set('amount_short', max(0, (float)$voucher->amount - $deduction));
                             }
                         }),
 
@@ -97,6 +103,7 @@ class LiquidationResource extends Resource
                     Forms\Components\Hidden::make('_voucher_payee'),
                     Forms\Components\Hidden::make('_voucher_number'),
                     Forms\Components\Hidden::make('amount_short'),
+                    Forms\Components\Hidden::make('prior_deduction'),
                 ]),
 
             Forms\Components\Section::make('Settlement Details')
@@ -109,10 +116,12 @@ class LiquidationResource extends Resource
                             ->default(0)
                             ->live(debounce: 500)
                             ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                $original = (float) ($get('_voucher_amount') ?? 0);
-                                $spent = (float) ($get('amount_spent') ?? 0);
-                                $returned = (float) ($get('amount_returned') ?? 0);
-                                $short = max(0, $original - $spent - $returned);
+                                $original  = (float) ($get('_voucher_amount') ?? 0);
+                                $deduction = (float) ($get('prior_deduction') ?? 0);
+                                $netTarget = max(0, $original - $deduction);
+                                $spent     = (float) ($get('amount_spent') ?? 0);
+                                $returned  = (float) ($get('amount_returned') ?? 0);
+                                $short     = max(0, $netTarget - $spent - $returned);
                                 $set('amount_short', $short);
                             })
                             ->extraInputAttributes(['class' => 'font-mono text-lg']),
@@ -124,10 +133,12 @@ class LiquidationResource extends Resource
                             ->default(0)
                             ->live(debounce: 500)
                             ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                                $original = (float) ($get('_voucher_amount') ?? 0);
-                                $spent = (float) ($get('amount_spent') ?? 0);
-                                $returned = (float) ($get('amount_returned') ?? 0);
-                                $short = max(0, $original - $spent - $returned);
+                                $original  = (float) ($get('_voucher_amount') ?? 0);
+                                $deduction = (float) ($get('prior_deduction') ?? 0);
+                                $netTarget = max(0, $original - $deduction);
+                                $spent     = (float) ($get('amount_spent') ?? 0);
+                                $returned  = (float) ($get('amount_returned') ?? 0);
+                                $short     = max(0, $netTarget - $spent - $returned);
                                 $set('amount_short', $short);
                             })
                             ->extraInputAttributes(['class' => 'font-mono text-lg text-success-600']),
@@ -137,11 +148,13 @@ class LiquidationResource extends Resource
                         ->label('Live Calculation')
                         ->live()
                         ->content(function (Forms\Get $get) {
-                            $original = (float) ($get('_voucher_amount') ?? 0);
-                            $spent = (float) ($get('amount_spent') ?? 0);
-                            $returned = (float) ($get('amount_returned') ?? 0);
+                            $original  = (float) ($get('_voucher_amount') ?? 0);
+                            $deduction = (float) ($get('prior_deduction') ?? 0);
+                            $netTarget = max(0, $original - $deduction);
+                            $spent     = (float) ($get('amount_spent') ?? 0);
+                            $returned  = (float) ($get('amount_returned') ?? 0);
                             $accounted = $spent + $returned;
-                            $diff = round($accounted - $original, 2);
+                            $diff      = round($accounted - $netTarget, 2);
 
                             $panelStyle = match (true) {
                                 abs($diff) <= 0.01 => 'background-color:#f0fdf4; border-color:#86efac;',
@@ -156,9 +169,15 @@ class LiquidationResource extends Resource
                                 default            => '—',
                             };
 
+                            $deductionRow = $deduction > 0
+                                ? "<div style='color:#b91c1c;margin-bottom:4px;'>Advance Deducted: AED " . number_format($deduction, 2) . "</div>"
+                                . "<div style='margin-bottom:4px;font-weight:600;'>Net Receipts Needed: AED " . number_format($netTarget, 2) . "</div>"
+                                : '';
+
                             return new \Illuminate\Support\HtmlString(
                                 "<div style='padding:14px;border-radius:10px;border:1px solid;{$panelStyle}font-family:monospace;'>" .
-                                "<div style='margin-bottom:4px;'>Original: AED " . number_format($original, 2) . "</div>" .
+                                "<div style='margin-bottom:4px;'>Original Voucher: AED " . number_format($original, 2) . "</div>" .
+                                $deductionRow .
                                 "<div style='margin-bottom:4px;'>Spent:    AED " . number_format($spent, 2) . "</div>" .
                                 "<div style='margin-bottom:8px;'>Returned: AED " . number_format($returned, 2) . "</div>" .
                                 "<div style='padding-top:8px;border-top:1px solid #e5e7eb;font-family:sans-serif;'>Status: {$statusMsg}</div>" .
@@ -249,12 +268,21 @@ class LiquidationResource extends Resource
                                             ->money('AED')
                                             ->extraAttributes(['class' => 'font-mono text-lg text-success-600']),
                                         \Filament\Infolists\Components\TextEntry::make('amount_short')
-                                            ->label('Shortage')
+                                            ->label('Shortage / Balance')
                                             ->money('AED')
                                             ->extraAttributes(['class' => 'font-mono text-lg'])
                                             ->color(fn ($state) => (float)$state > 0 ? 'danger' : 'success'),
                                     ]),
-                                
+
+                                // Cash Advance deduction row — only shown if > 0
+                                \Filament\Infolists\Components\TextEntry::make('prior_deduction')
+                                    ->label('Cash Advance / Prior Deduction')
+                                    ->money('AED')
+                                    ->color('warning')
+                                    ->helperText('This amount was deducted at disbursement. Receipts are only required for the net amount.')
+                                    ->visible(fn ($record) => (float) $record->prior_deduction > 0)
+                                    ->columnSpanFull(),
+
                                 \Filament\Infolists\Components\TextEntry::make('remarks')
                                     ->label('Custodian Remarks')
                                     ->prose()

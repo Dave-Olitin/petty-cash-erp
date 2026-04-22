@@ -30,6 +30,8 @@ class EditLiquidation extends EditRecord
             $data['_voucher_payee']  = $voucher->payee;
             $data['_voucher_number'] = $voucher->voucher_number;
         }
+        // Ensure prior_deduction is visible in the form from the saved record
+        $data['prior_deduction'] = $this->getRecord()->prior_deduction ?? 0;
         return $data;
     }
 
@@ -44,12 +46,15 @@ class EditLiquidation extends EditRecord
         $voucher = $this->getRecord()?->voucher;
         if (!$voucher) return $data;
 
-        $original = (float) $voucher->amount;
-        $spent    = (float) ($data['amount_spent'] ?? 0);
-        $returned = (float) ($data['amount_returned'] ?? 0);
-        $diff = round(($spent + $returned) - $original, 2);
+        $original  = (float) $voucher->amount;
+        $deduction = (float) ($this->getRecord()->prior_deduction ?? $data['prior_deduction'] ?? 0);
+        $netTarget = max(0, $original - $deduction);
+        $spent     = (float) ($data['amount_spent'] ?? 0);
+        $returned  = (float) ($data['amount_returned'] ?? 0);
+        $diff      = round(($spent + $returned) - $netTarget, 2);
 
-        $data['amount_short'] = max(0, -$diff);
+        $data['amount_short']    = max(0, -$diff);
+        $data['prior_deduction'] = $deduction;
 
         // Only stamp the time when the liquidation is first settled, not on subsequent edits
         if (empty($this->getRecord()->liquidated_at)) {
@@ -107,10 +112,12 @@ class EditLiquidation extends EditRecord
         }
 
         // ── Auto-generate OR update the linked Receipt Voucher ──────────────────
-        $returned = (float) $record->amount_returned;
-        $spent    = (float) $record->amount_spent;
-        $original = (float) ($voucher->amount ?? 0);
-        $variance = round(($spent + $returned) - $original, 2);
+        $returned  = (float) $record->amount_returned;
+        $spent     = (float) $record->amount_spent;
+        $original  = (float) ($voucher->amount ?? 0);
+        $deduction = (float) ($record->prior_deduction ?? 0);
+        $netTarget = max(0, $original - $deduction);
+        $variance  = round(($spent + $returned) - $netTarget, 2);
 
         // Find any existing linked RV (including soft-deleted, to prevent duplicates)
         $existingRv = \App\Models\Voucher::where('type', 'receipt')
@@ -225,17 +232,28 @@ class EditLiquidation extends EditRecord
      */
     private function buildRvBreakdown(\App\Models\Voucher $voucher, float $original, float $spent, float $returned, float $variance, \App\Models\Liquidation $record): string
     {
-        return implode("\n", [
+        $deduction = (float) ($record->prior_deduction ?? 0);
+        $netTarget = max(0, $original - $deduction);
+
+        $lines = [
             "AUTO-GENERATED - Cash Return from Liquidation",
             "Reference PCV: {$voucher->voucher_number}",
             "Payee/Employee: {$voucher->payee}",
             "---------------------------------",
             "Original Advance           : AED " . number_format($original, 2),
-            "Amount Spent (w/ receipts) : AED " . number_format($spent, 2),
-            "Cash Returned to Box       : AED " . number_format($returned, 2),
-            "Variance                   : " . ($variance > 0 ? '+' : '') . "AED " . number_format($variance, 2),
-            "Liquidation Status         : " . ucfirst($record->status),
-            ($record->remarks ? "Remarks: {$record->remarks}" : ''),
-        ]);
+        ];
+
+        if ($deduction > 0) {
+            $lines[] = "Less: Cash Advance/Deduction: AED " . number_format($deduction, 2);
+            $lines[] = "Net Receipts Required      : AED " . number_format($netTarget, 2);
+        }
+
+        $lines[] = "Amount Spent (w/ receipts) : AED " . number_format($spent, 2);
+        $lines[] = "Cash Returned to Box       : AED " . number_format($returned, 2);
+        $lines[] = "Variance                   : " . ($variance > 0 ? '+' : '') . "AED " . number_format($variance, 2);
+        $lines[] = "Liquidation Status         : " . ucfirst($record->status);
+        if ($record->remarks) $lines[] = "Remarks: {$record->remarks}";
+
+        return implode("\n", $lines);
     }
 }

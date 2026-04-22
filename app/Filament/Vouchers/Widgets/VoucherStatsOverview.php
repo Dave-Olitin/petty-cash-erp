@@ -29,9 +29,16 @@ class VoucherStatsOverview extends BaseWidget
             // Base query — scope to user if they're a regular requester
             // ONLY count petty cash and payment vouchers, as Receipt Vouchers are not expenses
             // and Bank Encashments are float transfers.
-            $base = Voucher::query()->whereIn('type', ['petty_cash', 'payment']);
+            $base = Voucher::query()
+                ->select('vouchers.*')
+                ->whereIn('vouchers.type', ['petty_cash', 'payment'])
+                ->leftJoin('denominations', function (\Illuminate\Database\Query\JoinClause $join) {
+                    $join->on('vouchers.id', '=', 'denominations.denominatable_id')
+                         ->where('denominations.denominatable_type', Voucher::class);
+                });
+                
             if (!$user->isHeadOffice() && !$user->hasAnyRole(['Accountant', 'Approver', 'Admin', 'Super Admin'])) {
-                $base->where('user_id', $user->id);
+                $base->where('vouchers.user_id', $user->id);
             }
 
             // --- This Month vs Last Month ---
@@ -39,37 +46,37 @@ class VoucherStatsOverview extends BaseWidget
             $lastMonth = now()->subMonth()->startOfMonth();
             $lastMonthEnd = now()->subMonth()->endOfMonth();
 
-            $paidThisMonth = (clone $base)->where('status', 'paid')
-                ->whereBetween('updated_at', [$thisMonth, now()])
-                ->sum('amount');
+            $paidThisMonth = (clone $base)->where('vouchers.status', 'paid')
+                ->whereBetween('vouchers.updated_at', [$thisMonth, now()])
+                ->sum(\Illuminate\Support\Facades\DB::raw('vouchers.amount - COALESCE(denominations.prior_deduction, 0)'));
 
-            $paidLastMonth = (clone $base)->where('status', 'paid')
-                ->whereBetween('updated_at', [$lastMonth, $lastMonthEnd])
-                ->sum('amount');
+            $paidLastMonth = (clone $base)->where('vouchers.status', 'paid')
+                ->whereBetween('vouchers.updated_at', [$lastMonth, $lastMonthEnd])
+                ->sum(\Illuminate\Support\Facades\DB::raw('vouchers.amount - COALESCE(denominations.prior_deduction, 0)'));
 
             // Month-over-month trend for paid amounts (last 6 months)
             $paidTrend = collect(range(5, 0))->map(fn ($i) =>
-                (clone $base)->where('status', 'paid')
-                    ->whereBetween('updated_at', [
+                (clone $base)->where('vouchers.status', 'paid')
+                    ->whereBetween('vouchers.updated_at', [
                         now()->subMonths($i)->startOfMonth(),
                         now()->subMonths($i)->endOfMonth(),
                     ])
-                    ->sum('amount')
+                    ->sum(\Illuminate\Support\Facades\DB::raw('vouchers.amount - COALESCE(denominations.prior_deduction, 0)'))
             )->values()->toArray();
 
             // --- Pending Approvals (last 7 days trend) ---
-            $pendingNow = (clone $base)->whereIn('status', ['pending_checker', 'pending_approver'])->count();
+            $pendingNow = (clone $base)->whereIn('vouchers.status', ['pending_checker', 'pending_approver'])->count();
             $pendingTrend = collect(range(6, 0))->map(fn ($i) =>
-                (clone $base)->whereIn('status', ['pending_checker', 'pending_approver'])
-                    ->whereDate('updated_at', now()->subDays($i))
+                (clone $base)->whereIn('vouchers.status', ['pending_checker', 'pending_approver'])
+                    ->whereDate('vouchers.updated_at', now()->subDays($i))
                     ->count()
             )->values()->toArray();
 
             // --- Ready-to-Pay (fully approved) ---
-            $readyToPay = (clone $base)->where('status', 'approved')->count();
+            $readyToPay = (clone $base)->where('vouchers.status', 'approved')->count();
             $readyTrend = collect(range(6, 0))->map(fn ($i) =>
-                (clone $base)->where('status', 'approved')
-                    ->whereDate('updated_at', now()->subDays($i))
+                (clone $base)->where('vouchers.status', 'approved')
+                    ->whereDate('vouchers.updated_at', now()->subDays($i))
                     ->count()
             )->values()->toArray();
 

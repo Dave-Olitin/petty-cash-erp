@@ -19,6 +19,7 @@ class Liquidation extends Model
         'amount_spent',
         'amount_returned',
         'amount_short',
+        'prior_deduction',
         'status',
         'remarks',
         'due_date',
@@ -28,11 +29,12 @@ class Liquidation extends Model
     protected function casts(): array
     {
         return [
-            'amount_spent'    => 'decimal:2',
-            'amount_returned' => 'decimal:2',
-            'amount_short'    => 'decimal:2',
-            'due_date'        => 'date',
-            'liquidated_at'   => 'datetime',
+            'amount_spent'     => 'decimal:2',
+            'amount_returned'  => 'decimal:2',
+            'amount_short'     => 'decimal:2',
+            'prior_deduction'  => 'decimal:2',
+            'due_date'         => 'date',
+            'liquidated_at'    => 'datetime',
         ];
     }
 
@@ -58,16 +60,26 @@ class Liquidation extends Model
 
     // ── Computed helpers ──────────────────────────────────────────────────────
 
-    /** Total accounted = spent + returned */
+    /** Total accounted = spent + returned + prior_deduction (advance already settled) */
     public function getTotalAccountedAttribute(): float
     {
-        return (float) $this->amount_spent + (float) $this->amount_returned;
+        return (float) $this->amount_spent + (float) $this->amount_returned + (float) $this->prior_deduction;
     }
 
-    /** Variance against original voucher amount (positive = excess, negative = short) */
+    /** 
+     * Net receipts target = voucher amount minus any pre-settled deductions.
+     * Variance = total_accounted vs original voucher amount.
+     */
     public function getVarianceAttribute(): float
     {
         return $this->total_accounted - (float) ($this->voucher?->amount ?? 0);
+    }
+
+    /** Amount of receipts still needed from the employee */
+    public function getReceiptsNeededAttribute(): float
+    {
+        $net = (float) ($this->voucher?->amount ?? 0) - (float) $this->prior_deduction;
+        return max(0, $net - (float) $this->amount_spent - (float) $this->amount_returned);
     }
 
     public function isOverdue(): bool

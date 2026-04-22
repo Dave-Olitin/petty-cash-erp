@@ -17,7 +17,7 @@ class JournalEntryObserver
             return;
         }
 
-        $voucher = $journalEntry->voucher()->with('liquidation')->first();
+        $voucher = $journalEntry->voucher()->with(['liquidation', 'denominations'])->first();
 
         if (! $voucher) {
             return;
@@ -28,50 +28,57 @@ class JournalEntryObserver
             return;
         }
 
-        $disbursed   = (float) $voucher->amount;
-        $spent       = (float) $journalEntry->total_debit;
-        $returned    = max(0, $disbursed - $spent);
-        $short       = max(0, $spent - $disbursed);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($journalEntry, $voucher) {
+            $original  = (float) $voucher->amount;
+            $denom     = $voucher->denominations()->first();
+            $deduction = $denom ? (float) $denom->prior_deduction : 0;
+            $netTarget = max(0, $original - $deduction);
 
-        // Determine settlement status
-        $status = 'complete';
+            $spent     = (float) $journalEntry->total_debit;
+            $returned  = max(0, $netTarget - $spent);
+            $short     = max(0, $spent - $netTarget);
 
-        $existingLiquidation = $voucher->liquidation;
+            // Determine settlement status
+            $status = 'complete';
 
-        // Guard: only skip if the liquidation is already COMPLETE and was set manually
-        // (i.e., it has no auto-liquidated tag — an accountant already settled it by hand)
-        if (
-            $existingLiquidation
-            && $existingLiquidation->status === 'complete'
-            && ! str_contains($existingLiquidation->remarks ?? '', '[auto-liquidated]')
-        ) {
-            return;
-        }
+            $existingLiquidation = $voucher->liquidation;
 
-        $remarkTag  = '[auto-liquidated] JE: ' . $journalEntry->entry_no;
-        $remarkNote = $short > 0
-            ? " | Short by AED " . number_format($short, 2)
-            : ($returned > 0 ? " | AED " . number_format($returned, 2) . " returned." : " | Fully settled.");
+            // Guard: only skip if the liquidation is already COMPLETE and was set manually
+            // (i.e., it has no auto-liquidated tag — an accountant already settled it by hand)
+            if (
+                $existingLiquidation
+                && $existingLiquidation->status === 'complete'
+                && ! str_contains($existingLiquidation->remarks ?? '', '[auto-liquidated]')
+            ) {
+                return;
+            }
 
-        $payload = [
-            'voucher_id'      => $voucher->id,
-            'liquidated_by'   => $journalEntry->created_by ?? auth()->id() ?? 1,
-            'amount_spent'    => $spent,
-            'amount_returned' => $returned,
-            'amount_short'    => $short,
-            'status'          => $status,
-            'remarks'         => $remarkTag . $remarkNote,
-            'liquidated_at'   => $journalEntry->date ?? now(),
-        ];
+            $remarkTag  = '[auto-liquidated] JE: ' . $journalEntry->entry_no;
+            $remarkNote = $short > 0
+                ? " | Short by AED " . number_format($short, 2)
+                : ($returned > 0 ? " | AED " . number_format($returned, 2) . " returned." : " | Fully settled (Net: " . number_format($netTarget, 2) . ").");
 
-        if ($existingLiquidation) {
-            $existingLiquidation->update($payload);
-        } else {
-            Liquidation::create($payload);
-        }
+            $payload = [
+                'voucher_id'      => $voucher->id,
+                'liquidated_by'   => $journalEntry->created_by ?? auth()->id() ?? 1,
+                'amount_spent'    => $spent,
+                'amount_returned' => $returned,
+                'amount_short'    => $short,
+                'prior_deduction' => $deduction,
+                'status'          => $status,
+                'remarks'         => $remarkTag . $remarkNote,
+                'liquidated_at'   => $journalEntry->date ?? now(),
+            ];
 
-        // Sync the voucher's liquidation_status field
-        $voucher->update(['liquidation_status' => 'liquidated']);
+            if ($existingLiquidation) {
+                $existingLiquidation->update($payload);
+            } else {
+                Liquidation::create($payload);
+            }
+
+            // Sync the voucher's liquidation_status field
+            $voucher->update(['liquidation_status' => 'liquidated']);
+        });
     }
 
     /**

@@ -24,15 +24,18 @@ class CreateLiquidation extends CreateRecord
         $voucher = \App\Models\Voucher::find($data['voucher_id']);
         if (!$voucher) return $data;
 
-        $original = (float) $voucher->amount;
-        $spent    = (float) ($data['amount_spent'] ?? 0);
-        $returned = (float) ($data['amount_returned'] ?? 0);
+        $original  = (float) $voucher->amount;
+        $deduction = (float) ($data['prior_deduction'] ?? 0);
+        $netTarget = max(0, $original - $deduction);
+        $spent     = (float) ($data['amount_spent'] ?? 0);
+        $returned  = (float) ($data['amount_returned'] ?? 0);
         $accounted = round($spent + $returned, 2);
-        $diff = round($accounted - $original, 2);
+        $diff      = round($accounted - $netTarget, 2);
 
-        $data['amount_short'] = max(0, -$diff);
-        $data['liquidated_at'] = now();
-        $data['liquidated_by'] = $data['liquidated_by'] ?? auth()->id();
+        $data['amount_short']    = max(0, -$diff);
+        $data['prior_deduction'] = $deduction;
+        $data['liquidated_at']   = now();
+        $data['liquidated_by']   = $data['liquidated_by'] ?? auth()->id();
 
         // Determine status
         if (abs($diff) <= 0.01) {

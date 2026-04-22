@@ -22,7 +22,7 @@ class LiquidationSummaryWidget extends BaseWidget
 
         $outstandingAmount = Liquidation::where('liquidations.status', 'pending')
             ->join('vouchers', 'vouchers.id', '=', 'liquidations.voucher_id')
-            ->sum('vouchers.amount');
+            ->sum(\Illuminate\Support\Facades\DB::raw('vouchers.amount - COALESCE(liquidations.prior_deduction, 0)'));
 
         $avgDays = Liquidation::complete()
             ->whereNotNull('liquidated_at')

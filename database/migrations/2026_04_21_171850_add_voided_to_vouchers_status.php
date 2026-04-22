@@ -11,7 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE vouchers MODIFY COLUMN status ENUM('draft','pending_checker','pending_approver','approved','rejected','paid','voided') NOT NULL DEFAULT 'draft'");
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'sqlite') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE vouchers MODIFY COLUMN status ENUM('draft','pending_checker','pending_approver','approved','rejected','paid','voided') NOT NULL DEFAULT 'draft'");
+        }
     }
 
     /**
@@ -19,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE vouchers MODIFY COLUMN status ENUM('draft','pending_checker','pending_approver','approved','rejected','paid') NOT NULL DEFAULT 'draft'");
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'sqlite') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE vouchers MODIFY COLUMN status ENUM('draft','pending_checker','pending_approver','approved','rejected','paid') NOT NULL DEFAULT 'draft'");
+        }
     }
 };
