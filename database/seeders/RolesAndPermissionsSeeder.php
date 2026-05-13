@@ -59,6 +59,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // Reports & Advanced
             'report.view',
             'voucher.edit_own_undisbursed',
+
+            // General Ledger Reports
+            'gl_report.view', // Can view Trial Balance, Account Ledger drill-down
         ];
 
         foreach ($permissions as $perm) {
@@ -100,6 +103,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'purchase_entry.edit',
             'purchase_entry.delete',
             'liquidation.edit_settled',
+            'gl_report.view',
         ]);
 
         // APPROVER — can view and give final approval/rejection

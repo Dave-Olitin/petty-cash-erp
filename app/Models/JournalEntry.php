@@ -72,4 +72,21 @@ class JournalEntry extends Model
     {
         return $this->hasMany(JournalEntryLine::class);
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Scopes & Accessors
+    // ──────────────────────────────────────────────────────────────────────
+
+    public function scopeInPeriod($query, ?\Carbon\Carbon $from = null, ?\Carbon\Carbon $to = null)
+    {
+        return $query->when($from, fn($q) => $q->whereDate('date', '>=', $from))
+                     ->when($to, fn($q) => $q->whereDate('date', '<=', $to));
+    }
+
+    public function getIsBalancedAttribute(): bool
+    {
+        $debit = (float) $this->total_debit;
+        $credit = (float) $this->total_credit;
+        return abs($debit - $credit) < 0.001;
+    }
 }
