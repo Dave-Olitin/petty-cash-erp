@@ -848,28 +848,57 @@ class VoucherResource extends Resource
                     ->mountUsing(function (Forms\Form $form, Voucher $record) {
                         $form->fill([
                             'voucher_amount' => $record->amount,
-                            'cheque_no'      => $record->cheque_no,
-                            'cheque_date'    => $record->cheque_date,
-                            'bank'           => $record->bank,
+                            'multiple_payments' => $record->multiple_payments ?? [
+                                [
+                                    'cheque_no' => $record->cheque_no,
+                                    'cheque_date' => $record->cheque_date,
+                                    'bank' => $record->bank,
+                                    'amount' => $record->amount,
+                                ]
+                            ],
                         ]);
                     })
                     ->form([
                         Forms\Components\Hidden::make('voucher_amount'),
                         
-                        Forms\Components\Section::make('Cheque / Bank Transfer Details')
-                            ->description('Confirm the final payment references for this voucher.')
-                            ->visible(fn (Voucher $record) => in_array($record->type, ['payment', 'bank_encashment']))
+                        Forms\Components\Repeater::make('multiple_payments')
+                            ->label('Payment References')
                             ->schema([
-                                Forms\Components\TextInput::make('cheque_no')
-                                    ->label('Cheque / Ref No.')
-                                    ->maxLength(50),
-                                Forms\Components\DatePicker::make('cheque_date')
-                                    ->label('Cheque Date')
-                                    ->native(false),
-                                Forms\Components\TextInput::make('bank')
-                                    ->label('Bank Name')
-                                    ->maxLength(100),
-                            ])->columns(3),
+                                Forms\Components\Grid::make(4)->schema([
+                                    Forms\Components\TextInput::make('cheque_no')
+                                        ->label('Ref/Cheque #')
+                                        ->required(),
+                                    Forms\Components\DatePicker::make('cheque_date')
+                                        ->label('Date')
+                                        ->required()
+                                        ->native(false),
+                                    Forms\Components\TextInput::make('bank')
+                                        ->label('Bank')
+                                        ->required(),
+                                    Forms\Components\TextInput::make('amount')
+                                        ->label('Amount')
+                                        ->numeric()
+                                        ->prefix('AED')
+                                        ->required()
+                                        ->live(debounce: 500),
+                                ]),
+                            ])
+                            ->default([])
+                            ->reorderable(false)
+                            ->itemLabel(fn (array $state): ?string => 
+                                ($state['cheque_no'] ?? 'Payment') . 
+                                ($state['amount'] ? ' — AED ' . number_format((float) $state['amount'], 2) : '')
+                            )
+                            ->hint(function (Forms\Get $get) {
+                                $payments = $get('multiple_payments') ?? [];
+                                $total = collect($payments)->sum(fn($p) => (float)($p['amount'] ?? 0));
+                                $target = (float)$get('voucher_amount');
+                                
+                                if (abs($total - $target) < 0.01) {
+                                    return new \Illuminate\Support\HtmlString('<span class="text-success-600 font-bold">✅ Total Matches (AED ' . number_format($total, 2) . ')</span>');
+                                }
+                                return new \Illuminate\Support\HtmlString('<span class="text-danger-600 font-bold">⚠️ Total (AED ' . number_format($total, 2) . ') must equal AED ' . number_format($target, 2) . '</span>');
+                            }),
 
                         Forms\Components\Section::make('Physical Cash Breakdown')
                             ->description(fn (Voucher $record) => new \Illuminate\Support\HtmlString("Voucher Total: <strong>AED " . number_format((float) $record->amount, 2) . "</strong> &mdash; Please count the currency notes and coins."))
@@ -982,10 +1011,26 @@ class VoucherResource extends Resource
                     ->visible(fn (Voucher $record): bool => in_array($record->status, ['pending_checker', 'pending_approver', 'approved']) && auth()->user()->can('voucher.pay'))
                     ->action(function (Voucher $record, array $data) {
                         if (in_array($record->type, ['payment', 'bank_encashment'])) {
+                            $payments = $data['multiple_payments'] ?? [];
+                            $total = collect($payments)->sum(fn($p) => (float)($p['amount'] ?? 0));
+                            
+                            if (abs($total - (float)$record->amount) > 0.01) {
+                                Notification::make()
+                                    ->title('Payment total mismatch')
+                                    ->body('The sum of multiple payments (AED ' . number_format($total, 2) . ') must equal the voucher total (AED ' . number_format($record->amount, 2) . ').')
+                                    ->danger()
+                                    ->send();
+                                return;
+                            }
+
+                            // Sync legacy fields with the first payment for backward compatibility
+                            $first = $payments[0] ?? null;
+                            
                             $record->update([
-                                'cheque_no' => $data['cheque_no'] ?? null,
-                                'cheque_date' => $data['cheque_date'] ?? null,
-                                'bank' => $data['bank'] ?? null,
+                                'multiple_payments' => $payments,
+                                'cheque_no' => $first['cheque_no'] ?? null,
+                                'cheque_date' => $first['cheque_date'] ?? null,
+                                'bank' => $first['bank'] ?? null,
                             ]);
                             
                             $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
@@ -1280,21 +1325,48 @@ class VoucherResource extends Resource
                         ])->from('lg'),
 
                         \Filament\Infolists\Components\Section::make('Bank Settlement Details')
-                            ->visible(fn ($record) => !empty($record->cheque_no))
+                            ->visible(fn ($record) => !empty($record->cheque_no) || !empty($record->multiple_payments))
                             ->schema([
-                                \Filament\Infolists\Components\TextEntry::make('cheque_no')
-                                    ->label('Cheque Reference')
-                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                    ->fontFamily('mono')
-                                    ->icon('heroicon-m-credit-card'),
-                                \Filament\Infolists\Components\TextEntry::make('cheque_date')
-                                    ->label('Release Date')
-                                    ->date('d M Y')
-                                    ->icon('heroicon-m-calendar'),
-                                \Filament\Infolists\Components\TextEntry::make('bank')
-                                    ->label('Issuing Bank')
-                                    ->icon('heroicon-m-building-library'),
-                            ])->columns(3),
+                                \Filament\Infolists\Components\RepeatableEntry::make('multiple_payments')
+                                    ->label('Recorded Payments')
+                                    ->hidden(fn ($record) => empty($record->multiple_payments))
+                                    ->schema([
+                                        \Filament\Infolists\Components\Grid::make(4)->schema([
+                                            \Filament\Infolists\Components\TextEntry::make('cheque_no')
+                                                ->label('Reference')
+                                                ->weight(\Filament\Support\Enums\FontWeight::Bold),
+                                            \Filament\Infolists\Components\TextEntry::make('cheque_date')
+                                                ->label('Date')
+                                                ->date('d M Y'),
+                                            \Filament\Infolists\Components\TextEntry::make('bank')
+                                                ->label('Bank'),
+                                            \Filament\Infolists\Components\TextEntry::make('amount')
+                                                ->label('Amount')
+                                                ->money('aed')
+                                                ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                                ->color('primary'),
+                                        ]),
+                                    ])
+                                    ->columnSpanFull(),
+
+                                // Legacy view for single payment vouchers without multiple_payments array
+                                \Filament\Infolists\Components\Grid::make(3)
+                                    ->hidden(fn ($record) => !empty($record->multiple_payments))
+                                    ->schema([
+                                        \Filament\Infolists\Components\TextEntry::make('cheque_no')
+                                            ->label('Cheque Reference')
+                                            ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                            ->fontFamily('mono')
+                                            ->icon('heroicon-m-credit-card'),
+                                        \Filament\Infolists\Components\TextEntry::make('cheque_date')
+                                            ->label('Release Date')
+                                            ->date('d M Y')
+                                            ->icon('heroicon-m-calendar'),
+                                        \Filament\Infolists\Components\TextEntry::make('bank')
+                                            ->label('Issuing Bank')
+                                            ->icon('heroicon-m-building-library'),
+                                    ]),
+                            ]),
 
                         \Filament\Infolists\Components\TextEntry::make('attachment_paths')
                             ->label('Supporting Evidence')

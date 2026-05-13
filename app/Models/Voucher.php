@@ -39,6 +39,7 @@ class Voucher extends Model implements HasMedia
         'cheque_no',
         'cheque_date',
         'bank',
+        'multiple_payments',
         'transaction_summary',
         'invoice_breakdown',
         'liquidation_status',
@@ -50,6 +51,7 @@ class Voucher extends Model implements HasMedia
             'amount' => 'decimal:2',
             'attachment_paths' => 'array',
             'cheque_date' => 'date',
+            'multiple_payments' => 'array',
             'invoice_breakdown' => 'array',
             'liquidation_status' => 'string',
         ];
