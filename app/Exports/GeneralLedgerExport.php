@@ -72,7 +72,7 @@ class GeneralLedgerExport implements FromCollection, WithHeadings, WithMapping, 
             ['Period:', ($this->from ? $this->from->format('d/m/Y') : 'Beginning') . ' to ' . ($this->to ? $this->to->format('d/m/Y') : 'Today')],
             ['Branch:', $this->branch ?? 'All Branches'],
             [],
-            ['Date', 'JE Reference', 'Voucher #', 'Branch', 'Debit (AED)', 'Credit (AED)', 'Balance'],
+            ['Date', 'JE Reference', 'Voucher #', 'Payee', 'Branch', 'Debit (AED)', 'Credit (AED)', 'Balance'],
         ];
     }
 
@@ -81,7 +81,7 @@ class GeneralLedgerExport implements FromCollection, WithHeadings, WithMapping, 
         if ($item['__type'] === 'header') {
             return [
                 "── {$item['code']} — {$item['name']} ──",
-                '', '', '', '', '', '',
+                '', '', '', '', '', '', '',
             ];
         }
 
@@ -94,7 +94,7 @@ class GeneralLedgerExport implements FromCollection, WithHeadings, WithMapping, 
                 : ($isDebitNormal ? 'CR' : 'DR');
 
             return [
-                'SUBTOTAL', '', '', '',
+                'SUBTOTAL', '', '', '', '',
                 number_format($item['total_dr'], 2),
                 number_format($item['total_cr'], 2),
                 number_format(abs($closing), 2) . ' ' . $side,
@@ -114,6 +114,7 @@ class GeneralLedgerExport implements FromCollection, WithHeadings, WithMapping, 
             $line->journalEntry?->date?->format('d/m/Y') ?? '',
             $line->journalEntry?->entry_no ?? '',
             $line->journalEntry?->voucher?->voucher_number ?? '',
+            $line->journalEntry?->voucher?->payee ?? '',
             $line->branch ?? '',
             (float)$line->debit > 0 ? number_format($line->debit, 2) : '',
             (float)$line->credit > 0 ? number_format($line->credit, 2) : '',

@@ -147,7 +147,16 @@ class AccountCodeResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof AccountType ? $state->label() : ucfirst($state))
                     ->color(fn ($state) => $state instanceof AccountType ? $state->color() : 'gray')
-                    ->sortable(),
+                    ->sortable(query: fn (Builder $query, string $direction) => $query->orderByRaw("
+                        CASE type
+                            WHEN 'asset' THEN 1
+                            WHEN 'liability' THEN 2
+                            WHEN 'equity' THEN 3
+                            WHEN 'revenue' THEN 4
+                            WHEN 'expense' THEN 5
+                            ELSE 6
+                        END $direction
+                    ")->orderBy('code', 'asc')),
 
                 Tables\Columns\TextColumn::make('normal_balance')
                     ->label('Normal Balance')
@@ -251,7 +260,7 @@ class AccountCodeResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('code')
+            ->defaultSort('type')
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25);
     }

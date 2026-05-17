@@ -863,6 +863,7 @@ class VoucherResource extends Resource
                         
                         Forms\Components\Repeater::make('multiple_payments')
                             ->label('Payment References')
+                            ->visible(fn (Voucher $record) => in_array($record->type, ['payment', 'bank_encashment']))
                             ->schema([
                                 Forms\Components\Grid::make(4)->schema([
                                     Forms\Components\TextInput::make('cheque_no')
@@ -872,8 +873,24 @@ class VoucherResource extends Resource
                                         ->label('Date')
                                         ->required()
                                         ->native(false),
-                                    Forms\Components\TextInput::make('bank')
-                                        ->label('Bank')
+                                    Forms\Components\Select::make('bank')
+                                        ->label('Bank / Account')
+                                        ->searchable()
+                                        ->allowHtml()
+                                        ->getSearchResultsUsing(function (string $search) {
+                                            return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
+                                                ->orWhere('name', 'like', "%{$search}%")
+                                                ->limit(50)
+                                                ->get()
+                                                ->mapWithKeys(fn ($ac) => [$ac->code => "{$ac->code} — {$ac->name}"])
+                                                ->toArray();
+                                        })
+                                        ->getOptionLabelUsing(fn (?string $value) => $value
+                                            ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                                ? "{$ac->code} — {$ac->name}"
+                                                : $value
+                                            : null
+                                        )
                                         ->required(),
                                     Forms\Components\TextInput::make('amount')
                                         ->label('Amount')
@@ -1012,28 +1029,7 @@ class VoucherResource extends Resource
                     ->action(function (Voucher $record, array $data) {
                         if (in_array($record->type, ['payment', 'bank_encashment'])) {
                             $payments = $data['multiple_payments'] ?? [];
-                            $total = collect($payments)->sum(fn($p) => (float)($p['amount'] ?? 0));
-                            
-                            if (abs($total - (float)$record->amount) > 0.01) {
-                                Notification::make()
-                                    ->title('Payment total mismatch')
-                                    ->body('The sum of multiple payments (AED ' . number_format($total, 2) . ') must equal the voucher total (AED ' . number_format($record->amount, 2) . ').')
-                                    ->danger()
-                                    ->send();
-                                return;
-                            }
-
-                            // Sync legacy fields with the first payment for backward compatibility
-                            $first = $payments[0] ?? null;
-                            
-                            $record->update([
-                                'multiple_payments' => $payments,
-                                'cheque_no' => $first['cheque_no'] ?? null,
-                                'cheque_date' => $first['cheque_date'] ?? null,
-                                'bank' => $first['bank'] ?? null,
-                            ]);
-                            
-                            $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
+                            $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user(), $payments, []);
                             if ($error) {
                                 Notification::make()->title($error)->danger()->send();
                                 return;
@@ -1043,59 +1039,7 @@ class VoucherResource extends Resource
                             return;
                         }
 
-                        $tendered = ((int) ($data['bill_1000'] ?? 0) * 1000) 
-                            + ((int) ($data['bill_500'] ?? 0) * 500)
-                            + ((int) ($data['bill_200'] ?? 0) * 200)
-                            + ((int) ($data['bill_100'] ?? 0) * 100)
-                            + ((int) ($data['bill_50'] ?? 0) * 50)
-                            + ((int) ($data['bill_20'] ?? 0) * 20)
-                            + ((int) ($data['bill_10'] ?? 0) * 10)
-                            + ((int) ($data['bill_5'] ?? 0) * 5)
-                            + ((int) ($data['coin_1'] ?? 0) * 1)
-                            + ((int) ($data['coin_0_50'] ?? 0) * 0.50)
-                            + ((int) ($data['coin_0_25'] ?? 0) * 0.25);
-
-                        $changeGiven = round((float) ($data['change_given'] ?? 0), 2);
-                        $deduction   = round((float) ($data['prior_deduction'] ?? 0), 2);
-                        $netPhysical = round($tendered - $changeGiven, 2);
-                        $targetWithDeduction = round((float)$record->amount - $deduction, 2);
-
-                        if (abs($netPhysical - $targetWithDeduction) > 0.01) {
-                            Notification::make()
-                                ->title('Denomination validation failed')
-                                ->danger()
-                                ->body('Net Physical Cash (Tendered − Change) must equal the Net target (Voucher − Deduction). ' .
-                                       'You tendered AED ' . number_format($tendered, 2) .
-                                       ', change back AED ' . number_format($changeGiven, 2) .
-                                       ', net physical AED ' . number_format($netPhysical, 2) .
-                                       ' ≠ net target AED ' . number_format($targetWithDeduction, 2) . '.')
-                                ->send();
-                            throw \Illuminate\Validation\ValidationException::withMessages([
-                                'bill_1000' => 'Net amount mismatch.'
-                            ]);
-                        }
-
-                        // Save denominations securely
-                        $record->denominations()->create([
-                            'bill_1000'    => $data['bill_1000'] ?: 0,
-                            'bill_500'     => $data['bill_500'] ?: 0,
-                            'bill_200'     => $data['bill_200'] ?: 0,
-                            'bill_100'     => $data['bill_100'] ?: 0,
-                            'bill_50'      => $data['bill_50'] ?: 0,
-                            'bill_20'      => $data['bill_20'] ?: 0,
-                            'bill_10'      => $data['bill_10'] ?: 0,
-                            'bill_5'       => $data['bill_5'] ?: 0,
-                            'coin_1'       => $data['coin_1'] ?: 0,
-                            'coin_0_50'    => $data['coin_0_50'] ?: 0,
-                            'coin_0_25'    => $data['coin_0_25'] ?: 0,
-                            'total_amount' => $tendered,
-                            'change_given' => $changeGiven,
-                            'prior_deduction' => $deduction,
-                            'is_change_received' => $data['is_change_received'] ?? true,
-                            'remarks'      => $data['remarks'] ?? null,
-                        ]);
-
-                        $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user());
+                        $error = app(\App\Services\VoucherApprovalService::class)->markPaid($record, auth()->user(), [], $data);
                         if ($error) {
                             Notification::make()->title($error)->danger()->send();
                             return;

@@ -310,6 +310,7 @@ class ViewVoucher extends ViewRecord
                     
                     Forms\Components\Repeater::make('multiple_payments')
                         ->label('Payment References')
+                        ->visible(fn () => in_array($record->type, ['payment', 'bank_encashment']))
                         ->schema([
                             Forms\Components\Grid::make(4)->schema([
                                 Forms\Components\TextInput::make('cheque_no')
@@ -319,8 +320,24 @@ class ViewVoucher extends ViewRecord
                                     ->label('Date')
                                     ->required()
                                     ->native(false),
-                                Forms\Components\TextInput::make('bank')
-                                    ->label('Bank')
+                                Forms\Components\Select::make('bank')
+                                    ->label('Bank / Account')
+                                    ->searchable()
+                                    ->allowHtml()
+                                    ->getSearchResultsUsing(function (string $search) {
+                                        return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
+                                            ->orWhere('name', 'like', "%{$search}%")
+                                            ->limit(50)
+                                            ->get()
+                                            ->mapWithKeys(fn ($ac) => [$ac->code => "{$ac->code} — {$ac->name}"])
+                                            ->toArray();
+                                    })
+                                    ->getOptionLabelUsing(fn (?string $value) => $value
+                                        ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                            ? "{$ac->code} — {$ac->name}"
+                                            : $value
+                                        : null
+                                    )
                                     ->required(),
                                 Forms\Components\TextInput::make('amount')
                                     ->label('Amount')

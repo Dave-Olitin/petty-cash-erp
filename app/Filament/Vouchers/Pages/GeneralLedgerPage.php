@@ -36,8 +36,10 @@ class GeneralLedgerPage extends Page implements HasForms
         $this->form->fill([
             'from_date'   => now()->startOfMonth()->toDateString(),
             'to_date'     => now()->toDateString(),
-            'account_id'  => null,
-            'branch'      => null,
+            'account_id'  => [],
+            'branch'      => [],
+            'basis'       => [],
+            'payee'       => null,
         ]);
     }
 
@@ -63,6 +65,7 @@ class GeneralLedgerPage extends Page implements HasForms
 
                         Select::make('account_id')
                             ->label('Account Code')
+                            ->multiple()
                             ->options(
                                 AccountCode::query()
                                     ->orderBy('code')
@@ -74,10 +77,26 @@ class GeneralLedgerPage extends Page implements HasForms
 
                         Select::make('branch')
                             ->label('Branch')
+                            ->multiple()
                             ->options(LedgerBranch::pluck('name', 'name'))
                             ->searchable()
                             ->placeholder('All Branches'),
-                    ])->columns(4),
+
+                        Select::make('basis')
+                            ->label('Basis (Voucher Type)')
+                            ->multiple()
+                            ->options([
+                                'petty_cash' => 'Petty Cash',
+                                'payment' => 'Payment Voucher',
+                                'receipt' => 'Receipt Voucher',
+                                'bank_encashment' => 'Bank Encashment',
+                            ])
+                            ->placeholder('All Types'),
+
+                        \Filament\Forms\Components\TextInput::make('payee')
+                            ->label('Payee')
+                            ->placeholder('Search Payee'),
+                    ])->columns(3),
             ])
             ->statePath('data');
     }
@@ -89,12 +108,16 @@ class GeneralLedgerPage extends Page implements HasForms
         $f  = $this->data;
         $from      = !empty($f['from_date'])  ? Carbon::parse($f['from_date'])  : null;
         $to        = !empty($f['to_date'])    ? Carbon::parse($f['to_date'])    : null;
-        $accountId = $f['account_id'] ?? null;
-        $branch    = $f['branch']     ?? null;
+        $accountId = $f['account_id'] ?? [];
+        $branch    = $f['branch']     ?? [];
+        $basis     = $f['basis']      ?? [];
+        $payee     = $f['payee']      ?? null;
 
         $lines = JournalEntryLine::with(['journalEntry', 'journalEntry.voucher', 'accountCode'])
-            ->when($accountId, fn ($q) => $q->where('account_code_id', $accountId))
-            ->when($branch,    fn ($q) => $q->where('branch', $branch))
+            ->when(!empty($accountId), fn ($q) => $q->whereIn('account_code_id', $accountId))
+            ->when(!empty($branch),    fn ($q) => $q->whereIn('branch', $branch))
+            ->when(!empty($basis),     fn ($q) => $q->whereHas('journalEntry.voucher', fn ($v) => $v->whereIn('type', $basis)))
+            ->when(!empty($payee),     fn ($q) => $q->whereHas('journalEntry.voucher', fn ($v) => $v->where('payee', 'like', '%' . $payee . '%')))
             ->when($from, fn ($q) => $q->whereHas('journalEntry',
                 fn ($je) => $je->whereDate('date', '>=', $from)))
             ->when($to, fn ($q) => $q->whereHas('journalEntry',
@@ -141,12 +164,16 @@ class GeneralLedgerPage extends Page implements HasForms
         $f  = $this->data;
         $from      = !empty($f['from_date'])  ? Carbon::parse($f['from_date'])  : null;
         $to        = !empty($f['to_date'])    ? Carbon::parse($f['to_date'])    : null;
-        $accountId = $f['account_id'] ?? null;
-        $branch    = $f['branch']     ?? null;
+        $accountId = $f['account_id'] ?? [];
+        $branch    = $f['branch']     ?? [];
+        $basis     = $f['basis']      ?? [];
+        $payee     = $f['payee']      ?? null;
 
         $query = JournalEntryLine::query()
-            ->when($accountId, fn ($q) => $q->where('account_code_id', $accountId))
-            ->when($branch,    fn ($q) => $q->where('branch', $branch))
+            ->when(!empty($accountId), fn ($q) => $q->whereIn('account_code_id', $accountId))
+            ->when(!empty($branch),    fn ($q) => $q->whereIn('branch', $branch))
+            ->when(!empty($basis),     fn ($q) => $q->whereHas('journalEntry.voucher', fn ($v) => $v->whereIn('type', $basis)))
+            ->when(!empty($payee),     fn ($q) => $q->whereHas('journalEntry.voucher', fn ($v) => $v->where('payee', 'like', '%' . $payee . '%')))
             ->when($from, fn ($q) => $q->whereHas('journalEntry',
                 fn ($je) => $je->whereDate('date', '>=', $from)))
             ->when($to, fn ($q) => $q->whereHas('journalEntry',
@@ -191,10 +218,11 @@ class GeneralLedgerPage extends Page implements HasForms
         $f     = $this->data;
         $from  = !empty($f['from_date']) ? Carbon::parse($f['from_date']) : null;
         $to    = !empty($f['to_date'])   ? Carbon::parse($f['to_date'])   : null;
-        $branch = $f['branch'] ?? null;
+        $branch = $f['branch'] ?? [];
+        $branchStr = !empty($branch) ? implode(', ', $branch) : null;
 
         return Excel::download(
-            new GeneralLedgerExport($this->ledgerGroups, $from, $to, $branch),
+            new GeneralLedgerExport($this->ledgerGroups, $from, $to, $branchStr),
             'General_Ledger_' . now()->format('Y-m-d') . '.xlsx'
         );
     }

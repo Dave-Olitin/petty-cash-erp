@@ -215,13 +215,13 @@ class VoucherApprovalService
      * Mark an approved voucher as paid.
      * Returns null on success, or an error string if the state is invalid.
      */
-    public function markPaid(Voucher $voucher, User $actor): ?string
+    public function markPaid(Voucher $voucher, User $actor, array $paymentData = [], array $denominationData = []): ?string
     {
         // Capture all data needed for notifications BEFORE the transaction
         // so notification sends happen after the transaction commits (non-blocking).
         $notifyData = null;
 
-        $error = DB::transaction(function () use ($voucher, $actor, &$notifyData) {
+        $error = DB::transaction(function () use ($voucher, $actor, $paymentData, $denominationData, &$notifyData) {
             $locked = Voucher::lockForUpdate()->find($voucher->id);
 
             $payableStatuses = [
@@ -238,11 +238,94 @@ class VoucherApprovalService
                 return 'Unauthorized: You lack the required payment permission.';
             }
 
+            // 1. Validate Payments (for Bank/Payment types)
+            if (in_array($locked->type, ['payment', 'bank_encashment'])) {
+                if (!empty($paymentData)) {
+                    $total = collect($paymentData)->sum(fn($p) => (float)($p['amount'] ?? 0));
+                    if (abs($total - (float)$locked->amount) > 0.01) {
+                        return 'Payment validation failed: The sum of multiple payments (AED ' . number_format($total, 2) . ') must equal the voucher total (AED ' . number_format($locked->amount, 2) . ').';
+                    }
+                }
+            } else {
+                // 2. Validate Denominations (for Petty Cash/Receipt types)
+                if (!empty($denominationData)) {
+                    $tendered = ((int) ($denominationData['bill_1000'] ?? 0) * 1000) 
+                        + ((int) ($denominationData['bill_500'] ?? 0) * 500)
+                        + ((int) ($denominationData['bill_200'] ?? 0) * 200)
+                        + ((int) ($denominationData['bill_100'] ?? 0) * 100)
+                        + ((int) ($denominationData['bill_50'] ?? 0) * 50)
+                        + ((int) ($denominationData['bill_20'] ?? 0) * 20)
+                        + ((int) ($denominationData['bill_10'] ?? 0) * 10)
+                        + ((int) ($denominationData['bill_5'] ?? 0) * 5)
+                        + ((int) ($denominationData['coin_1'] ?? 0) * 1)
+                        + ((int) ($denominationData['coin_0_50'] ?? 0) * 0.50)
+                        + ((int) ($denominationData['coin_0_25'] ?? 0) * 0.25);
+
+                    $changeGiven = round((float) ($denominationData['change_given'] ?? 0), 2);
+                    $deduction   = round((float) ($denominationData['prior_deduction'] ?? 0), 2);
+                    $netPhysical = round($tendered - $changeGiven, 2);
+                    $targetWithDeduction = round((float)$locked->amount - $deduction, 2);
+
+                    if (abs($netPhysical - $targetWithDeduction) > 0.01) {
+                        return 'Denomination validation failed: Net Physical Cash (AED ' . number_format($netPhysical, 2) . ') must equal the Net target (AED ' . number_format($targetWithDeduction, 2) . ').';
+                    }
+                }
+            }
+
             $previousStatus = $locked->status;
-            $locked->update([
+            
+            // Prepare update array
+            $updateData = [
                 'status'                => VoucherStatus::Paid->value,
                 'current_approval_step' => null,
-            ]);
+            ];
+
+            // 3. Sync legacy cheque fields and save multiple payments
+            if (in_array($locked->type, ['payment', 'bank_encashment']) && !empty($paymentData)) {
+                $first = $paymentData[0] ?? null;
+                $updateData['multiple_payments'] = $paymentData;
+                $updateData['cheque_no'] = $first['cheque_no'] ?? null;
+                $updateData['cheque_date'] = $first['cheque_date'] ?? null;
+                $updateData['bank'] = $first['bank'] ?? null;
+            }
+
+            $locked->update($updateData);
+
+            // 4. Create Denomination Record if present
+            if (!in_array($locked->type, ['payment', 'bank_encashment']) && !empty($denominationData)) {
+                $tendered = ((int) ($denominationData['bill_1000'] ?? 0) * 1000) 
+                        + ((int) ($denominationData['bill_500'] ?? 0) * 500)
+                        + ((int) ($denominationData['bill_200'] ?? 0) * 200)
+                        + ((int) ($denominationData['bill_100'] ?? 0) * 100)
+                        + ((int) ($denominationData['bill_50'] ?? 0) * 50)
+                        + ((int) ($denominationData['bill_20'] ?? 0) * 20)
+                        + ((int) ($denominationData['bill_10'] ?? 0) * 10)
+                        + ((int) ($denominationData['bill_5'] ?? 0) * 5)
+                        + ((int) ($denominationData['coin_1'] ?? 0) * 1)
+                        + ((int) ($denominationData['coin_0_50'] ?? 0) * 0.50)
+                        + ((int) ($denominationData['coin_0_25'] ?? 0) * 0.25);
+                $changeGiven = round((float) ($denominationData['change_given'] ?? 0), 2);
+                $deduction   = round((float) ($denominationData['prior_deduction'] ?? 0), 2);
+
+                $locked->denominations()->create([
+                    'bill_1000'    => $denominationData['bill_1000'] ?: 0,
+                    'bill_500'     => $denominationData['bill_500'] ?: 0,
+                    'bill_200'     => $denominationData['bill_200'] ?: 0,
+                    'bill_100'     => $denominationData['bill_100'] ?: 0,
+                    'bill_50'      => $denominationData['bill_50'] ?: 0,
+                    'bill_20'      => $denominationData['bill_20'] ?: 0,
+                    'bill_10'      => $denominationData['bill_10'] ?: 0,
+                    'bill_5'       => $denominationData['bill_5'] ?: 0,
+                    'coin_1'       => $denominationData['coin_1'] ?: 0,
+                    'coin_0_50'    => $denominationData['coin_0_50'] ?: 0,
+                    'coin_0_25'    => $denominationData['coin_0_25'] ?: 0,
+                    'total_amount' => $tendered,
+                    'change_given' => $changeGiven,
+                    'prior_deduction' => $deduction,
+                    'is_change_received' => $denominationData['is_change_received'] ?? true,
+                    'remarks'      => $denominationData['remarks'] ?? null,
+                ]);
+            }
 
             // Bulk update all linked purchase entries in a single query
             $locked->purchaseEntries()->update([

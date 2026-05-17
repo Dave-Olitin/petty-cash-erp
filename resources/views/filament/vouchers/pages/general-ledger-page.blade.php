@@ -24,6 +24,7 @@
                         <th class="px-6 py-4 font-bold">Date</th>
                         <th class="px-6 py-4 font-bold">JE Ref</th>
                         <th class="px-6 py-4 font-bold">Voucher #</th>
+                        <th class="px-6 py-4 font-bold">Payee</th>
                         <th class="px-6 py-4 font-bold">Branch</th>
                         <th class="px-6 py-4 text-right font-bold">Debit (AED)</th>
                         <th class="px-6 py-4 text-right font-bold">Credit (AED)</th>
@@ -47,7 +48,7 @@
                     <tbody x-data="{ isOpen: false }" class="border-b border-gray-200 dark:border-gray-800 last:border-b-0">
                         {{-- Account Group Header Row --}}
                         <tr @click="isOpen = !isOpen" class="cursor-pointer bg-gray-100/80 dark:bg-gray-800/80 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors border-y border-gray-200 dark:border-gray-700">
-                            <td colspan="4" class="px-6 py-3">
+                            <td colspan="5" class="px-6 py-3">
                                 <div class="flex items-center gap-3">
                                     <x-filament::icon
                                         x-bind:class="isOpen ? 'rotate-180' : ''"
@@ -109,6 +110,9 @@
                                         <span class="text-gray-400">—</span>
                                     @endif
                                 </td>
+                                <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title="{{ $line->journalEntry?->voucher?->payee }}">
+                                    {{ $line->journalEntry?->voucher?->payee ?: '—' }}
+                                </td>
                                 <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase italic">
                                     {{ $line->branch ?: '—' }}
                                 </td>
@@ -128,7 +132,7 @@
                 @empty
                     <tbody>
                         <tr>
-                            <td colspan="7" class="text-center py-24 text-gray-400 dark:text-gray-600 bg-gray-50/20">
+                            <td colspan="8" class="text-center py-24 text-gray-400 dark:text-gray-600 bg-gray-50/20">
                                 <x-filament::icon icon="heroicon-o-book-open" class="mx-auto h-16 w-16 mb-4 opacity-20" />
                                 <p class="text-base font-medium">No transactions found.</p>
                             </td>

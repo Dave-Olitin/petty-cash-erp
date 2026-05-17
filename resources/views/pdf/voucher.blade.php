@@ -224,13 +224,26 @@
     </tr>
 </table>
 
-<table class="cheque-table">
-    <tr>
-        <td>Cheque No.: {{ $voucher->cheque_no ?: '_____________________' }}</td>
-        <td style="text-align:center;">Date: {{ $voucher->cheque_date ? $voucher->cheque_date->format('d/m/Y') : '_____________________' }}</td>
-        <td style="text-align:right;">Bank: {{ $voucher->bank ?: '_____________________' }}</td>
-    </tr>
-</table>
+@if(!empty($voucher->multiple_payments) && is_array($voucher->multiple_payments) && count($voucher->multiple_payments) > 0)
+    <table class="cheque-table" style="margin-bottom: 2px;">
+        @foreach($voucher->multiple_payments as $payment)
+        <tr>
+            <td style="width: 30%;">Ref/Cheque: {{ $payment['cheque_no'] ?? '__________________' }}</td>
+            <td style="width: 25%; text-align:center;">Date: {{ !empty($payment['cheque_date']) ? \Carbon\Carbon::parse($payment['cheque_date'])->format('d/m/Y') : '__________________' }}</td>
+            <td style="width: 25%; text-align:center;">Bank: {{ $payment['bank'] ?? '__________________' }}</td>
+            <td style="width: 20%; text-align:right;">Amount: {{ isset($payment['amount']) ? number_format($payment['amount'], 2) : '__________________' }}</td>
+        </tr>
+        @endforeach
+    </table>
+@else
+    <table class="cheque-table">
+        <tr>
+            <td>Cheque No.: {{ $voucher->cheque_no ?: '_____________________' }}</td>
+            <td style="text-align:center;">Date: {{ $voucher->cheque_date ? (\Carbon\Carbon::parse($voucher->cheque_date)->format('d/m/Y')) : '_____________________' }}</td>
+            <td style="text-align:right;">Bank: {{ $voucher->bank ?: '_____________________' }}</td>
+        </tr>
+    </table>
+@endif
 
 @php
     $hasPo = $voucher->items->contains(function($item) {
