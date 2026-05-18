@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use App\Observers\VoucherObserver;
+use App\Models\JournalEntry;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -101,6 +102,12 @@ class Voucher extends Model implements HasMedia
     {
         return $this->hasOne(Liquidation::class);
     }
+
+    public function journalEntry(): HasOne
+    {
+        return $this->hasOne(JournalEntry::class);
+    }
+
 
     public function getTotalDebitAttribute(): float
     {
