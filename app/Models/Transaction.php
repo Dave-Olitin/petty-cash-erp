@@ -20,6 +20,8 @@ class Transaction extends Model
         'supplier',
         'trn',
         'reference_number',
+        'reference_pcv_no',
+        'receiver_name',
         'description',
         'receipt_path',
         'status',

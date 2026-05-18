@@ -55,7 +55,14 @@ public static function form(Form $form): Form
                         })
                         ->required()
                         ->live() 
-                        ->afterStateUpdated(fn (callable $set) => $set('category_id', null)) // Reset category if type changes
+                        ->afterStateUpdated(function (callable $set, $state) {
+                            if ($state === 'REPLENISHMENT') {
+                                $set('items', []);
+                                $set('vat', 0);
+                            } else {
+                                $set('amount', 0);
+                            }
+                        })
                         ->native(false),
 
                     // Category Select Removed - Moved to Items Repeater
@@ -69,20 +76,35 @@ public static function form(Form $form): Form
                         
                     Forms\Components\TextInput::make('payee')
                         ->label('Paid To')
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
                     Forms\Components\TextInput::make('supplier')
                         ->label('Supplier Name')
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
                     Forms\Components\TextInput::make('trn')
                         ->label('TRN')
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
                     Forms\Components\TextInput::make('reference_number')
                         ->label('Invoice/Reference #')
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
+                    Forms\Components\TextInput::make('reference_pcv_no')
+                        ->label('Reference PCV No.')
+                        ->maxLength(255)
+                        ->visible(fn (callable $get) => $get('type') === 'REPLENISHMENT')
+                        ->required(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
+                    Forms\Components\TextInput::make('receiver_name')
+                        ->label('Receiver Name')
+                        ->maxLength(255)
+                        ->visible(fn (callable $get) => $get('type') === 'REPLENISHMENT')
+                        ->required(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
                 ])->columns(['default' => 1, 'sm' => 2]),
 
                     Forms\Components\Repeater::make('items')
                         ->relationship()
+                        ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT')
                         ->schema([
                             Forms\Components\Select::make('account_code_id')
                                 ->label('Account Code')
@@ -141,6 +163,7 @@ public static function form(Form $form): Form
                             Forms\Components\TextInput::make('vat')
                                 ->label('VAT (Receipt Level)')
                                 ->helperText('Use this if VAT is applied to the receipt total, not per item.')
+                                ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT')
                                 ->numeric()
                                 ->default(0)
                                 ->prefix('AED')
@@ -153,12 +176,12 @@ public static function form(Form $form): Form
                                 }),
 
                             Forms\Components\TextInput::make('amount')
-                                ->label('Grand Total')
+                                ->label(fn (callable $get) => $get('type') === 'REPLENISHMENT' ? 'Replenishment Amount' : 'Grand Total')
                                 ->numeric()
                                 ->prefix('AED')
-                                ->readOnly()
+                                ->readOnly(fn (callable $get) => $get('type') !== 'REPLENISHMENT')
                                 ->required()
-                                ->live()
+                                ->live(onBlur: true)
                                 ->default(0)
                                 ->dehydrated()
                                 ->rule(function (callable $get) {
@@ -211,7 +234,7 @@ public static function form(Form $form): Form
                 ->acceptedFileTypes(['image/*', 'application/pdf'])
                 ->openable()
                 ->downloadable()
-                ->required(fn (string $operation) => $operation === 'create'),
+                ->required(fn (string $operation, callable $get) => $operation === 'create' && $get('type') !== 'REPLENISHMENT'),
 
             // Logic: If user is HQ, they can pick a branch. If Branch User, it's auto-set.
             // NOTE: user_id is set server-side in CreateTransaction::mutateFormDataBeforeCreate()
@@ -268,6 +291,7 @@ public static function form(Form $form): Form
                     ]),
 
                 Infolists\Components\Section::make('Payee & Details')
+                    ->hidden(fn ($record) => $record->type === 'REPLENISHMENT')
                     ->schema([
                         Infolists\Components\TextEntry::make('payee')
                             ->label('Paid To'),
@@ -282,7 +306,20 @@ public static function form(Form $form): Form
                             ->columnSpanFull(),
                     ])->columns(['default' => 1, 'sm' => 2]),
 
+                Infolists\Components\Section::make('Replenishment Details')
+                    ->visible(fn ($record) => $record->type === 'REPLENISHMENT')
+                    ->schema([
+                        Infolists\Components\TextEntry::make('reference_pcv_no')
+                            ->label('Reference PCV No.'),
+                        Infolists\Components\TextEntry::make('receiver_name')
+                            ->label('Receiver Name'),
+                        Infolists\Components\TextEntry::make('description')
+                            ->label('Description')
+                            ->columnSpanFull(),
+                    ])->columns(['default' => 1, 'sm' => 2]),
+
                 Infolists\Components\Section::make('Line Items')
+                    ->hidden(fn ($record) => $record->type === 'REPLENISHMENT')
                     ->schema([
                         Infolists\Components\RepeatableEntry::make('items')
                             ->schema([
@@ -373,6 +410,14 @@ public static function table(Table $table): Table
                 ->label('Ref #')
                 ->searchable()
                 ->toggleable(),
+            Tables\Columns\TextColumn::make('reference_pcv_no')
+                ->label('PCV #')
+                ->searchable()
+                ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('receiver_name')
+                ->label('Receiver')
+                ->searchable()
+                ->toggleable(isToggledHiddenByDefault: true),
             Tables\Columns\IconColumn::make('receipt_path')
                 ->label('Receipt')
                 ->boolean()
@@ -611,7 +656,7 @@ public static function table(Table $table): Table
                             // 1. Define Headers
                             $headers = [
                                 'ID', 'Date', 'Type', 'Amount', 'Payee', 'Supplier', 'TRN', 
-                                'Reference #', 'Description', 'Items', 'Branch', 'Category', 
+                                'Reference #', 'PCV #', 'Receiver', 'Description', 'Items', 'Branch', 'Category', 
                                 'Status', 'Created By', 'Receipt URL'
                             ];
                             
@@ -632,6 +677,8 @@ public static function table(Table $table): Table
                                     $record->supplier,
                                     $record->trn,
                                     $record->reference_number,
+                                    $record->reference_pcv_no,
+                                    $record->receiver_name,
                                     $record->description,
                                     $itemsSummary,
                                     $record->branch ? $record->branch->name : 'Head Office',
