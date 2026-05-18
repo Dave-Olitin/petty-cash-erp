@@ -135,24 +135,34 @@ class VoucherObserver
                 // ── 4. Auto-trigger liquidation ───────────────────────────────
                 $threshold = (float) config('liquidation.minimum_amount', 0);
                 if ((float) $voucher->amount >= $threshold) {
-                    $deadlineDays = config('liquidation.deadline_days');
-                    $dueDate = $deadlineDays ? now()->addDays((int) $deadlineDays)->toDateString() : null;
 
-                    // Re-use the denomination already fetched above
-                    $netToJustify = max(0, (float) $voucher->amount - $priorDeduction);
+                    // Guard: if a liquidation was already created (e.g. because
+                    // an accountant linked a JE to this PCV before it was paid),
+                    // do NOT create a duplicate record — just sync the status flag.
+                    if ($voucher->liquidation()->exists()) {
+                        // JE already settled this voucher; keep its liquidation
+                        // intact and reflect the paid status on the voucher flag only.
+                        $voucher->updateQuietly(['liquidation_status' => 'pending']);
+                    } else {
+                        $deadlineDays = config('liquidation.deadline_days');
+                        $dueDate = $deadlineDays ? now()->addDays((int) $deadlineDays)->toDateString() : null;
 
-                    $voucher->updateQuietly(['liquidation_status' => 'pending']);
+                        // Re-use the denomination already fetched above
+                        $netToJustify = max(0, (float) $voucher->amount - $priorDeduction);
 
-                    \App\Models\Liquidation::create([
-                        'voucher_id'      => $voucher->id,
-                        'liquidated_by'   => $voucher->user_id,
-                        'amount_spent'    => 0,
-                        'amount_returned' => 0,
-                        'prior_deduction' => $priorDeduction,
-                        'amount_short'    => $netToJustify,
-                        'status'          => 'pending',
-                        'due_date'        => $dueDate,
-                    ]);
+                        $voucher->updateQuietly(['liquidation_status' => 'pending']);
+
+                        \App\Models\Liquidation::create([
+                            'voucher_id'      => $voucher->id,
+                            'liquidated_by'   => $voucher->user_id,
+                            'amount_spent'    => 0,
+                            'amount_returned' => 0,
+                            'prior_deduction' => $priorDeduction,
+                            'amount_short'    => $netToJustify,
+                            'status'          => 'pending',
+                            'due_date'        => $dueDate,
+                        ]);
+                    }
                 }
             }
 

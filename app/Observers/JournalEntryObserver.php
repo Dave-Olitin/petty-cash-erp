@@ -76,8 +76,13 @@ class JournalEntryObserver
                 Liquidation::create($payload);
             }
 
-            // Sync the voucher's liquidation_status field
-            $voucher->update(['liquidation_status' => 'liquidated']);
+            // Sync the voucher's liquidation_status field —
+            // only mark 'liquidated' if the voucher has actually been paid.
+            // If the JE was created before the PCV was disbursed, leave the
+            // status alone; the VoucherObserver will set it to 'pending' on pay.
+            if ($voucher->status === 'paid') {
+                $voucher->update(['liquidation_status' => 'liquidated']);
+            }
         });
     }
 
