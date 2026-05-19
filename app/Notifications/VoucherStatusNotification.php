@@ -29,9 +29,10 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
 
         // Only attempt to send an email if a real SMTP host has been configured
         // AND the user has not opted out of email notifications.
-        $wantsEmail = data_get($notifiable, 'receive_email_notifications', true);
+        // Use filter_var to strictly parse 0, "0", false, or "false" safely as a boolean false.
+        $wantsEmail = filter_var(data_get($notifiable, 'receive_email_notifications', true), FILTER_VALIDATE_BOOLEAN);
 
-        if ($wantsEmail !== false) {
+        if ($wantsEmail) {
             $host = config('mail.mailers.smtp.host', '');
             if (!empty($host) && !in_array($host, ['127.0.0.1', 'localhost', 'your-smtp-host'])) {
                 $channels[] = 'mail';

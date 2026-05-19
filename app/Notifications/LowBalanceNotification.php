@@ -24,11 +24,11 @@ class LowBalanceNotification extends Notification implements ShouldQueue
     {
         $channels = ['database', WebPushChannel::class];
 
-        $wantsEmail = data_get($notifiable, 'receive_email_notifications', true);
+        $wantsEmail = filter_var(data_get($notifiable, 'receive_email_notifications', true), FILTER_VALIDATE_BOOLEAN);
 
-        if ($wantsEmail !== false) {
+        if ($wantsEmail) {
             $host = config('mail.mailers.smtp.host');
-            if ($host && $host !== '127.0.0.1' && $host !== 'your-smtp-host') {
+            if (!empty($host) && !in_array($host, ['127.0.0.1', 'localhost', 'your-smtp-host'])) {
                 $channels[] = 'mail';
             }
         }
