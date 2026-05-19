@@ -23,6 +23,7 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'branch_id', // Required for branch scoping. Must be fillable for UserResource to save it.
+        'receive_email_notifications',
     ];
 
     protected $hidden = [
@@ -36,6 +37,7 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
             'branch_id'         => 'integer',
+            'receive_email_notifications' => 'boolean',
         ];
     }
 

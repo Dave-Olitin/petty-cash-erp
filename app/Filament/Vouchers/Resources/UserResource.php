@@ -43,6 +43,12 @@ class UserResource extends Resource
                                 ->password()
                                 ->required(fn (string $context): bool => $context === 'create')
                                 ->dehydrated(fn ($state) => filled($state)),
+                                
+                            Forms\Components\Toggle::make('receive_email_notifications')
+                                ->label('Receive Email Notifications')
+                                ->default(true)
+                                ->helperText('If disabled, the user will only receive in-app notifications.')
+                                ->columnSpanFull(),
                         ])->columns(2),
                 ])->columnSpan(['lg' => 2]),
 

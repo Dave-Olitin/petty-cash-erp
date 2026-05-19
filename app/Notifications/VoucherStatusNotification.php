@@ -27,12 +27,13 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
     {
         $channels = ['database', WebPushChannel::class];
 
-        // Only attempt to send an email if a real SMTP host has been configured.
-        // This prevents the application from crashing if the .env file is incomplete, 
-        // ensuring the in-app Notification Bell still successfully receives the DB alert.
-        $host = config('mail.mailers.smtp.host', '');
-        if (!empty($host) && !in_array($host, ['127.0.0.1', 'localhost', 'your-smtp-host'])) {
-            $channels[] = 'mail';
+        // Only attempt to send an email if a real SMTP host has been configured
+        // AND the user has not opted out of email notifications.
+        if ($notifiable->receive_email_notifications !== false) {
+            $host = config('mail.mailers.smtp.host', '');
+            if (!empty($host) && !in_array($host, ['127.0.0.1', 'localhost', 'your-smtp-host'])) {
+                $channels[] = 'mail';
+            }
         }
 
         return $channels;
