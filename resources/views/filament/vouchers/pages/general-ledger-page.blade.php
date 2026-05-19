@@ -1,4 +1,15 @@
 <x-filament-panels::page>
+    {{-- Ongoing Testing Alert --}}
+    <div class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4 flex items-start gap-3 shadow-sm mb-6">
+        <x-filament::icon icon="heroicon-o-beaker" class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+        <div>
+            <h3 class="text-sm font-bold text-amber-800 dark:text-amber-400">Ongoing Testing & Auditing Phase</h3>
+            <p class="text-xs text-amber-700 dark:text-amber-500 mt-1">
+                This module is currently in active beta testing. Accounting reconciliations, formulas, and exports are subject to audit verification before final production sign-off. Please report any discrepancies.
+            </p>
+        </div>
+    </div>
+
     {{-- ── Filters ── --}}
     <form wire:submit="updateReport">
         <div class="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-200 dark:border-gray-800 p-6">

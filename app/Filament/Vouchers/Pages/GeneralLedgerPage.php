@@ -30,6 +30,16 @@ class GeneralLedgerPage extends Page implements HasForms
     protected static ?int $navigationSort = 9;
     protected static string $view = 'filament.vouchers.pages.general-ledger-page';
 
+    public static function getNavigationBadge(): ?string
+    {
+        return 'Testing';
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
     public ?array $data = [];
 
     public function mount(): void
