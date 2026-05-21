@@ -5,8 +5,16 @@
     }
 
     .font-sans,
+    .font-mono,
+    .font-serif,
     body {
-        font-family: Cairo, "Public Sans", sans-serif, -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important
+        font-family: Manrope, "Public Sans", sans-serif, -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important
+    }
+
+    .fi-section,
+    .fi-modal-window,
+    .fi-ta-ctn {
+        border-radius: 10px !important;
     }
 
     .voucher-preview-section>.fi-section-header {

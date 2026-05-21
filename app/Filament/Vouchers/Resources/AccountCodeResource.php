@@ -114,6 +114,18 @@ class AccountCodeResource extends Resource
                             ->placeholder('Optional: describe what transactions belong here.')
                             ->rows(2)
                             ->columnSpanFull(),
+
+                        Forms\Components\Select::make('entity')
+                            ->label('Entity')
+                            ->multiple()
+                            ->options(\App\Models\VoucherTemplate::pluck('company_name', 'id'))
+                            ->placeholder('Select Entities')
+                            ->columnSpanFull(),
+
+                        Forms\Components\Toggle::make('is_active')
+                            ->label('Enabled')
+                            ->default(true)
+                            ->columnSpanFull(),
                     ])
                     ->columns(2),
             ]);
@@ -127,8 +139,17 @@ class AccountCodeResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query
-                ->withSum('debitItems', 'debit')
-                ->withSum('creditItems', 'credit')
+                ->orderByRaw("
+                    CASE type
+                        WHEN 'asset' THEN 1
+                        WHEN 'liability' THEN 2
+                        WHEN 'equity' THEN 3
+                        WHEN 'revenue' THEN 4
+                        WHEN 'expense' THEN 5
+                        ELSE 6
+                    END ASC
+                ")
+                ->orderBy('code', 'asc')
             )
             ->columns([
                 Tables\Columns\TextColumn::make('code')
@@ -165,30 +186,24 @@ class AccountCodeResource extends Resource
                     ->color(fn (string $state) => $state === 'debit' ? 'info' : 'warning')
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('entity')
+                    ->label('Entity')
+                    ->formatStateUsing(function ($state) {
+                        if (empty($state) || !is_array($state)) return '-';
+                        return \App\Models\VoucherTemplate::whereIn('id', $state)->pluck('company_name')->join(', ');
+                    })
+                    ->toggleable(),
+
+                Tables\Columns\ToggleColumn::make('is_active')
+                    ->label('Enabled')
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('voucher_items_count')
                     ->counts('voucherItems')
                     ->label('Vouchers')
                     ->sortable()
                     ->badge()
                     ->color('primary'),
-
-                Tables\Columns\TextColumn::make('debit_items_sum_debit')
-                    ->label('Total DR')
-                    ->money('AED')
-                    ->color('success')
-                    ->sortable(query: fn (Builder $query, string $direction) =>
-                        $query->orderBy('debit_items_sum_debit', $direction)
-                    )
-                    ->default(0),
-
-                Tables\Columns\TextColumn::make('credit_items_sum_credit')
-                    ->label('Total CR')
-                    ->money('AED')
-                    ->color('danger')
-                    ->sortable(query: fn (Builder $query, string $direction) =>
-                        $query->orderBy('credit_items_sum_credit', $direction)
-                    )
-                    ->default(0),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
@@ -260,7 +275,6 @@ class AccountCodeResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('type')
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25);
     }

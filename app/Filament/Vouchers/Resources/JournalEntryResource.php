@@ -84,7 +84,7 @@ class JournalEntryResource extends Resource
                         ->live()
                         ->schema([
                             Forms\Components\Select::make('account_code_id')
-                                ->relationship('accountCode', 'code')
+                                ->relationship('accountCode', 'code', fn ($query) => $query->where('is_active', true))
                                 ->label('Account')
                                 ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
                                 ->searchable(['code', 'name'])

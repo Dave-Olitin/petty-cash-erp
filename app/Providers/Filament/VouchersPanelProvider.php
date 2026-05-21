@@ -29,7 +29,7 @@ class VouchersPanelProvider extends PanelProvider
             ->brandName('PAYMENT VOUCHER')
             ->favicon(asset('images/icon-192.png'))
             ->maxContentWidth(\Filament\Support\Enums\MaxWidth::Full)
-            ->font('Cairo')
+            ->font('Manrope')
             ->defaultThemeMode(\Filament\Enums\ThemeMode::Light)
             ->renderHook(
                 \Filament\View\PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
@@ -133,7 +133,7 @@ class VouchersPanelProvider extends PanelProvider
             )
             ->sidebarCollapsibleOnDesktop()
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Zinc,
             ])
             ->discoverResources(in: app_path('Filament/Vouchers/Resources'), for: 'App\\Filament\\Vouchers\\Resources')
             ->discoverPages(in: app_path('Filament/Vouchers/Pages'), for: 'App\\Filament\\Vouchers\\Pages')

@@ -117,7 +117,11 @@
 </head>
 <body>
 
-@if($isPreview ?? false)
+@if($voucher->status === 'voided')
+    <div style="background-color: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px; text-align: center; font-weight: bold; font-family: Manrope, sans-serif; border-radius: 10px; margin-bottom: 20px; font-size: 14px; letter-spacing: 1px;">
+        THIS VOUCHER HAS BEEN CANCELLED
+    </div>
+@elseif($isPreview ?? false)
     <div class="watermark">DRAFT</div>
 @endif
 

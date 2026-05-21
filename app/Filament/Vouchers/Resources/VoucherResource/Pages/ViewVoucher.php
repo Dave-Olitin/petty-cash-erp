@@ -324,9 +324,21 @@ class ViewVoucher extends ViewRecord
                                     ->label('Bank / Account')
                                     ->searchable()
                                     ->allowHtml()
-                                    ->getSearchResultsUsing(function (string $search) {
-                                        return \App\Models\AccountCode::where('code', 'like', "%{$search}%")
-                                            ->orWhere('name', 'like', "%{$search}%")
+                                    ->getSearchResultsUsing(function (string $search, ?\App\Models\Voucher $record = null) {
+                                        $templateId = $record?->voucher_template_id;
+                                        return \App\Models\AccountCode::where('is_active', true)
+                                            ->where(function ($query) use ($search) {
+                                                $query->where('code', 'like', "%{$search}%")
+                                                    ->orWhere('name', 'like', "%{$search}%");
+                                            })
+                                            ->when($templateId, function ($query) use ($templateId) {
+                                                $query->where(function ($q) use ($templateId) {
+                                                    $q->whereNull('entity')
+                                                        ->orWhereJsonLength('entity', 0)
+                                                        ->orWhereJsonContains('entity', (string) $templateId)
+                                                        ->orWhereJsonContains('entity', (int) $templateId);
+                                                });
+                                            })
                                             ->limit(50)
                                             ->get()
                                             ->mapWithKeys(fn ($ac) => [$ac->code => "{$ac->code} — {$ac->name}"])

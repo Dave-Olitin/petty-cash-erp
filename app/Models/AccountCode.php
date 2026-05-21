@@ -13,11 +13,37 @@ class AccountCode extends Model
         'type',
         'normal_balance',
         'description',
+        'entity',
+        'is_active',
     ];
 
     protected $casts = [
         'type' => AccountType::class,
+        'entity' => 'array',
+        'is_active' => 'boolean',
     ];
+
+    protected static function booted()
+    {
+        static::saving(function ($accountCode) {
+            if ($accountCode->code) {
+                $firstDigit = substr($accountCode->code, 0, 1);
+                $type = match($firstDigit) {
+                    '1' => AccountType::Asset,
+                    '2' => AccountType::Liability,
+                    '3' => AccountType::Equity,
+                    '4' => AccountType::Revenue,
+                    '5' => AccountType::Expense,
+                    default => null,
+                };
+
+                if ($type) {
+                    $accountCode->type = $type;
+                    $accountCode->normal_balance = $type->normalBalance();
+                }
+            }
+        });
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // Relationships
