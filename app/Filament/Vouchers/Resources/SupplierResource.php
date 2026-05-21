@@ -22,7 +22,7 @@ class SupplierResource extends Resource
     protected static ?string $modelLabel = 'Supplier Details';
     protected static ?string $pluralModelLabel = 'Supplier Details';
     protected static ?string $navigationLabel = 'Supplier Details';
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
     public static function canViewAny(): bool
     {
@@ -178,6 +178,7 @@ class SupplierResource extends Resource
                 Tables\Actions\EditAction::make()->iconButton(),
                 Tables\Actions\DeleteAction::make()->iconButton(),
             ])
+            ->paginated([10, 25, 50, 100])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),

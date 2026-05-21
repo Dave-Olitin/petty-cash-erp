@@ -205,4 +205,44 @@ class VoucherObserver
     {
         //
     }
+
+    /**
+     * Handle the Voucher "saved" event.
+     */
+    public function saved(Voucher $voucher): void
+    {
+        $paths = $voucher->attachment_paths ?? [];
+        if (!is_array($paths)) {
+            $paths = [];
+        }
+
+        // Get existing documents in DB
+        $existingDocs = \App\Models\Document::where('voucher_id', $voucher->id)->get();
+        $existingPaths = $existingDocs->pluck('file_path')->toArray();
+
+        // Find paths to delete (present in DB, but not in current attachment_paths)
+        $pathsToDelete = array_diff($existingPaths, $paths);
+        if (!empty($pathsToDelete)) {
+            \App\Models\Document::where('voucher_id', $voucher->id)
+                ->whereIn('file_path', $pathsToDelete)
+                ->delete();
+        }
+
+        // Find paths to add (present in current attachment_paths, but not in DB)
+        $pathsToAdd = array_diff($paths, $existingPaths);
+        foreach ($pathsToAdd as $path) {
+            if (empty($path)) continue;
+
+            $fileName = basename($path);
+            $fileType = pathinfo($path, PATHINFO_EXTENSION);
+
+            \App\Models\Document::create([
+                'voucher_id' => $voucher->id,
+                'file_path' => $path,
+                'file_name' => $fileName,
+                'file_type' => $fileType,
+                'uploaded_by' => auth()->id() ?? $voucher->user_id,
+            ]);
+        }
+    }
 }

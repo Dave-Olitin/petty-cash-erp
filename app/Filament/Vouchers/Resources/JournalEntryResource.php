@@ -17,6 +17,7 @@ class JournalEntryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-document-duplicate';
     protected static ?string $navigationGroup = 'Accounting';
+    protected static ?int $navigationSort = 3;
 
     public static function canAccess(): bool
     {
@@ -257,6 +258,7 @@ class JournalEntryResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
             ])
+            ->paginated([10, 25, 50, 100])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),

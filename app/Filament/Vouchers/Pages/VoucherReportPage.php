@@ -10,20 +10,24 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
+use Filament\Tables;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Number;
-use Livewire\WithPagination;
 
-class VoucherReportPage extends Page implements HasForms
+class VoucherReportPage extends Page implements HasForms, HasTable
 {
     use InteractsWithForms;
-    use WithPagination;
+    use InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
     protected static ?string $navigationLabel = 'Report';
     protected static ?string $title = 'Vouchers Overview Report';
     protected static ?string $navigationGroup = null;
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 9;
     protected static string $view = 'filament.vouchers.pages.voucher-report-page';
 
     public static function canAccess(): bool
@@ -103,12 +107,104 @@ class VoucherReportPage extends Page implements HasForms
             ->columns(['sm' => 2, 'xl' => 4]);
     }
 
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(
+                Voucher::query()
+                    ->where('status', 'paid')
+                    ->whereBetween('created_at', [($this->date_from ?: now()->startOfMonth()->toDateString()) . ' 00:00:00', ($this->date_to ?: now()->toDateString()) . ' 23:59:59'])
+                    ->when($this->type, fn ($q) => $q->where('type', $this->type))
+                    ->when($this->account_code, fn ($q) => $q->whereHas('items', fn ($sub) => $sub->where('account_code', $this->account_code)))
+            )
+            ->columns([
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Date')
+                    ->date('d M Y')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('voucher_number')
+                    ->label('Voucher #')
+                    ->fontFamily('mono')
+                    ->weight('semibold')
+                    ->copyable()
+                    ->searchable()
+                    ->sortable()
+                    ->url(fn ($record) => \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->id]))
+                    ->color('primary'),
+
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Type')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'receipt' => 'success',
+                        'payment' => 'warning',
+                        'petty_cash' => 'info',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        'receipt' => 'Receipt',
+                        'payment' => 'Payment',
+                        'petty_cash' => 'Petty Cash',
+                        default => $state
+                    })
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('payee')
+                    ->label('Payee')
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('items.account_code')
+                    ->label('Account Code')
+                    ->badge()
+                    ->color('primary')
+                    ->formatStateUsing(fn ($record) => $record->items->first()?->account_code ?? '—'),
+
+                Tables\Columns\TextColumn::make('user.name')
+                    ->label('Requester')
+                    ->placeholder('—')
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('amount')
+                    ->label('Amount')
+                    ->money('AED')
+                    ->alignEnd()
+                    ->weight('bold')
+                    ->color(fn ($record) => $record->type === 'receipt' ? 'success' : 'primary')
+                    ->sortable(),
+            ])
+            ->headerActions([
+                Tables\Actions\Action::make('exportExcel')
+                    ->label('Export Excel')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('success')
+                    ->action(fn () => $this->exportExcel()),
+
+                Tables\Actions\Action::make('exportPdf')
+                    ->label('Export PDF')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('danger')
+                    ->action(fn () => $this->exportPdf()),
+
+                Tables\Actions\Action::make('exportDenominations')
+                    ->label('Export Denominations')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('info')
+                    ->action(fn () => $this->exportDenominationsExcel()),
+            ])
+            ->defaultSort('created_at', 'desc')
+            ->paginated([5, 10, 25, 50, 100])
+            ->defaultPaginationPageOption(10);
+    }
+
     public function getReportData(): array
     {
         $query = Voucher::query()
             ->where('status', 'paid')
             ->with(['user', 'category', 'items'])
-            ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
+            ->whereBetween('created_at', [($this->date_from ?: now()->startOfMonth()->toDateString()) . ' 00:00:00', ($this->date_to ?: now()->toDateString()) . ' 23:59:59']);
 
         if ($this->type) {
             $query->where('type', $this->type);
@@ -120,7 +216,6 @@ class VoucherReportPage extends Page implements HasForms
         }
 
         $baseQuery = clone $query;
-        // We consider Petty Cash and Payments as expenses, Receipts as income
         $totalPayment = (clone $baseQuery)->where('type', 'payment')->sum('amount');
         $totalPettyCash = (clone $baseQuery)->where('type', 'petty_cash')->sum('amount');
         $totalReceipt = (clone $baseQuery)->where('type', 'receipt')->sum('amount');
@@ -128,15 +223,13 @@ class VoucherReportPage extends Page implements HasForms
         $netExpenditure = ($totalPayment + $totalPettyCash) - $totalReceipt;
         $totalCount = $baseQuery->count();
 
-        $vouchers = $query->orderByDesc('created_at')->paginate($this->perPage);
-
         // Group by account codes using voucher items
         $byAccountData = DB::table('voucher_items')
             ->join('vouchers', 'vouchers.id', '=', 'voucher_items.voucher_id')
             ->whereNull('vouchers.deleted_at')
             ->where('vouchers.status', 'paid')
             ->where('voucher_items.entry_type', 'debit')
-            ->whereBetween('vouchers.created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
+            ->whereBetween('vouchers.created_at', [($this->date_from ?: now()->startOfMonth()->toDateString()) . ' 00:00:00', ($this->date_to ?: now()->toDateString()) . ' 23:59:59']);
 
         if ($this->type) {
             $byAccountData->where('vouchers.type', $this->type);
@@ -160,13 +253,12 @@ class VoucherReportPage extends Page implements HasForms
         })->sortDesc();
 
         return [
-            'vouchers'         => $vouchers,
             'total_payment'    => $totalPayment,
             'total_petty_cash' => $totalPettyCash,
             'total_receipt'    => $totalReceipt,
             'net_expenditure'  => $netExpenditure,
             'total_count'      => $totalCount,
-            'by_category'      => $byAccount, // Kept the key name for blade compatibility
+            'by_category'      => $byAccount,
         ];
     }
 
@@ -175,11 +267,12 @@ class VoucherReportPage extends Page implements HasForms
         $query = Voucher::query()
             ->where('status', 'paid')
             ->with(['user', 'category'])
-            ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
+            ->whereBetween('created_at', [($this->date_from ?: now()->startOfMonth()->toDateString()) . ' 00:00:00', ($this->date_to ?: now()->toDateString()) . ' 23:59:59']);
 
         if ($this->type) {
             $query->where('type', $this->type);
         }
+
         if ($this->account_code) {
             $query->whereHas('items', function ($q) {
                 $q->where('account_code', $this->account_code);
@@ -190,7 +283,7 @@ class VoucherReportPage extends Page implements HasForms
 
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Exports\VouchersExport($query),
-            'petty_cash_report_' . $this->date_from . '_to_' . $this->date_to . '.xlsx'
+            'petty_cash_report_' . ($this->date_from ?: now()->startOfMonth()->toDateString()) . '_to_' . ($this->date_to ?: now()->toDateString()) . '.xlsx'
         );
     }
 
@@ -198,12 +291,10 @@ class VoucherReportPage extends Page implements HasForms
     {
         $data = $this->getReportData();
 
-        // Convert paginator back into a solid collection for the PDF export so we 
-        // don't just export page 1 if there are 50 records
         $query = Voucher::query()
             ->where('status', 'paid')
             ->with(['user', 'category', 'items'])
-            ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59'])
+            ->whereBetween('created_at', [($this->date_from ?: now()->startOfMonth()->toDateString()) . ' 00:00:00', ($this->date_to ?: now()->toDateString()) . ' 23:59:59'])
             ->orderByDesc('created_at');
 
         if ($this->type) {
@@ -217,22 +308,22 @@ class VoucherReportPage extends Page implements HasForms
 
         $allVouchers = $query->get();
         $data['vouchers_all'] = $allVouchers;
-        $data['date_from']    = $this->date_from;
-        $data['date_to']      = $this->date_to;
-        $data['pdf_template'] = \App\Models\VoucherTemplate::first(); // Grab a template for logo/header
+        $data['date_from']    = $this->date_from ?: now()->startOfMonth()->toDateString();
+        $data['date_to']      = $this->date_to ?: now()->toDateString();
+        $data['pdf_template'] = \App\Models\VoucherTemplate::first();
 
         return response()->streamDownload(function () use ($data) {
             echo \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.report', $data)
                 ->setPaper('A4', 'landscape')
                 ->output();
-        }, 'vouchers_report_' . $this->date_from . '_to_' . $this->date_to . '.pdf');
+        }, 'vouchers_report_' . ($this->date_from ?: now()->startOfMonth()->toDateString()) . '_to_' . ($this->date_to ?: now()->toDateString()) . '.pdf');
     }
 
     public function exportDenominationsExcel()
     {
         $query = Voucher::query()
             ->where('status', 'paid')
-            ->whereBetween('created_at', [$this->date_from . ' 00:00:00', $this->date_to . ' 23:59:59']);
+            ->whereBetween('created_at', [($this->date_from ?: now()->startOfMonth()->toDateString()) . ' 00:00:00', ($this->date_to ?: now()->toDateString()) . ' 23:59:59']);
 
         if ($this->type) {
             $query->where('type', $this->type);
@@ -244,8 +335,8 @@ class VoucherReportPage extends Page implements HasForms
         }
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\DenominationsExport($query, $this->date_from, $this->date_to),
-            'denominations_report_' . $this->date_from . '_to_' . $this->date_to . '.xlsx'
+            new \App\Exports\DenominationsExport($query, ($this->date_from ?: now()->startOfMonth()->toDateString()), ($this->date_to ?: now()->toDateString())),
+            'denominations_report_' . ($this->date_from ?: now()->startOfMonth()->toDateString()) . '_to_' . ($this->date_to ?: now()->toDateString()) . '.xlsx'
         );
     }
 }

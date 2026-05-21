@@ -23,8 +23,8 @@ class PurchaseEntriesExport implements FromCollection, WithHeadings, WithMapping
 
     public function collection()
     {
-        // Get all purchase entries with their lines, accounts and tax registration
-        $entries = $this->query->with(['lines.debitAccount', 'taxRegistration'])->get();
+        // Get all purchase entries with their lines, accounts, tax registration, and custodian user
+        $entries = $this->query->with(['lines.debitAccount', 'taxRegistration', 'user'])->get();
         $exportRows = new Collection();
         
         foreach ($entries as $entry) {
@@ -54,6 +54,7 @@ class PurchaseEntriesExport implements FromCollection, WithHeadings, WithMapping
             'ENTITY',
             'SUPPLIER NAME',
             'SUPPLIER TRN',
+            'CUSTODIAN',
             'PO NUMBER',
             'INVOICE NO',
             'CURRENCY',
@@ -77,6 +78,7 @@ class PurchaseEntriesExport implements FromCollection, WithHeadings, WithMapping
                 $entry->entity,
                 $entry->supplier_name,
                 $entry->supplier_trn,
+                $entry->user?->name ?? 'System',
                 $entry->po_number,
                 $entry->invoice_no,
                 $entry->currency,
@@ -97,6 +99,7 @@ class PurchaseEntriesExport implements FromCollection, WithHeadings, WithMapping
             $entry->entity,
             $entry->supplier_name,
             $entry->supplier_trn,
+            $entry->user?->name ?? 'System',
             $entry->po_number,
             $entry->invoice_no,
             $entry->currency,

@@ -35,7 +35,19 @@ class AdminPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
             ->defaultThemeMode(\Filament\Enums\ThemeMode::Light)
             ->colors([
-                'primary' => Color::Indigo, // More "professional" than Amber
+                'primary' => [
+                    50 => '250, 250, 250',
+                    100 => '244, 244, 245',
+                    200 => '228, 228, 231',
+                    300 => '212, 212, 216',
+                    400 => '161, 161, 170',
+                    500 => '24, 24, 27',      // Zinc 900
+                    600 => '9, 9, 11',        // Zinc 950
+                    700 => '0, 0, 0',         // Pure Black
+                    800 => '0, 0, 0',
+                    900 => '0, 0, 0',
+                    950 => '0, 0, 0',
+                ],
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')

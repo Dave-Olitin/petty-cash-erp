@@ -496,6 +496,7 @@ class LiquidationResource extends Resource
 
                 Tables\Actions\ViewAction::make(),
             ])
+            ->paginated([10, 25, 50, 100])
             ->bulkActions([]);
     }
 

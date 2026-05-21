@@ -19,9 +19,9 @@ class AgingReportPage extends Page implements HasForms
     protected static ?string $navigationIcon    = 'heroicon-o-clock';
     protected static ?string $navigationLabel   = 'AP Aging Report';
     protected static ?string $title             = 'Accounts Payable — Aging Report';
-    protected static ?string $navigationGroup   = null;   // removed from sidebar
-    protected static bool    $shouldRegisterNavigation = false; // accessed via table action button
-    protected static ?int    $navigationSort    = 50;
+    protected static ?string $navigationGroup   = 'Accounting';
+    protected static bool    $shouldRegisterNavigation = true;
+    protected static ?int    $navigationSort    = 5;
     protected static string  $view              = 'filament.vouchers.pages.aging-report-page';
 
     public static function canAccess(): bool

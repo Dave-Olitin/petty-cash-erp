@@ -20,6 +20,7 @@ class DenominationsTableWidget extends BaseWidget
                 Denomination::query()->with('denominatable')->latest()
             )
             ->defaultPaginationPageOption(10)
+            ->paginated([10, 25, 50, 100])
             ->heading('Recent Cash Breakdown Logs')
             ->description('Live log of all cash denominations explicitly tracked (Replenishments and Voucher Disbursals)')
             ->columns([

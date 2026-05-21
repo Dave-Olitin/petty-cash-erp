@@ -70,25 +70,45 @@
     }
 
     .fi-tabs-item:hover {
-        color: #1e293b !important;
+        color: #09090b !important;
         background: #f8fafc !important
     }
 
+    .dark .fi-tabs-item:hover {
+        color: #ffffff !important;
+        background: rgba(255, 255, 255, 0.05) !important
+    }
+
     .fi-tabs-item[aria-selected=true] {
-        color: #4f46e5 !important;
+        color: #09090b !important;
         background: 0 0 !important;
-        box-shadow: inset 0 -3px 0 0 #4f46e5 !important;
-        border-bottom: 2px solid #4f46e5 !important
+        box-shadow: inset 0 -3px 0 0 #09090b !important;
+        border-bottom: 2px solid #09090b !important
+    }
+
+    .dark .fi-tabs-item[aria-selected=true] {
+        color: #ffffff !important;
+        box-shadow: inset 0 -3px 0 0 #ffffff !important;
+        border-bottom: 2px solid #ffffff !important
     }
 
     .fi-tabs-item[aria-selected=true] span {
-        color: #4f46e5 !important;
+        color: #09090b !important;
         font-size: 20px !important
     }
 
+    .dark .fi-tabs-item[aria-selected=true] span {
+        color: #ffffff !important
+    }
+
     .fi-tabs-item[aria-selected=true] .fi-badge {
-        background: #e0e7ff !important;
-        color: #4f46e5 !important
+        background: #f4f4f5 !important;
+        color: #09090b !important
+    }
+
+    .dark .fi-tabs-item[aria-selected=true] .fi-badge {
+        background: #27272a !important;
+        color: #ffffff !important
     }
 
     .fi-main {

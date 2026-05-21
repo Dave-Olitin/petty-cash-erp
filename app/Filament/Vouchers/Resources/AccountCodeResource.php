@@ -22,7 +22,7 @@ class AccountCodeResource extends Resource
     protected static ?string $navigationIcon    = 'heroicon-o-list-bullet';
     protected static ?string $navigationGroup   = 'Accounting';
     protected static ?string $navigationLabel   = 'Chart of Accounts';
-    protected static ?int    $navigationSort    = 4;
+    protected static ?int    $navigationSort    = 1;
 
     public static function canViewAny(): bool
     {

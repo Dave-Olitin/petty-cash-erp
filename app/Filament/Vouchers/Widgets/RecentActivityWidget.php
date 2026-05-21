@@ -22,7 +22,8 @@ class RecentActivityWidget extends BaseWidget
         $user = auth()->user();
         $query = \Spatie\Activitylog\Models\Activity::query()
             ->where('subject_type', \App\Models\Voucher::class)
-            ->latest();
+            ->latest()
+            ->limit(100);
 
         if ($user && !$user->isHeadOffice() && !$user->hasAnyRole(['Accountant', 'Approver', 'Admin', 'Super Admin'])) {
             $query->whereHasMorph('subject', [\App\Models\Voucher::class], function ($q) use ($user) {
@@ -53,6 +54,7 @@ class RecentActivityWidget extends BaseWidget
                 Tables\Columns\TextColumn::make('subject.voucher_number')
                     ->label('Voucher'),
             ])
-            ->paginated(true);
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(10);
     }
 }

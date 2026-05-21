@@ -29,6 +29,7 @@ class PurchaseEntry extends Model
         'entity',
         'branch',
         'tax_registration_id',
+        'user_id',
         'date',
         'due_date',
         'price_type',
@@ -66,6 +67,10 @@ class PurchaseEntry extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
+            if (empty($model->user_id) && auth()->check()) {
+                $model->user_id = auth()->id();
+            }
+
             if (empty($model->entry_no)) {
                 // Use type-specific prefix: PE- for purchases, PR- for returns
                 $prefix = ($model->entry_type === self::TYPE_RETURN ? 'PR-' : 'PE-') . date('Y') . '-';
@@ -109,6 +114,11 @@ class PurchaseEntry extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(PurchaseEntryLine::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     // ── Accessors ──────────────────────────────────────────────────────────

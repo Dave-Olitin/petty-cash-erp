@@ -25,7 +25,7 @@ class TrialBalancePage extends Page implements HasForms
     protected static ?string $navigationIcon = 'heroicon-o-scale';
     protected static ?string $navigationGroup = 'Accounting';
     protected static ?string $navigationLabel = 'Trial Balance';
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 7;
     protected static string $view = 'filament.vouchers.pages.trial-balance-page';
 
     public static function getNavigationBadge(): ?string

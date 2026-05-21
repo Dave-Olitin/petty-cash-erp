@@ -19,6 +19,7 @@ class PurchaseEntryResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
     protected static ?string $navigationGroup = 'Accounting';
     protected static ?string $navigationLabel = 'Purchases & Returns';
+    protected static ?int $navigationSort = 4;
 
     // ── Permissions ───────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ class PurchaseEntryResource extends Resource
             'taxRegistration',
             'lines.debitAccount',
             'lines.creditAccount',
+            'user',
         ]);
     }
 
@@ -233,6 +235,7 @@ class PurchaseEntryResource extends Resource
                                                 ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
                                                 ->searchable(['code', 'name'])
                                                 ->native(false)
+                                                ->required()
                                                 ->columnSpan(6),
 
                                             // ── DR Amount ───────────────────────
@@ -241,6 +244,15 @@ class PurchaseEntryResource extends Resource
                                                 ->numeric()
                                                 ->default(0)
                                                 ->live(onBlur: true)
+                                                ->rules([
+                                                    fn (Forms\Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                                        $debit = (float) $value;
+                                                        $credit = (float) $get('credit');
+                                                        if ($debit <= 0 && $credit <= 0) {
+                                                            $fail('Either Debit Amount or Credit Amount must be greater than 0.');
+                                                        }
+                                                    },
+                                                ])
                                                 ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                                     $debit = (float) $state;
                                                     if ($debit > 0) {
@@ -296,7 +308,7 @@ class PurchaseEntryResource extends Resource
                                         ->hidden(),
 
                                     // Hidden fields kept for data integrity
-                                    Forms\Components\Hidden::make('amount'),
+                                    Forms\Components\Hidden::make('amount')->default(0),
                                     Forms\Components\Hidden::make('tax_percentage')->default(0),
                                     Forms\Components\Hidden::make('tax_amount')->default(0),
                                 ])
@@ -494,6 +506,13 @@ class PurchaseEntryResource extends Resource
                 Tables\Columns\TextColumn::make('taxRegistration.name')
                     ->label('Supplier')
                     ->searchable(),
+
+                Tables\Columns\TextColumn::make('user.name')
+                    ->label('Custodian')
+                    ->placeholder('System')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('payment_status')
                     ->label('Status')

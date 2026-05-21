@@ -26,4 +26,44 @@ class FloatReplenishmentObserver
             ]);
         }
     }
+
+    /**
+     * Sync attachments to documents table on saved.
+     */
+    public function saved(FloatReplenishment $replenishment): void
+    {
+        $paths = $replenishment->attachment_paths ?? [];
+        if (!is_array($paths)) {
+            $paths = [];
+        }
+
+        // Get existing documents in DB for this float replenishment
+        $existingDocs = \App\Models\Document::where('float_replenishment_id', $replenishment->id)->get();
+        $existingPaths = $existingDocs->pluck('file_path')->toArray();
+
+        // Find paths to delete (present in DB, but not in current attachment_paths)
+        $pathsToDelete = array_diff($existingPaths, $paths);
+        if (!empty($pathsToDelete)) {
+            \App\Models\Document::where('float_replenishment_id', $replenishment->id)
+                ->whereIn('file_path', $pathsToDelete)
+                ->delete();
+        }
+
+        // Find paths to add (present in current attachment_paths, but not in DB)
+        $pathsToAdd = array_diff($paths, $existingPaths);
+        foreach ($pathsToAdd as $path) {
+            if (empty($path)) continue;
+
+            $fileName = basename($path);
+            $fileType = pathinfo($path, PATHINFO_EXTENSION);
+
+            \App\Models\Document::create([
+                'float_replenishment_id' => $replenishment->id,
+                'file_path' => $path,
+                'file_name' => $fileName,
+                'file_type' => $fileType,
+                'uploaded_by' => auth()->id() ?? $replenishment->created_by,
+            ]);
+        }
+    }
 }

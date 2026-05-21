@@ -81,15 +81,15 @@
         <!-- Stat 1: Total Cash in Box -->
         <div class="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-6 shadow-sm flex flex-col justify-between">
             <div class="flex items-center justify-between">
-                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">Total Cash in Box</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Cash in Box</span>
                 <x-heroicon-o-credit-card class="h-5 w-5 text-slate-400 dark:text-slate-500" />
             </div>
             <div class="mt-4">
-                <span class="text-2xl font-bold tracking-tight {{ $grandTotalInBox < 0 ? 'stat-val-rose' : 'stat-val-green' }}">
+                <span class="text-3xl font-medium tracking-tight {{ $grandTotalInBox < 0 ? 'stat-val-rose' : 'stat-val-green' }}">
                     AED {{ number_format($grandTotalInBox, 2) }}
                 </span>
             </div>
-            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <div class="mt-2 text-xs text-slate-400 dark:text-slate-500">
                 Matches physical safe ending balance
             </div>
         </div>
@@ -97,11 +97,11 @@
         <!-- Stat 2: Total Spent This Month -->
         <div class="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-6 shadow-sm flex flex-col justify-between">
             <div class="flex items-center justify-between">
-                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">Total Spent This Month</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Spent This Month</span>
                 <x-heroicon-o-currency-dollar class="h-5 w-5 text-slate-400 dark:text-slate-500" />
             </div>
             <div class="mt-4">
-                <span class="text-2xl font-bold tracking-tight stat-val-blue">
+                <span class="text-3xl font-medium tracking-tight stat-val-blue">
                     AED {{ number_format($paidThisMonth, 2) }}
                 </span>
                 <div class="flex items-center gap-1 mt-1 text-xs {{ $momIsDecrease ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500' }}">
@@ -112,7 +112,7 @@
                     @endif
                 </div>
             </div>
-            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <div class="mt-2 text-xs text-slate-400 dark:text-slate-500">
                 Total approved disbursements this month
             </div>
         </div>
@@ -120,15 +120,15 @@
         <!-- Stat 3: Cash Not Yet Returned -->
         <div class="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-6 shadow-sm flex flex-col justify-between">
             <div class="flex items-center justify-between">
-                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">Cash Not Yet Returned</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Cash Not Yet Returned</span>
                 <x-heroicon-o-clock class="h-5 w-5 text-slate-400 dark:text-slate-500" />
             </div>
             <div class="mt-4">
-                <span class="text-2xl font-bold tracking-tight stat-val-amber">
+                <span class="text-3xl font-medium tracking-tight stat-val-amber">
                     AED {{ number_format($outstandingAmount, 2) }}
                 </span>
             </div>
-            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <div class="mt-2 text-xs text-slate-400 dark:text-slate-500">
                 Advances still to be accounted for
             </div>
         </div>
@@ -136,15 +136,15 @@
         <!-- Stat 4: Average Days to Settle -->
         <div class="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-6 shadow-sm flex flex-col justify-between">
             <div class="flex items-center justify-between">
-                <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">Average Days to Settle</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Average Days to Settle</span>
                 <x-heroicon-o-calendar class="h-5 w-5 text-slate-400 dark:text-slate-500" />
             </div>
             <div class="mt-4">
-                <span class="text-2xl font-bold tracking-tight stat-val-indigo">
+                <span class="text-3xl font-medium tracking-tight stat-val-indigo">
                     {{ $avgDaysFormatted }}
                 </span>
             </div>
-            <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <div class="mt-2 text-xs text-slate-400 dark:text-slate-500">
                 Typical receipt filing duration
             </div>
         </div>

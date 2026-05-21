@@ -1111,6 +1111,7 @@ class VoucherResource extends Resource
                         Notification::make()->title('Attachments and notes securely updated')->success()->send();
                     }),
             ])
+            ->paginated([10, 25, 50, 100])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\BulkAction::make('export_selected')

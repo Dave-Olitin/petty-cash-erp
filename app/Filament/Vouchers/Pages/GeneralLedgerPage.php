@@ -27,7 +27,7 @@ class GeneralLedgerPage extends Page implements HasForms
     protected static ?string $navigationIcon = 'heroicon-o-book-open';
     protected static ?string $navigationGroup = 'Accounting';
     protected static ?string $navigationLabel = 'General Ledger';
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 6;
     protected static string $view = 'filament.vouchers.pages.general-ledger-page';
 
     public static function getNavigationBadge(): ?string
