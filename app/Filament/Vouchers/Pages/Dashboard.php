@@ -17,6 +17,20 @@ class Dashboard extends \Filament\Pages\Dashboard
         return auth()->user()->can('access_vouchers_panel');
     }
 
+    public function getColumns(): int | string | array
+    {
+        return [
+            'default' => 1,
+            'md' => 2,
+            'xl' => 3,
+        ];
+    }
+
+    public function getMaxContentWidth(): \Filament\Support\Enums\MaxWidth | string | null
+    {
+        return \Filament\Support\Enums\MaxWidth::Full;
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -195,9 +209,7 @@ class Dashboard extends \Filament\Pages\Dashboard
     public function getWidgets(): array
     {
         return [
-            \App\Filament\Vouchers\Widgets\VoucherStatsOverview::class,
-            \App\Filament\Vouchers\Widgets\DenominationStatsOverview::class,
-            \App\Filament\Vouchers\Widgets\LiquidationSummaryWidget::class,
+            \App\Filament\Vouchers\Widgets\DashboardOverviewWidget::class,
             \App\Filament\Vouchers\Widgets\FloatReplenishmentsTable::class,
             \App\Filament\Vouchers\Widgets\DenominationsTableWidget::class,
         ];
