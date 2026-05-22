@@ -10,6 +10,7 @@ class ListAuditLogs extends ListRecords
 {
     protected static string $resource = AuditLogResource::class;
 
+    #[\Livewire\Attributes\Url]
     public ?string $activeTab = 'audit_logs';
 
     protected function getHeaderActions(): array

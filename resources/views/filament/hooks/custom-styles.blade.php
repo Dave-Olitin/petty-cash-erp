@@ -231,4 +231,43 @@
         font-weight: 800 !important;
         box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.2), 0 2px 4px -2px rgba(34, 197, 94, 0.2) !important;
     }
+
+    /* Active/Selected Sidebar Navigation Menu Item styling */
+    .fi-sidebar-item-button-active,
+    .fi-sidebar-item-button[aria-current="page"],
+    .fi-sidebar-item-active,
+    .fi-sidebar-item-button[class*="active"],
+    a[class*="sidebar-item-button-active"],
+    a[class*="sidebar-item-button"][aria-current="page"] {
+        background-color: rgba(34, 197, 94, 0.12) !important; /* Elegant light green tint */
+        border-inline-start: 4px solid #000000ff !important; /* Vibrant green left border */
+        color: #22c55e !important;
+        font-weight: 700 !important;
+        border-top-left-radius: 0px !important;
+        border-bottom-left-radius: 0px !important;
+        border-top-right-radius: 6px !important;
+        border-bottom-right-radius: 6px !important;
+    }
+    
+    .dark .fi-sidebar-item-button-active,
+    .dark .fi-sidebar-item-button[aria-current="page"],
+    .dark .fi-sidebar-item-active,
+    .dark .fi-sidebar-item-button[class*="active"],
+    .dark a[class*="sidebar-item-button-active"],
+    .dark a[class*="sidebar-item-button"][aria-current="page"] {
+        background-color: rgba(34, 197, 94, 0.2) !important; /* Slightly darker green tint for dark mode */
+        border-inline-start: 4px solid #000000ff !important;
+        color: #22c55e !important;
+    }
+
+    /* Change icons and labels color of active/selected sidebar items */
+    .fi-sidebar-item-button-active .fi-sidebar-item-icon,
+    .fi-sidebar-item-button-active .fi-sidebar-item-label,
+    .fi-sidebar-item-button[aria-current="page"] .fi-sidebar-item-icon,
+    .fi-sidebar-item-button[aria-current="page"] .fi-sidebar-item-label,
+    .fi-sidebar-item-button[class*="active"] .fi-sidebar-item-icon,
+    .fi-sidebar-item-button[class*="active"] .fi-sidebar-item-label {
+        color: #22c55e !important;
+        font-weight: 700 !important;
+    }
 </style>

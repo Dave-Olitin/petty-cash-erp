@@ -37,9 +37,10 @@ class TopUnliquidatedTableWidget extends BaseWidget
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('voucher_numbers')
                     ->label('References')
-                    ->wrap()
-                    ->fontFamily('mono')
+                    ->badge()
+                    ->separator(', ')
                     ->color('gray')
+                    ->fontFamily('mono')
                     ->size('xs'),
                 Tables\Columns\TextColumn::make('total_outstanding')
                     ->label('Total Unliquidated')

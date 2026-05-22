@@ -29,12 +29,12 @@ class AuditLogResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user() && auth()->user()->hasRole('Admin');
+        return auth()->user() && auth()->user()->hasAnyRole(['Admin', 'Super Admin']);
     }
 
     public static function canViewAny(): bool
     {
-        return auth()->user() && auth()->user()->hasRole('Admin');
+        return auth()->user() && auth()->user()->hasAnyRole(['Admin', 'Super Admin']);
     }
 
     public static function canCreate(): bool
@@ -137,8 +137,8 @@ class AuditLogResource extends Resource
                         };
 
                         $props = $record->properties;
-                        if ($props instanceof \Spatie\Activitylog\Contracts\Activity) {
-                            $props = $props->properties->toArray();
+                        if ($props instanceof \Illuminate\Support\Collection) {
+                            $props = $props->toArray();
                         } elseif (is_object($props) && method_exists($props, 'toArray')) {
                             $props = $props->toArray();
                         } elseif (is_string($props)) {

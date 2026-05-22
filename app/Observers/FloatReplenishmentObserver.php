@@ -14,7 +14,7 @@ class FloatReplenishmentObserver
     public function created(FloatReplenishment $replenishment): void
     {
         // Only create if no denomination already exists (avoids double-entry)
-        if (! $replenishment->denominations) {
+        if (! $replenishment->denominations()->exists()) {
             $replenishment->denominations()->create([
                 'total_amount'       => $replenishment->amount,
                 'change_given'       => 0,

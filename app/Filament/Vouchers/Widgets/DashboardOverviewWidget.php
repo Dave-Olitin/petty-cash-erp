@@ -151,6 +151,9 @@ class DashboardOverviewWidget extends Widget
                 'totalReplenishingAmount'     => 'AED ' . number_format($totalReplenishingAmount, 2),
                 'totalReceiptsAmount'         => 'AED ' . number_format($totalReceiptsAmount, 2),
                 'totalCashOutAmount'          => 'AED ' . number_format($totalCashOutAmount, 2),
+                'rawReplenishments'           => $totalReplenishingAmount,
+                'rawReceipts'                 => $totalReceiptsAmount,
+                'rawCashOut'                  => $totalCashOutAmount,
                 'avgDaysFormatted'            => $avgDaysFormatted,
             ];
         });

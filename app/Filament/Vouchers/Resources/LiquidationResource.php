@@ -193,7 +193,7 @@ class LiquidationResource extends Resource
                             ->helperText('Leave blank for system default.'),
 
                         Forms\Components\Select::make('liquidated_by')
-                            ->label(' custodian')
+                            ->label('Custodian')
                             ->relationship('custodian', 'name')
                             ->searchable()
                             ->preload()
@@ -362,13 +362,14 @@ class LiquidationResource extends Resource
                         default                         => 'info',
                     }),
 
-                Tables\Columns\BadgeColumn::make('status')
-                    ->colors([
-                        'warning' => 'pending',
-                        'success' => 'complete',
-                        'danger'  => 'short',
-                        'info'    => 'excess',
-                    ])
+                        Tables\Columns\TextColumn::make('status')
+                    ->badge()
+                    ->color(fn ($state) => match ($state) {
+                        'complete' => 'success',
+                        'short'    => 'danger',
+                        'excess'   => 'info',
+                        default    => 'warning',
+                    })
                     ->formatStateUsing(fn ($state) => ucfirst($state)),
 
                 Tables\Columns\TextColumn::make('due_date')

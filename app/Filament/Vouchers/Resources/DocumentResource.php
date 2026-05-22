@@ -29,12 +29,12 @@ class DocumentResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->user() && auth()->user()->hasRole('Admin');
+        return auth()->user() && auth()->user()->hasAnyRole(['Admin', 'Super Admin']);
     }
 
     public static function canViewAny(): bool
     {
-        return auth()->user() && auth()->user()->hasRole('Admin');
+        return auth()->user() && auth()->user()->hasAnyRole(['Admin', 'Super Admin']);
     }
 
     public static function canCreate(): bool
@@ -91,7 +91,7 @@ class DocumentResource extends Resource
                         ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->voucher_id]) 
                         : ($record->float_replenishment_id ? route('replenishment.pdf', ['replenishment' => $record->float_replenishment_id]) : null)
                     )
-                    ->color('primary')
+                    ->color('warning')
                     ->weight('bold')
                     ->fontFamily('mono'),
 
