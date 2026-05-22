@@ -754,6 +754,7 @@ class VoucherResource extends Resource
 
                 Tables\Actions\EditAction::make()
                     ->iconButton()
+                    ->color('warning')
                     ->visible(fn (Voucher $record): bool => auth()->user()->can('update', $record)),
 
                 Tables\Actions\Action::make('submit')

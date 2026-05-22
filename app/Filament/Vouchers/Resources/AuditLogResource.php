@@ -27,9 +27,14 @@ class AuditLogResource extends Resource
 
     protected static ?int $navigationSort = 11;
 
+    public static function canAccess(): bool
+    {
+        return auth()->user() && auth()->user()->hasRole('Admin');
+    }
+
     public static function canViewAny(): bool
     {
-        return auth()->user()?->can('manage_settings') ?? false;
+        return auth()->user() && auth()->user()->hasRole('Admin');
     }
 
     public static function canCreate(): bool
@@ -86,11 +91,159 @@ class AuditLogResource extends Resource
                         'rejected' => 'danger',
                         default => 'gray',
                     })
+                    ->limit(20)
+                    ->tooltip(fn ($state) => $state)
                     ->searchable(),
+
+                Tables\Columns\TextColumn::make('summary')
+                    ->label('Friendly Summary')
+                    ->wrap()
+                    ->limit(80)
+                    ->tooltip(fn ($state) => $state)
+                    ->getStateUsing(function ($record) {
+                        $subject = $record->subject;
+                        $action = strtolower($record->description);
+                        
+                        $basename = $record->subject_type ? class_basename($record->subject_type) : 'System';
+                        
+                        $subjectName = '—';
+                        if ($subject) {
+                            if (isset($subject->voucher_number)) {
+                                $subjectName = $subject->voucher_number;
+                            } elseif (isset($subject->entry_no)) {
+                                $subjectName = $subject->entry_no;
+                            } elseif (isset($subject->name)) {
+                                $subjectName = $subject->name;
+                            } elseif (isset($subject->label)) {
+                                $subjectName = $subject->label;
+                            } elseif (isset($subject->reference)) {
+                                $subjectName = $subject->reference;
+                            } else {
+                                $subjectName = "ID: " . $record->subject_id;
+                            }
+                        } else {
+                            $subjectName = $record->subject_id ? "ID: {$record->subject_id}" : '';
+                        }
+                        
+                        $module = match ($basename) {
+                            'Voucher' => 'Voucher',
+                            'Liquidation' => 'Settlement',
+                            'PurchaseEntry' => 'Purchase Bill',
+                            'TaxRegistration' => 'Supplier',
+                            'User' => 'User Account',
+                            'PeriodClose' => 'Period Closing',
+                            'LedgerAccount' => 'Chart of Account',
+                            default => $basename,
+                        };
+
+                        $props = $record->properties;
+                        if ($props instanceof \Spatie\Activitylog\Contracts\Activity) {
+                            $props = $props->properties->toArray();
+                        } elseif (is_object($props) && method_exists($props, 'toArray')) {
+                            $props = $props->toArray();
+                        } elseif (is_string($props)) {
+                            $props = json_decode($props, true) ?? [];
+                        } elseif (!is_array($props)) {
+                            $props = [];
+                        }
+
+                        $old = \Illuminate\Support\Arr::get($props, 'old', []);
+                        $new = \Illuminate\Support\Arr::get($props, 'attributes', $props);
+
+                        if ($basename === 'Voucher') {
+                            $amt = isset($new['amount']) ? ' (AED ' . number_format($new['amount'], 2) . ')' : '';
+                            $payee = isset($new['payee']) ? ' for ' . $new['payee'] : '';
+                            
+                            switch ($action) {
+                                case 'created':
+                                    return "Created new Voucher {$subjectName}{$amt}{$payee}.";
+                                case 'updated':
+                                    $changes = [];
+                                    foreach ($new as $k => $v) {
+                                        if (in_array($k, ['created_at', 'updated_at', 'deleted_at'])) continue;
+                                        $oldVal = \Illuminate\Support\Arr::get($old, $k);
+                                        if ($oldVal != $v) {
+                                            $lbl = ucwords(str_replace('_', ' ', $k));
+                                            if (is_scalar($oldVal) && is_scalar($v)) {
+                                                $changes[] = "{$lbl} from '" . ($oldVal ?: 'none') . "' to '{$v}'";
+                                            }
+                                        }
+                                    }
+                                    if (empty($changes)) {
+                                        return "Updated Voucher {$subjectName}.";
+                                    }
+                                    return "Updated Voucher {$subjectName}: " . implode(', ', $changes);
+                                case 'deleted':
+                                    return "Deleted Voucher {$subjectName}.";
+                                case 'submitted':
+                                    return "Submitted Voucher {$subjectName} for Checker review.";
+                                case 'approved':
+                                    return "Approved Voucher {$subjectName}.";
+                                case 'rejected':
+                                    return "Rejected Voucher {$subjectName}.";
+                                case 'paid':
+                                    return "Paid/Disbursed Voucher {$subjectName}.";
+                                default:
+                                    return ucfirst($action) . " Voucher {$subjectName}.";
+                            }
+                        }
+
+                        if ($basename === 'Liquidation') {
+                            $spent = isset($new['amount_spent']) ? 'AED ' . number_format($new['amount_spent'], 2) : '';
+                            $returned = isset($new['amount_returned']) ? 'AED ' . number_format($new['amount_returned'], 2) : '';
+                            switch ($action) {
+                                case 'created':
+                                    return "Initiated Settlement for Voucher {$subjectName}.";
+                                case 'updated':
+                                    if (isset($new['status']) && isset($old['status']) && $old['status'] !== $new['status']) {
+                                        return "Settlement status for Voucher {$subjectName} changed from '" . ucfirst($old['status']) . "' to '" . ucfirst($new['status']) . "'.";
+                                    }
+                                    return "Updated Settlement details for Voucher {$subjectName}.";
+                                default:
+                                    return ucfirst($action) . " Settlement for Voucher {$subjectName}.";
+                            }
+                        }
+
+                        if ($basename === 'PurchaseEntry') {
+                            $total = isset($new['grand_total']) ? ' (AED ' . number_format($new['grand_total'], 2) . ')' : '';
+                            switch ($action) {
+                                case 'created':
+                                    return "Created Purchase Bill {$subjectName}{$total}.";
+                                case 'updated':
+                                    if (isset($new['payment_status']) && isset($old['payment_status']) && $old['payment_status'] !== $new['payment_status']) {
+                                        return "Payment status of Purchase Bill {$subjectName} changed from '{$old['payment_status']}' to '{$new['payment_status']}'.";
+                                    }
+                                    return "Updated Purchase Bill {$subjectName}.";
+                                default:
+                                    return ucfirst($action) . " Purchase Bill {$subjectName}.";
+                            }
+                        }
+
+                        // General Fallback
+                        $actionLabel = ucfirst(str_replace('_', ' ', $action));
+                        $detailsList = [];
+                        foreach ($new as $k => $v) {
+                            if (in_array($k, ['created_at', 'updated_at', 'deleted_at', 'password', 'remember_token'])) continue;
+                            if (is_scalar($v) && strlen((string)$v) < 50) {
+                                $detailsList[] = ucwords(str_replace('_', ' ', $k)) . ": '{$v}'";
+                            }
+                        }
+                        $details = !empty($detailsList) ? " (" . implode(', ', array_slice($detailsList, 0, 3)) . ")" : "";
+                        return "{$actionLabel} {$module} {$subjectName}{$details}.";
+                    }),
 
                 Tables\Columns\TextColumn::make('subject_type')
                     ->label('Module')
-                    ->formatStateUsing(fn ($state) => $state ? class_basename($state) : '—')
+                    ->formatStateUsing(fn ($state) => match ($state ? class_basename($state) : '') {
+                        'Voucher' => 'Voucher',
+                        'Liquidation' => 'Settlement (Liquidation)',
+                        'PurchaseEntry' => 'Purchase Bill',
+                        'TaxRegistration' => 'Supplier Directory',
+                        'User' => 'User Account',
+                        'PeriodClose' => 'Period Closing',
+                        'LedgerAccount' => 'Chart of Account',
+                        default => $state ? class_basename($state) : '—',
+                    })
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('subject_id')

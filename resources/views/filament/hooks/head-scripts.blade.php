@@ -1,7 +1,7 @@
 {{-- PWA & Login Page Head Injections --}}
 @if(Request::is('vouchers') || Request::is('vouchers/*') || true)
     <link rel="manifest" href="/manifest-vouchers.json">
-    <meta name="theme-color" content="#f59e0b">
+    <meta name="theme-color" content="#000000">
 @endif
 
 @if(filament()->getCurrentPanel()->getId() === 'admin')

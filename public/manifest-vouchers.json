@@ -10,7 +10,7 @@
     "start_url": "/vouchers/login",
     "display": "standalone",
     "background_color": "#ffffff",
-    "theme_color": "#f59e0b",
+    "theme_color": "#000000",
     "orientation": "any",
     "prefer_related_applications": false,
     "icons": [

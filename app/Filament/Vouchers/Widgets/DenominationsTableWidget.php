@@ -58,7 +58,7 @@ class DenominationsTableWidget extends BaseWidget
                     ->color('primary')
                     ->weight(\Filament\Support\Enums\FontWeight::Bold),
                 Tables\Columns\IconColumn::make('is_change_received')
-                    ->label('Change RTN')
+                    ->label('Exact')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-circle')
                     ->falseIcon('heroicon-o-x-circle')
@@ -117,7 +117,7 @@ class DenominationsTableWidget extends BaseWidget
                             ];
                         })->toArray();
 
-                        array_unshift($exportData, ['Date', 'Source', 'Reference', 'Gross Amount', 'Change', 'Net Change', 'Change RTN', 'Remarks']);
+                        array_unshift($exportData, ['Date', 'Source', 'Reference', 'Gross Amount', 'Change', 'Net Change', 'Exact', 'Remarks']);
 
                         return response()->streamDownload(function () use ($exportData) {
                             $file = fopen('php://output', 'w');

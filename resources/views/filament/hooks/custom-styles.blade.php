@@ -1,3 +1,7 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+
 <style>
     .fi-tabs,
     .voucher-preview-section .fi-section-content {
@@ -8,7 +12,7 @@
     .font-mono,
     .font-serif,
     body {
-        font-family: Manrope, "Public Sans", sans-serif, -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important
+        font-family: "Manrope", "Public Sans", sans-serif, -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important
     }
 
     .fi-section,
@@ -195,5 +199,36 @@
     .fi-wi-stats-overview-stat {
         padding: 1.25rem !important;
         gap: 0.5rem !important;
+    }
+
+    /* Completed Wizard Step Icon UI to Green */
+    .fi-fo-wizard-header-step.fi-completed .fi-fo-wizard-header-step-icon-ctn {
+        background-color: #22c55e !important;
+        color: #ffffff !important;
+        border-color: #22c55e !important;
+    }
+    .fi-fo-wizard-header-step.fi-completed .fi-fo-wizard-header-step-label {
+        color: #22c55e !important;
+    }
+
+    /* Notification Bell Badge to Green */
+    .fi-topbar-database-notifications-btn .fi-icon-btn-badge,
+    .fi-topbar-database-notifications-btn .fi-badge,
+    .fi-topbar-database-notifications-btn span[class*="badge"],
+    .fi-icon-btn-badge {
+        background-color: #22c55e !important;
+        color: #ffffff !important;
+    }
+
+    /* Distinct Pagination Active/Current Page Button Styling */
+    .fi-ta-pagination button[aria-current="page"],
+    .fi-pagination button[aria-current="page"],
+    .fi-pagination-item-active,
+    button[aria-current="page"] {
+        background-color: #22c55e !important; /* Success Green */
+        color: #ffffff !important;
+        border-color: #22c55e !important;
+        font-weight: 800 !important;
+        box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.2), 0 2px 4px -2px rgba(34, 197, 94, 0.2) !important;
     }
 </style>

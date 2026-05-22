@@ -94,7 +94,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
             {{-- Category Breakdown --}}
-            <x-filament::section class="lg:col-span-1">
+            <x-filament::section class="col-span-full">
                 <x-slot name="heading">
                     <div class="flex items-center gap-2">
                         <x-heroicon-o-tag class="h-4 w-4 text-gray-400" />
@@ -129,35 +129,41 @@
                                 const rawData = JSON.parse(this.$el.dataset.series);
                                 const options = {
                                     series: [{
-                                        name: 'Total (Bar)',
-                                        type: 'column',
-                                        data: rawData
-                                    }, {
-                                        name: 'Total (Line)',
-                                        type: 'line',
+                                        name: 'Total Spent',
                                         data: rawData
                                     }],
                                     labels: JSON.parse(this.$el.dataset.labels),
                                     chart: {
-                                        type: 'line',
+                                        type: 'bar',
                                         height: 380,
                                         animations: { enabled: true, easing: 'easeinout', speed: 800 },
                                         background: 'transparent',
                                         toolbar: { show: false }
                                     },
-                                    stroke: {
-                                        width: [0, 4],
-                                        curve: 'smooth'
+                                    plotOptions: {
+                                        bar: {
+                                            borderRadius: 6,
+                                            columnWidth: '45%',
+                                            distributed: true
+                                        }
                                     },
-                                    theme: { mode: isDark ? 'dark' : 'light', palette: 'palette1' },
+                                    colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#06b6d4', '#475569', '#3f3f46', '#22c55e', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'],
+                                    theme: { mode: isDark ? 'dark' : 'light' },
                                     dataLabels: {
-                                        enabled: true,
-                                        enabledOnSeries: [1],
-                                        formatter: function (val) { return 'AED ' + Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); },
-                                        background: { enabled: true, foreColor: isDark ? '#fff' : '#000', borderRadius: 2, borderWidth: 0 }
+                                        enabled: false
+                                    },
+                                    grid: {
+                                        borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                                        strokeDashArray: 4
                                     },
                                     xaxis: {
-                                        labels: { style: { colors: textColor } }
+                                        labels: {
+                                            rotate: -45,
+                                            rotateAlways: true,
+                                            style: { colors: textColor, fontSize: '11px', fontWeight: 500 },
+                                            trim: true,
+                                            maxHeight: 120
+                                        }
                                     },
                                     yaxis: [{
                                         labels: {
@@ -165,7 +171,7 @@
                                             formatter: function(val) { return 'AED ' + Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
                                         }
                                     }],
-                                    legend: { show: true, position: 'bottom', fontSize: '12px', labels: { colors: textColor } },
+                                    legend: { show: false },
                                     tooltip: {
                                         theme: isDark ? 'dark' : 'light',
                                         y: { formatter: function(val) { return 'AED ' + Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } }
@@ -186,7 +192,7 @@
             </x-filament::section>
 
             {{-- Voucher Table --}}
-            <div class="lg:col-span-3">
+            <div class="col-span-full">
                 {{ $this->table }}
             </div>
 

@@ -211,7 +211,6 @@ class Dashboard extends \Filament\Pages\Dashboard
         return [
             \App\Filament\Vouchers\Widgets\DashboardOverviewWidget::class,
             \App\Filament\Vouchers\Widgets\FloatReplenishmentsTable::class,
-            \App\Filament\Vouchers\Widgets\DenominationsTableWidget::class,
         ];
     }
 }

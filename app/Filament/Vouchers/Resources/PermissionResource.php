@@ -79,8 +79,13 @@ class PermissionResource extends Resource
         ];
     }
 
+    public static function canAccess(): bool
+    {
+        return auth()->user()->hasRole('Admin');
+    }
+
     public static function canViewAny(): bool
     {
-        return auth()->user()->can('manage_settings');
+        return auth()->user()->hasRole('Admin');
     }
 }

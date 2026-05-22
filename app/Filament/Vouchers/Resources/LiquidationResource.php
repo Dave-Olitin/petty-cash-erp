@@ -328,7 +328,8 @@ class LiquidationResource extends Resource
                     ->url(fn ($record) => $record->voucher_id
                         ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->voucher_id])
                         : null)
-                    ->openUrlInNewTab(),
+                    ->openUrlInNewTab()
+                    ->color('warning'),
 
                 Tables\Columns\TextColumn::make('voucher.payee')
                     ->label('Employee / Payee')

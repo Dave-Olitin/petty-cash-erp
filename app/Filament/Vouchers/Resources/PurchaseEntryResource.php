@@ -480,7 +480,7 @@ class PurchaseEntryResource extends Resource
                     ->label('Type')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state === 'return' ? 'PURCHASE RETURN' : 'PURCHASE BILL')
-                    ->color(fn ($state) => $state === 'return' ? 'warning' : 'primary')
+                    ->color(fn ($state) => $state === 'return' ? 'warning' : 'info')
                     ->extraAttributes(['class' => 'font-bold tracking-tighter']),
 
                 Tables\Columns\TextColumn::make('entity')
@@ -700,7 +700,7 @@ class PurchaseEntryResource extends Resource
                                     ->label('Type')
                                     ->badge()
                                     ->formatStateUsing(fn ($state) => $state === 'return' ? 'PURCHASE RETURN' : 'PURCHASE BILL')
-                                    ->color(fn ($state) => $state === 'return' ? 'warning' : 'primary')
+                                    ->color(fn ($state) => $state === 'return' ? 'warning' : 'info')
                                     ->extraAttributes(['class' => 'font-bold tracking-tighter']),
                                 \Filament\Infolists\Components\TextEntry::make('entity')
                                     ->label('Entity'),

@@ -27,9 +27,14 @@ class DocumentResource extends Resource
 
     protected static ?int $navigationSort = 10;
 
+    public static function canAccess(): bool
+    {
+        return auth()->user() && auth()->user()->hasRole('Admin');
+    }
+
     public static function canViewAny(): bool
     {
-        return auth()->user()?->can('manage_settings') ?? false;
+        return auth()->user() && auth()->user()->hasRole('Admin');
     }
 
     public static function canCreate(): bool
@@ -123,6 +128,8 @@ class DocumentResource extends Resource
                               ->orWhereHas('floatReplenishment', fn ($f) => $f->where('remarks', 'like', "%{$search}%"))
                         );
                     })
+                    ->limit(55)
+                    ->tooltip(fn ($state) => $state && strlen($state) > 55 ? $state : null)
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('amount')
