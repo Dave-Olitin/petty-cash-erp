@@ -116,13 +116,10 @@ class DashboardOverviewWidget extends Widget
             $overdueCount = Liquidation::overdue()->count();
 
             // ── 5. CASH FLOW ARCHITECTURE (Ledger Flow) ──
-            $totalReplenishingAmount = FloatReplenishment::sum('amount');
-            $totalReceiptsAmount = Voucher::where('type', 'receipt')
-                ->where('status', 'paid')
-                ->sum('amount');
-            $totalCashOutAmount = Voucher::whereIn('type', ['petty_cash', 'payment'])
-                ->where('status', 'paid')
-                ->sum('amount');
+            $totalReplenishingAmount = $replenished;
+            $totalReceiptsAmount = $receipts;
+            $totalCashOutAmount = $payments;
+
 
             $avgDays = Liquidation::complete()
                 ->whereNotNull('liquidated_at')
