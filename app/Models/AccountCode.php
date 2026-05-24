@@ -112,20 +112,22 @@ class AccountCode extends Model
 
     /**
      * Scope for Trial Balance and GL reports.
-     * Aggregates official Journal Entry lines.
+     * Aggregates paid Voucher Item lines.
      */
     public function scopeWithGLBalances($query, ?\Carbon\Carbon $from = null, ?\Carbon\Carbon $to = null, ?string $branch = null)
     {
         return $query
-            ->withSum(['journalEntryLines as total_debit' => function ($q) use ($from, $to, $branch) {
-                $q->when($from, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '>=', $from)))
-                  ->when($to, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '<=', $to)))
-                  ->when($branch, fn($query) => $query->where('branch', $branch));
+            ->withSum(['voucherItems as total_debit' => function ($q) use ($from, $to, $branch) {
+                $q->whereHas('voucher', fn($v) => $v->where('status', 'paid'))
+                  ->when($from, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
+                  ->when($to, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
+                  ->when($branch, fn($query) => $query->where('branch_code', $branch));
             }], 'debit')
-            ->withSum(['journalEntryLines as total_credit' => function ($q) use ($from, $to, $branch) {
-                $q->when($from, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '>=', $from)))
-                  ->when($to, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '<=', $to)))
-                  ->when($branch, fn($query) => $query->where('branch', $branch));
+            ->withSum(['voucherItems as total_credit' => function ($q) use ($from, $to, $branch) {
+                $q->whereHas('voucher', fn($v) => $v->where('status', 'paid'))
+                  ->when($from, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
+                  ->when($to, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
+                  ->when($branch, fn($query) => $query->where('branch_code', $branch));
             }], 'credit');
     }
 }

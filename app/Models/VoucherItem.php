@@ -65,4 +65,9 @@ class VoucherItem extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+    public function accountCode(): BelongsTo
+    {
+        return $this->belongsTo(AccountCode::class, 'account_code', 'code');
+    }
 }

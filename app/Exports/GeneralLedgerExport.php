@@ -111,11 +111,11 @@ class GeneralLedgerExport implements FromCollection, WithHeadings, WithMapping, 
             : ($isDebitNormal ? 'CR' : 'DR');
 
         return [
-            $line->journalEntry?->date?->format('d/m/Y') ?? '',
-            $line->journalEntry?->entry_no ?? '',
-            $line->journalEntry?->voucher?->voucher_number ?? '',
-            $line->journalEntry?->voucher?->payee ?? '',
-            $line->branch ?? '',
+            $line->voucher?->created_at?->format('d/m/Y') ?? '',
+            $line->voucher?->journalEntry?->entry_no ?? '',
+            $line->voucher?->voucher_number ?? '',
+            $line->voucher?->payee ?? '',
+            $line->branch_code ?? '',
             (float)$line->debit > 0 ? number_format($line->debit, 2) : '',
             (float)$line->credit > 0 ? number_format($line->credit, 2) : '',
             number_format(abs($bal), 2) . ' ' . $balSide,

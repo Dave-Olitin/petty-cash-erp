@@ -100,40 +100,40 @@
                             <tr x-show="isOpen" class="hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-b-0">
                                 <td class="px-6 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap pl-12 relative">
                                     <div class="absolute left-8 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
-                                    {{ $line->journalEntry?->date?->format('d/m/Y') ?? '—' }}
+                                    {{ $line->voucher?->created_at?->format('d/m/Y') ?? '—' }}
                                 </td>
                                 <td class="px-6 py-3">
-                                    @if($line->journalEntry)
-                                        <a href="{{ \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $line->journalEntry]) }}"
+                                    @if($line->voucher?->journalEntry)
+                                        <a href="{{ \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $line->voucher->journalEntry]) }}"
                                            class="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">
-                                            {{ $line->journalEntry->entry_no }}
+                                            {{ $line->voucher->journalEntry->entry_no }}
                                         </a>
                                     @else
                                         <span class="text-gray-400">—</span>
                                     @endif
                                 </td>
                                 <td class="px-6 py-3">
-                                    @if($line->journalEntry?->voucher)
-                                        <a href="{{ \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $line->journalEntry->voucher]) }}"
+                                    @if($line->voucher)
+                                        <a href="{{ \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $line->voucher]) }}"
                                            class="text-xs text-gray-500 dark:text-gray-400 hover:underline">
-                                            {{ $line->journalEntry->voucher->voucher_number }}
+                                            {{ $line->voucher->voucher_number }}
                                         </a>
                                     @else
                                         <span class="text-gray-400">—</span>
                                     @endif
                                 </td>
                                 <td class="px-6 py-3 text-right font-mono text-xs text-gray-500 dark:text-gray-400">
-                                    @if($line->journalEntry?->voucher && $line->journalEntry->voucher->type === 'petty_cash')
-                                        {{ number_format($line->journalEntry->voucher->amount, 2) }}
+                                    @if($line->voucher && $line->voucher->type === 'petty_cash')
+                                        {{ number_format($line->voucher->amount, 2) }}
                                     @else
                                         <span class="text-gray-400">—</span>
                                     @endif
                                 </td>
-                                <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title="{{ $line->journalEntry?->voucher?->payee }}">
-                                    {{ $line->journalEntry?->voucher?->payee ?: '—' }}
+                                <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title="{{ $line->voucher?->payee }}">
+                                    {{ $line->voucher?->payee ?: '—' }}
                                 </td>
                                 <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase italic">
-                                    {{ $line->branch ?: '—' }}
+                                    {{ $line->branch_code ?: '—' }}
                                 </td>
                                 <td class="px-6 py-3 text-right font-mono text-xs {{ (float)$line->debit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700' }}">
                                     {{ (float)$line->debit > 0 ? number_format($line->debit, 2) : '—' }}

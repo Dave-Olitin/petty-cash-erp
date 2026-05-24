@@ -22,15 +22,17 @@ class GeneralLedgerService
     {
         $query = AccountCode::query()
             ->select('account_codes.*')
-            ->withSum(['journalEntryLines as total_debit' => function ($q) use ($from, $to, $branch) {
-                $q->when($from, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '>=', $from)))
-                  ->when($to, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '<=', $to)))
-                  ->when($branch, fn($query) => $query->where('branch', $branch));
+            ->withSum(['voucherItems as total_debit' => function ($q) use ($from, $to, $branch) {
+                $q->whereHas('voucher', fn($v) => $v->where('status', 'paid'))
+                  ->when($from, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
+                  ->when($to, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
+                  ->when($branch, fn($query) => $query->where('branch_code', $branch));
             }], 'debit')
-            ->withSum(['journalEntryLines as total_credit' => function ($q) use ($from, $to, $branch) {
-                $q->when($from, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '>=', $from)))
-                  ->when($to, fn($query) => $query->whereHas('journalEntry', fn($je) => $je->whereDate('date', '<=', $to)))
-                  ->when($branch, fn($query) => $query->where('branch', $branch));
+            ->withSum(['voucherItems as total_credit' => function ($q) use ($from, $to, $branch) {
+                $q->whereHas('voucher', fn($v) => $v->where('status', 'paid'))
+                  ->when($from, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
+                  ->when($to, fn($query) => $query->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
+                  ->when($branch, fn($query) => $query->where('branch_code', $branch));
             }], 'credit');
 
         return $query->get()->map(function ($account) {
@@ -53,13 +55,14 @@ class GeneralLedgerService
      */
     public function getAccountLedger(AccountCode $account, ?Carbon $from = null, ?Carbon $to = null, ?string $branch = null): Collection
     {
-        return JournalEntryLine::query()
-            ->where('account_code_id', $account->id)
-            ->with(['journalEntry', 'journalEntry.voucher'])
-            ->when($from, fn($q) => $q->whereHas('journalEntry', fn($je) => $je->whereDate('date', '>=', $from)))
-            ->when($to, fn($q) => $q->whereHas('journalEntry', fn($je) => $je->whereDate('date', '<=', $to)))
-            ->when($branch, fn($q) => $q->where('branch', $branch))
+        return VoucherItem::query()
+            ->where('account_code', $account->code)
+            ->whereHas('voucher', fn($v) => $v->where('status', 'paid'))
+            ->with(['voucher', 'voucher.journalEntry'])
+            ->when($from, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
+            ->when($to, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
+            ->when($branch, fn($q) => $q->where('branch_code', $branch))
             ->get()
-            ->sortBy(fn($line) => $line->journalEntry->date);
+            ->sortBy(fn($line) => $line->voucher->created_at);
     }
 }
