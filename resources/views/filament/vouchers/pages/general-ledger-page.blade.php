@@ -34,6 +34,7 @@
                     <tr class="text-[11px] uppercase tracking-wider text-gray-500 bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
                         <th class="px-6 py-4 font-bold">Date</th>
                         <th class="px-6 py-4 font-bold">JE Ref</th>
+                        <th class="px-6 py-4 font-bold">Src</th>
                         <th class="px-6 py-4 font-bold">Voucher #</th>
                         <th class="px-6 py-4 text-right font-bold">PCV Amount</th>
                         <th class="px-6 py-4 font-bold">Payee</th>
@@ -60,7 +61,7 @@
                     <tbody x-data="{ isOpen: false }" class="border-b border-gray-200 dark:border-gray-800 last:border-b-0">
                         {{-- Account Group Header Row --}}
                         <tr @click="isOpen = !isOpen" class="cursor-pointer bg-gray-100/80 dark:bg-gray-800/80 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors border-y border-gray-200 dark:border-gray-700">
-                            <td colspan="6" class="px-6 py-3">
+                            <td colspan="7" class="px-6 py-3">
                                 <div class="flex items-center gap-3">
                                     <x-filament::icon
                                         x-bind:class="isOpen ? 'rotate-180' : ''"
@@ -96,51 +97,82 @@
                                 $balLabel = $bal >= 0
                                     ? ($isDebitNormal ? 'DR' : 'CR')
                                     : ($isDebitNormal ? 'CR' : 'DR');
+                                $isJeSource = $line->source === 'je';
                             @endphp
                             <tr x-show="isOpen" class="hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-b-0">
+                                {{-- Date --}}
                                 <td class="px-6 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap pl-12 relative">
                                     <div class="absolute left-8 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
-                                    {{ $line->voucher?->created_at?->format('d/m/Y') ?? '—' }}
+                                    {{ optional($line->date)->format('d/m/Y') ?? '—' }}
                                 </td>
+
+                                {{-- JE Ref --}}
                                 <td class="px-6 py-3">
-                                    @if($line->voucher?->journalEntry)
-                                        <a href="{{ \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $line->voucher->journalEntry]) }}"
+                                    @if($line->je_ref)
+                                        <a href="{{ \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $line->je_id]) }}"
                                            class="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">
-                                            {{ $line->voucher->journalEntry->entry_no }}
+                                            {{ $line->je_ref }}
                                         </a>
                                     @else
                                         <span class="text-gray-400">—</span>
                                     @endif
                                 </td>
+
+                                {{-- Source badge --}}
                                 <td class="px-6 py-3">
-                                    @if($line->voucher)
-                                        <a href="{{ \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $line->voucher]) }}"
+                                    @if($isJeSource)
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                            JE
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                            VCH
+                                        </span>
+                                    @endif
+                                </td>
+
+                                {{-- Voucher # --}}
+                                <td class="px-6 py-3">
+                                    @if($line->voucher_id)
+                                        <a href="{{ \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $line->voucher_id]) }}"
                                            class="text-xs text-gray-500 dark:text-gray-400 hover:underline">
-                                            {{ $line->voucher->voucher_number }}
+                                            {{ $line->voucher_number ?? '—' }}
                                         </a>
                                     @else
                                         <span class="text-gray-400">—</span>
                                     @endif
                                 </td>
+
+                                {{-- PCV Amount --}}
                                 <td class="px-6 py-3 text-right font-mono text-xs text-gray-500 dark:text-gray-400">
-                                    @if($line->voucher && $line->voucher->type === 'petty_cash')
-                                        {{ number_format($line->voucher->amount, 2) }}
+                                    @if($line->voucher_type === 'petty_cash' && $line->voucher_amount)
+                                        {{ number_format($line->voucher_amount, 2) }}
                                     @else
                                         <span class="text-gray-400">—</span>
                                     @endif
                                 </td>
-                                <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title="{{ $line->voucher?->payee }}">
-                                    {{ $line->voucher?->payee ?: '—' }}
+
+                                {{-- Payee --}}
+                                <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[150px] truncate" title="{{ $line->payee }}">
+                                    {{ $line->payee ?: '—' }}
                                 </td>
+
+                                {{-- Branch --}}
                                 <td class="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase italic">
-                                    {{ $line->branch_code ?: '—' }}
+                                    {{ $line->branch ?: '—' }}
                                 </td>
-                                <td class="px-6 py-3 text-right font-mono text-xs {{ (float)$line->debit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700' }}">
-                                    {{ (float)$line->debit > 0 ? number_format($line->debit, 2) : '—' }}
+
+                                {{-- Debit --}}
+                                <td class="px-6 py-3 text-right font-mono text-xs {{ $line->debit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700' }}">
+                                    {{ $line->debit > 0 ? number_format($line->debit, 2) : '—' }}
                                 </td>
-                                <td class="px-6 py-3 text-right font-mono text-xs {{ (float)$line->credit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700' }}">
-                                    {{ (float)$line->credit > 0 ? number_format($line->credit, 2) : '—' }}
+
+                                {{-- Credit --}}
+                                <td class="px-6 py-3 text-right font-mono text-xs {{ $line->credit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700' }}">
+                                    {{ $line->credit > 0 ? number_format($line->credit, 2) : '—' }}
                                 </td>
+
+                                {{-- Running Balance --}}
                                 <td class="px-6 py-3 text-right font-mono text-xs text-gray-900 dark:text-white">
                                     {{ number_format(abs($bal), 2) }}
                                     <span class="text-[9px] font-normal text-gray-400 ml-0.5">{{ $balLabel }}</span>
@@ -151,7 +183,7 @@
                 @empty
                     <tbody>
                         <tr>
-                            <td colspan="9" class="text-center py-24 text-gray-400 dark:text-gray-600 bg-gray-50/20">
+                            <td colspan="10" class="text-center py-24 text-gray-400 dark:text-gray-600 bg-gray-50/20">
                                 <x-filament::icon icon="heroicon-o-book-open" class="mx-auto h-16 w-16 mb-4 opacity-20" />
                                 <p class="text-base font-medium">No transactions found.</p>
                             </td>

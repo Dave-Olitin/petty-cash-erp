@@ -3,8 +3,9 @@
 namespace App\Filament\Vouchers\Pages;
 
 use App\Models\AccountCode;
-use App\Models\Liquidation;
+use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
+use App\Models\Liquidation;
 use App\Models\VoucherItem;
 use App\Models\LedgerBranch;
 use App\Exports\GeneralLedgerExport;
@@ -46,13 +47,14 @@ class GeneralLedgerPage extends Page implements HasForms
     public function mount(): void
     {
         $this->form->fill([
-            'from_date' => now()->startOfMonth()->toDateString(),
-            'to_date' => now()->toDateString(),
-            'account_id' => [],
-            'branch' => [],
-            'basis' => [],
-            'payee' => null,
-            'only_with_je' => true,
+            'from_date'   => now()->startOfMonth()->toDateString(),
+            'to_date'     => now()->toDateString(),
+            'account_id'  => [],
+            'branch'      => [],
+            'basis'       => [],
+            'payee'       => null,
+            'only_with_je'=> true,
+            'data_source' => 'both',
         ]);
     }
 
@@ -110,6 +112,16 @@ class GeneralLedgerPage extends Page implements HasForms
                             ->label('Payee')
                             ->placeholder('Search Payee'),
 
+                        \Filament\Forms\Components\Select::make('data_source')
+                            ->label('Data Source')
+                            ->options([
+                                'both'          => '🔀 Both (Vouchers + JEs)',
+                                'vouchers_only' => '📄 Vouchers Only',
+                                'je_only'       => '📒 JE Lines Only',
+                            ])
+                            ->default('both')
+                            ->selectablePlaceholder(false),
+
                         \Filament\Forms\Components\Toggle::make('only_with_je')
                             ->label('Only Show Liquidations with Official JE')
                             ->inline(false),
@@ -118,47 +130,129 @@ class GeneralLedgerPage extends Page implements HasForms
             ->statePath('data');
     }
 
-    /** Fetch all matching paid voucher lines, grouped by account. */
+    /**
+     * Fetch all matching lines from Vouchers and/or JEs, grouped by account.
+     *
+     * Strategy (data_source = 'both'):
+     *   • VoucherItem rows → only for vouchers WITHOUT a linked JE (no double-count)
+     *   • JournalEntryLine rows → all JEs (covers both voucher-backed and standalone)
+     *
+     * Each row is normalised into a plain object with a common shape so the blade
+     * and export can handle both sources identically.
+     */
     #[Computed]
     public function ledgerGroups(): Collection
     {
-        $f = $this->data;
-        $from = !empty($f['from_date']) ? Carbon::parse($f['from_date']) : null;
-        $to = !empty($f['to_date']) ? Carbon::parse($f['to_date']) : null;
-        $accountId = $f['account_id'] ?? [];
-        $branch = $f['branch'] ?? [];
-        $basis = $f['basis'] ?? [];
-        $payee = $f['payee'] ?? null;
+        $f          = $this->data;
+        $from       = !empty($f['from_date']) ? Carbon::parse($f['from_date']) : null;
+        $to         = !empty($f['to_date'])   ? Carbon::parse($f['to_date'])   : null;
+        $accountId  = $f['account_id'] ?? [];
+        $branch     = $f['branch']     ?? [];
+        $basis      = $f['basis']      ?? [];
+        $payee      = $f['payee']      ?? null;
+        $dataSource = $f['data_source'] ?? 'both';
 
-        $lines = VoucherItem::with(['voucher', 'voucher.journalEntry', 'accountCode'])
-            ->whereHas('voucher', function ($q) {
-                $q->where('status', 'paid');
-            })
-            ->when(!empty($accountId), function ($q) use ($accountId) {
-                $codes = AccountCode::whereIn('id', $accountId)->pluck('code');
-                $q->whereIn('account_code', $codes);
-            })
-            ->when(!empty($branch), fn($q) => $q->whereIn('branch_code', $branch))
-            ->when(!empty($basis), fn($q) => $q->whereHas('voucher', fn($v) => $v->whereIn('type', $basis)))
-            ->when(!empty($payee), fn($q) => $q->whereHas('voucher', fn($v) => $v->where('payee', 'like', '%' . $payee . '%')))
-            ->when($from, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
-            ->when($to, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
-            ->get()
-            ->sortBy(fn($l) => [$l->accountCode?->code, $l->voucher?->created_at]);
+        $rows = collect();
 
-        // Group by account, and attach a running balance per group
-        return $lines
-            ->groupBy(fn($l) => $l->accountCode?->id ?? 0)
-            ->filter(fn($group, $key) => $key > 0) // filter out entries without valid account code
+        // ── 1. VoucherItem rows ──────────────────────────────────────────────
+        if ($dataSource !== 'je_only') {
+            // In 'both' mode, skip vouchers that already have a JE — JE lines cover them.
+            $journalisedVoucherIds = ($dataSource === 'both')
+                ? JournalEntry::whereNotNull('voucher_id')->pluck('voucher_id')->toArray()
+                : [];
+
+            $voucherItems = VoucherItem::with(['voucher', 'voucher.journalEntry', 'accountCode'])
+                ->whereHas('voucher', fn($q) => $q->where('status', 'paid'))
+                ->when(
+                    $dataSource === 'both' && !empty($journalisedVoucherIds),
+                    fn($q) => $q->whereHas('voucher', fn($v) => $v->whereNotIn('id', $journalisedVoucherIds))
+                )
+                ->when(!empty($accountId), function ($q) use ($accountId) {
+                    $codes = AccountCode::whereIn('id', $accountId)->pluck('code');
+                    $q->whereIn('account_code', $codes);
+                })
+                ->when(!empty($branch), fn($q) => $q->whereIn('branch_code', $branch))
+                ->when(!empty($basis),  fn($q) => $q->whereHas('voucher', fn($v) => $v->whereIn('type', $basis)))
+                ->when(!empty($payee),  fn($q) => $q->whereHas('voucher', fn($v) => $v->where('payee', 'like', '%' . $payee . '%')))
+                ->when($from, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
+                ->when($to,   fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
+                ->get()
+                ->filter(fn($item) => $item->accountCode !== null)
+                ->map(fn($item) => (object) [
+                    'date'            => $item->voucher?->created_at,
+                    'je_ref'          => $item->voucher?->journalEntry?->entry_no,
+                    'je_id'           => $item->voucher?->journalEntry?->id,
+                    'voucher_id'      => $item->voucher_id,
+                    'voucher_number'  => $item->voucher?->voucher_number,
+                    'voucher_type'    => $item->voucher?->type,
+                    'voucher_amount'  => $item->voucher?->amount,
+                    'payee'           => $item->voucher?->payee,
+                    'branch'          => $item->branch_code,
+                    'debit'           => (float) $item->debit,
+                    'credit'          => (float) $item->credit,
+                    'source'          => 'voucher',
+                    'account_code_id' => $item->accountCode->id,
+                    'account'         => $item->accountCode,
+                    'running_balance' => 0.0,
+                    'description'     => $item->description,
+                ]);
+
+            $rows = $rows->merge($voucherItems);
+        }
+
+        // ── 2. JournalEntryLine rows ─────────────────────────────────────────
+        if ($dataSource !== 'vouchers_only') {
+            $jeLines = JournalEntryLine::with(['journalEntry', 'journalEntry.voucher', 'accountCode'])
+                ->when(!empty($accountId), fn($q) => $q->whereIn('account_code_id', $accountId))
+                ->when(!empty($branch),    fn($q) => $q->whereIn('branch', $branch))
+                ->when(!empty($basis),     fn($q) => $q->whereHas('journalEntry.voucher', fn($v) => $v->whereIn('type', $basis)))
+                ->when(!empty($payee), fn($q) => $q->where(function ($sub) use ($payee) {
+                    $sub->where('supplier_name', 'like', '%' . $payee . '%')
+                        ->orWhereHas('journalEntry.voucher', fn($v) => $v->where('payee', 'like', '%' . $payee . '%'));
+                }))
+                ->when($from, fn($q) => $q->whereHas('journalEntry', fn($j) => $j->whereDate('date', '>=', $from)))
+                ->when($to,   fn($q) => $q->whereHas('journalEntry', fn($j) => $j->whereDate('date', '<=', $to)))
+                ->get()
+                ->filter(fn($line) => $line->accountCode !== null)
+                ->map(fn($line) => (object) [
+                    'date'            => $line->journalEntry?->date,
+                    'je_ref'          => $line->journalEntry?->entry_no,
+                    'je_id'           => $line->journal_entry_id,
+                    'voucher_id'      => $line->journalEntry?->voucher_id,
+                    'voucher_number'  => $line->journalEntry?->voucher?->voucher_number,
+                    'voucher_type'    => $line->journalEntry?->voucher?->type,
+                    'voucher_amount'  => $line->journalEntry?->voucher?->amount,
+                    'payee'           => $line->supplier_name ?: ($line->journalEntry?->voucher?->payee ?? null),
+                    'branch'          => $line->branch,
+                    'debit'           => (float) $line->debit,
+                    'credit'          => (float) $line->credit,
+                    'source'          => 'je',
+                    'account_code_id' => $line->account_code_id,
+                    'account'         => $line->accountCode,
+                    'running_balance' => 0.0,
+                    'description'     => $line->remarks,
+                ]);
+
+            $rows = $rows->merge($jeLines);
+        }
+
+        // ── 3. Sort → group by account → running balance ─────────────────────
+        $sorted = $rows->sortBy(fn($r) => [
+            $r->account?->code ?? 'zzz',
+            optional($r->date)->timestamp ?? 0,
+        ]);
+
+        return $sorted
+            ->groupBy(fn($r) => $r->account_code_id ?? 0)
+            ->filter(fn($group, $key) => $key > 0)
             ->map(function (Collection $group) {
-                $account = $group->first()->accountCode;
-                $runningBalance = 0;
+                $account        = $group->first()->account;
+                $runningBalance = 0.0;
 
                 $rows = $group->map(function ($line) use ($account, &$runningBalance) {
-                    $dr = (float) $line->debit;
-                    $cr = (float) $line->credit;
+                    $dr = $line->debit;
+                    $cr = $line->credit;
 
-                    // Running balance: positive = normal side, negative = contra
                     if ($account && $account->normal_balance === 'debit') {
                         $runningBalance += ($dr - $cr);
                     } else {
@@ -170,10 +264,10 @@ class GeneralLedgerPage extends Page implements HasForms
                 });
 
                 return [
-                    'account' => $account,
-                    'rows' => $rows,
-                    'total_debit' => $group->sum('debit'),
-                    'total_credit' => $group->sum('credit'),
+                    'account'         => $account,
+                    'rows'            => $rows,
+                    'total_debit'     => $group->sum('debit'),
+                    'total_credit'    => $group->sum('credit'),
                     'closing_balance' => $runningBalance,
                 ];
             })
@@ -183,31 +277,13 @@ class GeneralLedgerPage extends Page implements HasForms
     #[Computed]
     public function totals(): array
     {
-        $f = $this->data;
-        $from = !empty($f['from_date']) ? Carbon::parse($f['from_date']) : null;
-        $to = !empty($f['to_date']) ? Carbon::parse($f['to_date']) : null;
-        $accountId = $f['account_id'] ?? [];
-        $branch = $f['branch'] ?? [];
-        $basis = $f['basis'] ?? [];
-        $payee = $f['payee'] ?? null;
-
-        $query = VoucherItem::query()
-            ->whereHas('voucher', function ($q) {
-                $q->where('status', 'paid');
-            })
-            ->when(!empty($accountId), function ($q) use ($accountId) {
-                $codes = AccountCode::whereIn('id', $accountId)->pluck('code');
-                $q->whereIn('account_code', $codes);
-            })
-            ->when(!empty($branch), fn($q) => $q->whereIn('branch_code', $branch))
-            ->when(!empty($basis), fn($q) => $q->whereHas('voucher', fn($v) => $v->whereIn('type', $basis)))
-            ->when(!empty($payee), fn($q) => $q->whereHas('voucher', fn($v) => $v->where('payee', 'like', '%' . $payee . '%')))
-            ->when($from, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
-            ->when($to, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)));
+        // Derived from the already-computed (and Livewire-cached) ledgerGroups.
+        // No redundant DB queries — computed properties are cached per request.
+        $groups = $this->ledgerGroups;
 
         return [
-            'debit' => (float) $query->sum('debit'),
-            'credit' => (float) $query->sum('credit'),
+            'debit'  => (float) $groups->sum('total_debit'),
+            'credit' => (float) $groups->sum('total_credit'),
         ];
     }
 
