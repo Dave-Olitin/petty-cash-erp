@@ -59,11 +59,11 @@ class PurchaseEntryLine extends Model
             $debit  = (float) ($model->debit  ?? 0);
             $credit = (float) ($model->credit ?? 0);
 
-            // If the user only filled DR, mirror it to total (and vice-versa for CR).
-            if ($debit > 0 && (float) ($model->total ?? 0) === 0.0) {
+            // Always sync total and amount with debit/credit if they are greater than 0.
+            if ($debit > 0) {
                 $model->total  = $debit;
                 $model->amount = $debit;
-            } elseif ($credit > 0 && (float) ($model->total ?? 0) === 0.0) {
+            } elseif ($credit > 0) {
                 $model->total  = $credit;
                 $model->amount = $credit;
             }

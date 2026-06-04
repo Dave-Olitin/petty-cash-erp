@@ -330,6 +330,7 @@ class VoucherApprovalService
             // Bulk update all linked purchase entries in a single query
             $locked->purchaseEntries()->update([
                 'amount_paid'    => DB::raw('grand_total'),
+                'balance_due'    => 0,
                 'payment_status' => \App\Models\PurchaseEntry::STATUS_PAID,
             ]);
 
