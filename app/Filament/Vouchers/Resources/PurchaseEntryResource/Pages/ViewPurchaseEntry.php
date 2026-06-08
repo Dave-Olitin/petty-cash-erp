@@ -13,6 +13,11 @@ class ViewPurchaseEntry extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('back')
+                ->label('Back')
+                ->url(static::$resource::getUrl('index'))
+                ->color('gray')
+                ->icon('heroicon-m-arrow-left'),
             Actions\EditAction::make(),
         ];
     }

@@ -561,47 +561,127 @@ class PurchaseEntryResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                // ── Date Range ──────────────────────────────────────────
-                Tables\Filters\Filter::make('date')
-                    ->form([
-                        Forms\Components\DatePicker::make('date_from'),
-                        Forms\Components\DatePicker::make('date_until'),
-                    ])
-                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data): \Illuminate\Database\Eloquent\Builder {
-                        return $query
-                            ->when($data['date_from'],  fn ($q, $date) => $q->whereDate('date', '>=', $date))
-                            ->when($data['date_until'], fn ($q, $date) => $q->whereDate('date', '<=', $date));
-                    }),
+                // ── Entry Type ──────────────────────────────────────────
+                Tables\Filters\SelectFilter::make('entry_type')
+                    ->label('Entry Type')
+                    ->multiple()
+                    ->options([
+                        'purchase' => 'Purchase Bills',
+                        'return'   => 'Purchase Returns',
+                    ]),
+
+                // ── Entity ──────────────────────────────────────────────
+                Tables\Filters\SelectFilter::make('entity')
+                    ->label('Entity')
+                    ->multiple()
+                    ->options(\App\Models\VoucherTemplate::where('is_active', true)->pluck('company_name', 'company_name'))
+                    ->searchable()
+                    ->preload(),
+
+                // ── Supplier ────────────────────────────────────────────
+                Tables\Filters\SelectFilter::make('tax_registration_id')
+                    ->label('Supplier')
+                    ->relationship('taxRegistration', 'name')
+                    ->multiple()
+                    ->searchable()
+                    ->preload(),
+
+                // ── Custodian ───────────────────────────────────────────
+                Tables\Filters\SelectFilter::make('user_id')
+                    ->label('Custodian')
+                    ->relationship('user', 'name')
+                    ->multiple()
+                    ->searchable()
+                    ->preload(),
 
                 // ── Payment Status ──────────────────────────────────────
                 Tables\Filters\SelectFilter::make('payment_status')
                     ->label('Payment Status')
+                    ->multiple()
                     ->options([
                         'unpaid'  => 'Unpaid',
                         'partial' => 'Partially Paid',
                         'paid'    => 'Fully Paid',
                     ]),
 
-                // ── Aging Bucket ────────────────────────────────────────
-                Tables\Filters\Filter::make('overdue')
-                    ->label('Overdue Only')
-                    ->query(fn ($query) => $query->overdue()),
+                // ── Date Range ──────────────────────────────────────────
+                Tables\Filters\Filter::make('date')
+                    ->form([
+                        Forms\Components\Grid::make(2)
+                            ->schema([
+                                Forms\Components\DatePicker::make('date_from')->label('Bill Date From'),
+                                Forms\Components\DatePicker::make('date_until')->label('Bill Date Until'),
+                            ]),
+                    ])
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data): \Illuminate\Database\Eloquent\Builder {
+                        return $query
+                            ->when($data['date_from'],  fn ($q, $date) => $q->whereDate('date', '>=', $date))
+                            ->when($data['date_until'], fn ($q, $date) => $q->whereDate('date', '<=', $date));
+                    })
+                    ->columnSpan(2),
 
-                // ── Entry Type ──────────────────────────────────────────
-                Tables\Filters\SelectFilter::make('entry_type')
-                    ->label('Entry Type')
-                    ->options([
-                        'purchase' => 'Purchase Bills',
-                        'return'   => 'Purchase Returns',
-                    ]),
+                // ── Aging Bucket ─────────────────────────────────────────
+                Tables\Filters\Filter::make('aging_bucket')
+                    ->label('Aging Bucket')
+                    ->form([
+                        Forms\Components\Select::make('aging_buckets')
+                            ->label('Aging Bucket')
+                            ->multiple()
+                            ->options([
+                                'current'  => '🟢 Current',
+                                '1_30'     => '🔵 1–30 Days',
+                                '31_60'    => '🟡 31–60 Days',
+                                '61_90'    => '🟠 61–90 Days',
+                                '90_plus'  => '🔴 90+ Days',
+                            ])
+                            ->placeholder('All Aging Buckets'),
+                    ])
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data): \Illuminate\Database\Eloquent\Builder {
+                        $buckets = $data['aging_buckets'] ?? [];
+                        if (empty($buckets)) return $query;
 
-                // ── Supplier ────────────────────────────────────────────
-                Tables\Filters\SelectFilter::make('tax_registration_id')
-                    ->label('Supplier')
-                    ->relationship('taxRegistration', 'name')
-                    ->searchable()
-                    ->preload(),
+                        return $query->where(function ($q) use ($buckets) {
+                            foreach ($buckets as $bucket) {
+                                $q->orWhere(function ($sub) use ($bucket) {
+                                    match ($bucket) {
+                                        'current' => $sub->where(function ($s) {
+                                            $s->where('payment_status', 'paid')
+                                              ->orWhereNull('due_date')
+                                              ->orWhere('due_date', '>=', now()->toDateString());
+                                        }),
+                                        '1_30'    => $sub->whereIn('payment_status', ['unpaid', 'partial'])
+                                                         ->whereNotNull('due_date')
+                                                         ->where('due_date', '<', now()->toDateString())
+                                                         ->where('due_date', '>=', now()->subDays(30)->toDateString()),
+                                        '31_60'   => $sub->whereIn('payment_status', ['unpaid', 'partial'])
+                                                         ->whereNotNull('due_date')
+                                                         ->where('due_date', '<', now()->subDays(30)->toDateString())
+                                                         ->where('due_date', '>=', now()->subDays(60)->toDateString()),
+                                        '61_90'   => $sub->whereIn('payment_status', ['unpaid', 'partial'])
+                                                         ->whereNotNull('due_date')
+                                                         ->where('due_date', '<', now()->subDays(60)->toDateString())
+                                                         ->where('due_date', '>=', now()->subDays(90)->toDateString()),
+                                        '90_plus' => $sub->whereIn('payment_status', ['unpaid', 'partial'])
+                                                         ->whereNotNull('due_date')
+                                                         ->where('due_date', '<', now()->subDays(90)->toDateString()),
+                                        default   => null,
+                                    };
+                                });
+                            }
+                        });
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $labels = [
+                            'current' => 'Current', '1_30' => '1–30 Days',
+                            '31_60'   => '31–60 Days', '61_90' => '61–90 Days', '90_plus' => '90+ Days',
+                        ];
+                        return collect($data['aging_buckets'] ?? [])
+                            ->map(fn ($b) => 'Aging: ' . ($labels[$b] ?? $b))
+                            ->all();
+                    }),
             ])
+            ->filtersLayout(\Filament\Tables\Enums\FiltersLayout::AboveContentCollapsible)
+            ->filtersFormColumns(4)
             ->headerActions([
                 \Filament\Tables\Actions\Action::make('aging_report')
                     ->label('Aging Report')

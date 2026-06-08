@@ -156,17 +156,9 @@ class GeneralLedgerPage extends Page implements HasForms
 
         // ── 1. VoucherItem rows ──────────────────────────────────────────────
         if ($dataSource !== 'je_only') {
-            // In 'both' mode, skip vouchers that already have a JE — JE lines cover them.
-            $journalisedVoucherIds = ($dataSource === 'both')
-                ? JournalEntry::whereNotNull('voucher_id')->pluck('voucher_id')->toArray()
-                : [];
-
+            // Include all vouchers, even if they have a linked Journal Entry.
             $voucherItems = VoucherItem::with(['voucher', 'voucher.journalEntry', 'accountCode'])
                 ->whereHas('voucher', fn($q) => $q->where('status', 'paid'))
-                ->when(
-                    $dataSource === 'both' && !empty($journalisedVoucherIds),
-                    fn($q) => $q->whereHas('voucher', fn($v) => $v->whereNotIn('id', $journalisedVoucherIds))
-                )
                 ->when(!empty($accountId), function ($q) use ($accountId) {
                     $codes = AccountCode::whereIn('id', $accountId)->pluck('code');
                     $q->whereIn('account_code', $codes);
@@ -191,6 +183,7 @@ class GeneralLedgerPage extends Page implements HasForms
                     'debit'           => (float) $item->debit,
                     'credit'          => (float) $item->credit,
                     'source'          => 'voucher',
+                    'is_info_only'    => ($dataSource === 'both' && $item->voucher?->journalEntry !== null),
                     'account_code_id' => $item->accountCode->id,
                     'account'         => $item->accountCode,
                     'running_balance' => 0.0,
@@ -227,6 +220,7 @@ class GeneralLedgerPage extends Page implements HasForms
                     'debit'           => (float) $line->debit,
                     'credit'          => (float) $line->credit,
                     'source'          => 'je',
+                    'is_info_only'    => false,
                     'account_code_id' => $line->account_code_id,
                     'account'         => $line->accountCode,
                     'running_balance' => 0.0,
@@ -250,8 +244,8 @@ class GeneralLedgerPage extends Page implements HasForms
                 $runningBalance = 0.0;
 
                 $rows = $group->map(function ($line) use ($account, &$runningBalance) {
-                    $dr = $line->debit;
-                    $cr = $line->credit;
+                    $dr = !empty($line->is_info_only) ? 0.0 : $line->debit;
+                    $cr = !empty($line->is_info_only) ? 0.0 : $line->credit;
 
                     if ($account && $account->normal_balance === 'debit') {
                         $runningBalance += ($dr - $cr);
@@ -266,8 +260,8 @@ class GeneralLedgerPage extends Page implements HasForms
                 return [
                     'account'         => $account,
                     'rows'            => $rows,
-                    'total_debit'     => $group->sum('debit'),
-                    'total_credit'    => $group->sum('credit'),
+                    'total_debit'     => $group->reject(fn($r) => !empty($r->is_info_only))->sum('debit'),
+                    'total_credit'    => $group->reject(fn($r) => !empty($r->is_info_only))->sum('credit'),
                     'closing_balance' => $runningBalance,
                 ];
             })

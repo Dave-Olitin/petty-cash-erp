@@ -99,7 +99,7 @@
                                     : ($isDebitNormal ? 'CR' : 'DR');
                                 $isJeSource = $line->source === 'je';
                             @endphp
-                            <tr x-show="isOpen" class="hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-b-0">
+                            <tr x-show="isOpen" class="hover:bg-primary-50/30 dark:hover:bg-primary-900/10 transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-b-0 {{ !empty($line->is_info_only) ? 'opacity-60 italic bg-gray-50/50 dark:bg-gray-800/20' : '' }}">
                                 {{-- Date --}}
                                 <td class="px-6 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap pl-12 relative">
                                     <div class="absolute left-8 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700"></div>
@@ -123,6 +123,10 @@
                                     @if($isJeSource)
                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                                             JE
+                                        </span>
+                                    @elseif(!empty($line->is_info_only))
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400 border border-gray-200 dark:border-gray-700" title="This voucher has a linked Journal Entry. Excluded from ledger balance to prevent double-counting.">
+                                            VCH (INFO)
                                         </span>
                                     @else
                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
@@ -163,12 +167,12 @@
                                 </td>
 
                                 {{-- Debit --}}
-                                <td class="px-6 py-3 text-right font-mono text-xs {{ $line->debit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700' }}">
+                                <td class="px-6 py-3 text-right font-mono text-xs {{ !empty($line->is_info_only) ? 'text-gray-400/70 dark:text-gray-500/70 line-through' : ($line->debit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700') }}">
                                     {{ $line->debit > 0 ? number_format($line->debit, 2) : '—' }}
                                 </td>
 
                                 {{-- Credit --}}
-                                <td class="px-6 py-3 text-right font-mono text-xs {{ $line->credit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700' }}">
+                                <td class="px-6 py-3 text-right font-mono text-xs {{ !empty($line->is_info_only) ? 'text-gray-400/70 dark:text-gray-500/70 line-through' : ($line->credit > 0 ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-300 dark:text-gray-700') }}">
                                     {{ $line->credit > 0 ? number_format($line->credit, 2) : '—' }}
                                 </td>
 

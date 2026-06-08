@@ -27,19 +27,26 @@ class AccountCode extends Model
     {
         static::saving(function ($accountCode) {
             if ($accountCode->code) {
-                $firstDigit = substr($accountCode->code, 0, 1);
-                $type = match($firstDigit) {
-                    '1' => AccountType::Asset,
-                    '2' => AccountType::Liability,
-                    '3' => AccountType::Equity,
-                    '4' => AccountType::Revenue,
-                    '5' => AccountType::Expense,
-                    default => null,
-                };
+                $isNew = !$accountCode->exists;
+                $codeChanged = $accountCode->isDirty('code');
+                $typeChanged = $accountCode->isDirty('type');
+                $balanceChanged = $accountCode->isDirty('normal_balance');
 
-                if ($type) {
-                    $accountCode->type = $type;
-                    $accountCode->normal_balance = $type->normalBalance();
+                if ($isNew || ($codeChanged && !$typeChanged && !$balanceChanged)) {
+                    $firstDigit = substr($accountCode->code, 0, 1);
+                    $type = match($firstDigit) {
+                        '1' => AccountType::Asset,
+                        '2' => AccountType::Liability,
+                        '3' => AccountType::Equity,
+                        '4' => AccountType::Revenue,
+                        '5' => AccountType::Expense,
+                        default => null,
+                    };
+
+                    if ($type) {
+                        $accountCode->type = $type;
+                        $accountCode->normal_balance = $type->normalBalance();
+                    }
                 }
             }
         });
