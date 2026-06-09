@@ -16,6 +16,8 @@ class JournalEntryLine extends Model
         'branch',
         'supplier_name',
         'trn',
+        'date',
+        'invoice_no',
         'remarks',
         'debit',
         'credit',
@@ -24,6 +26,7 @@ class JournalEntryLine extends Model
     protected function casts(): array
     {
         return [
+            'date' => 'date',
             'debit' => 'decimal:2',
             'credit' => 'decimal:2',
         ];

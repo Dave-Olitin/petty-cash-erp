@@ -94,9 +94,9 @@ class JournalEntriesExport implements FromCollection, WithHeadings, WithMapping,
         $entry = $row->parent_entry;
         return [
             $entry->entry_no,
-            $entry->date ? $entry->date->format('Y-m-d') : '',
+            $row->date ? $row->date->format('Y-m-d') : ($entry->date ? $entry->date->format('Y-m-d') : ''),
             $entry->po_number,
-            $entry->invoice_no,
+            $row->invoice_no ?? $entry->invoice_no,
             $entry->reference,
             $entry->currency,
             $row->accountCode?->code,

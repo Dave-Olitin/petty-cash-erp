@@ -45,6 +45,7 @@ class Voucher extends Model implements HasMedia
         'transaction_summary',
         'invoice_breakdown',
         'liquidation_status',
+        'parent_voucher_id',
     ];
 
     protected function casts(): array
@@ -108,6 +109,16 @@ class Voucher extends Model implements HasMedia
     public function journalEntry(): HasOne
     {
         return $this->hasOne(JournalEntry::class);
+    }
+
+    public function parentVoucher(): BelongsTo
+    {
+        return $this->belongsTo(Voucher::class, 'parent_voucher_id');
+    }
+
+    public function childVouchers(): HasMany
+    {
+        return $this->hasMany(Voucher::class, 'parent_voucher_id');
     }
 
 

@@ -72,9 +72,13 @@ class JournalEntryObserver
 
             if ($existingLiquidation) {
                 $existingLiquidation->update($payload);
+                $liquidationRecord = $existingLiquidation;
             } else {
-                Liquidation::create($payload);
+                $liquidationRecord = Liquidation::create($payload);
             }
+
+            // Trigger auto-generation of child vouchers (RV/PCV) based on the liquidation
+            app(\App\Services\LiquidationService::class)->handleAutoGeneration($liquidationRecord, true);
 
             // Sync the voucher's liquidation_status field —
             // only mark 'liquidated' if the voucher has actually been paid.

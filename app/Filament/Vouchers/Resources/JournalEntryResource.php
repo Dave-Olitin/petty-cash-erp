@@ -115,16 +115,25 @@ class JournalEntryResource extends Resource
                                 ->label('TRN')
                                 ->maxLength(255)
                                 ->columnSpan(2),
+                            Forms\Components\DatePicker::make('date')
+                                ->label('Date')
+                                ->native(false)
+                                ->displayFormat('d/m/Y')
+                                ->columnSpan(2),
+                            Forms\Components\TextInput::make('invoice_no')
+                                ->label('Inv #')
+                                ->maxLength(255)
+                                ->columnSpan(2),
                             Forms\Components\TextInput::make('remarks')
                                 ->label('Description')
-                                ->columnSpan(6),
+                                ->columnSpan(4),
                             Forms\Components\TextInput::make('debit')
                                 ->label('Debit')
                                 ->numeric()
                                 ->default(0)
                                 ->required()
                                 ->prefix('DR')
-                                ->columnSpan(3)
+                                ->columnSpan(2)
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                     if ((float)$state > 0) $set('credit', 0);
@@ -135,7 +144,7 @@ class JournalEntryResource extends Resource
                                 ->default(0)
                                 ->required()
                                 ->prefix('CR')
-                                ->columnSpan(3)
+                                ->columnSpan(2)
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                     if ((float)$state > 0) $set('debit', 0);
@@ -317,13 +326,15 @@ class JournalEntryResource extends Resource
 
                 \Filament\Infolists\Components\Section::make('Accounting Lines')
                     ->schema([
-                        \Filament\Infolists\Components\Grid::make(12)
+                        \Filament\Infolists\Components\Grid::make(16)
                             ->extraAttributes(['class' => 'bg-gray-100 p-2 border-b border-gray-200 rounded-t-lg'])
                             ->schema([
                                 \Filament\Infolists\Components\TextEntry::make('header_account')->state('Account / Ledger')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
                                 \Filament\Infolists\Components\TextEntry::make('header_branch')->state('Branch')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
                                 \Filament\Infolists\Components\TextEntry::make('header_supplier')->state('Supplier')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
                                 \Filament\Infolists\Components\TextEntry::make('header_trn')->state('TRN')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
+                                \Filament\Infolists\Components\TextEntry::make('header_date')->state('Date')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
+                                \Filament\Infolists\Components\TextEntry::make('header_invoice')->state('Inv #')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
                                 \Filament\Infolists\Components\TextEntry::make('header_remarks')->state('Description')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2),
                                 \Filament\Infolists\Components\TextEntry::make('header_debit')->state('Debit (DR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
                                 \Filament\Infolists\Components\TextEntry::make('header_credit')->state('Credit (CR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
@@ -332,7 +343,7 @@ class JournalEntryResource extends Resource
                         \Filament\Infolists\Components\RepeatableEntry::make('lines')
                             ->label('')
                             ->schema([
-                                \Filament\Infolists\Components\Grid::make(12)
+                                \Filament\Infolists\Components\Grid::make(16)
                                     ->schema([
                                         \Filament\Infolists\Components\TextEntry::make('accountCode.code')
                                             ->label('Account')
@@ -354,6 +365,17 @@ class JournalEntryResource extends Resource
                                             ->hiddenLabel()
                                             ->placeholder('—')
                                             ->columnSpan(1),
+                                        \Filament\Infolists\Components\TextEntry::make('date')
+                                            ->label('Date')
+                                            ->hiddenLabel()
+                                            ->date('M j, Y')
+                                            ->placeholder('—')
+                                            ->columnSpan(2),
+                                        \Filament\Infolists\Components\TextEntry::make('invoice_no')
+                                            ->label('Invoice #')
+                                            ->hiddenLabel()
+                                            ->placeholder('—')
+                                            ->columnSpan(2),
                                         \Filament\Infolists\Components\TextEntry::make('remarks')
                                             ->label('Description')
                                             ->hiddenLabel()
@@ -400,6 +422,46 @@ class JournalEntryResource extends Resource
                                     ->color(fn ($state) => $state === 'BALANCED' ? 'success' : 'danger'),
                             ])
                     ])->compact(),
+                
+                \Filament\Infolists\Components\Section::make('Related Child Vouchers (Generated from Liquidation)')
+                    ->schema([
+                        \Filament\Infolists\Components\RepeatableEntry::make('voucher.childVouchers')
+                            ->label('')
+                            ->schema([
+                                \Filament\Infolists\Components\Grid::make(4)
+                                    ->schema([
+                                        \Filament\Infolists\Components\TextEntry::make('voucher_number')
+                                            ->label('Voucher Number')
+                                            ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                            ->url(fn ($record) => \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->id])),
+                                        \Filament\Infolists\Components\TextEntry::make('type')
+                                            ->label('Type')
+                                            ->badge()
+                                            ->formatStateUsing(fn (string $state): string => match ($state) {
+                                                'payment' => 'Payment Voucher',
+                                                'receipt' => 'Receipt Voucher',
+                                                'petty_cash' => 'Petty Cash Voucher',
+                                                default => ucfirst($state),
+                                            })
+                                            ->color(fn (string $state): string => match ($state) {
+                                                'payment' => 'danger',
+                                                'receipt' => 'success',
+                                                'petty_cash' => 'warning',
+                                                default => 'gray',
+                                            }),
+                                        \Filament\Infolists\Components\TextEntry::make('amount')
+                                            ->label('Amount')
+                                            ->money('AED'),
+                                        \Filament\Infolists\Components\TextEntry::make('status')
+                                            ->label('Status')
+                                            ->badge(),
+                                    ])
+                            ])
+                            ->columns(1)
+                            ->contained(true)
+                    ])
+                    ->visible(fn ($record) => $record->voucher && $record->voucher->childVouchers()->count() > 0)
+                    ->collapsed(false),
             ]);
     }
 }

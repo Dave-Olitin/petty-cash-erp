@@ -1285,30 +1285,48 @@ class VoucherResource extends Resource
                             ])->columnSpan(3),
 
                             // Minor Column: Audit sidebar
-                            \Filament\Infolists\Components\Section::make('Identity & Date')
-                                ->compact()
-                                ->schema([
-                                    \Filament\Infolists\Components\TextEntry::make('user.name')
-                                        ->label('Prepared By')
-                                        ->icon('heroicon-m-user-circle'),
+                            \Filament\Infolists\Components\Group::make([
+                                \Filament\Infolists\Components\Section::make('Parent Reference')
+                                    ->compact()
+                                    ->visible(fn ($record) => $record->parent_voucher_id !== null)
+                                    ->schema([
+                                        \Filament\Infolists\Components\TextEntry::make('parentVoucher.voucher_number')
+                                            ->label('Parent Voucher')
+                                            ->icon('heroicon-m-link')
+                                            ->url(fn ($record) => $record->parent_voucher_id ? static::getUrl('view', ['record' => $record->parent_voucher_id]) : null),
+                                            
+                                        \Filament\Infolists\Components\TextEntry::make('parentVoucher.journalEntry.entry_no')
+                                            ->label('Parent Journal Entry')
+                                            ->icon('heroicon-m-document-text')
+                                            ->visible(fn ($record) => $record->parentVoucher && $record->parentVoucher->journalEntry)
+                                            ->url(fn ($record) => $record->parentVoucher && $record->parentVoucher->journalEntry ? \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $record->parentVoucher->journalEntry->id]) : null),
+                                    ]),
 
-                                    \Filament\Infolists\Components\TextEntry::make('department')
-                                        ->label('Department')
-                                        ->placeholder('General')
-                                        ->icon('heroicon-m-briefcase'),
+                                \Filament\Infolists\Components\Section::make('Identity & Date')
+                                    ->compact()
+                                    ->schema([
+                                        \Filament\Infolists\Components\TextEntry::make('user.name')
+                                            ->label('Prepared By')
+                                            ->icon('heroicon-m-user-circle'),
 
-                                    \Filament\Infolists\Components\TextEntry::make('category.name')
-                                        ->label('Expense Category')
-                                        ->placeholder('Uncategorized')
-                                        ->icon('heroicon-m-square-3-stack-3d'),
-                                    
-                                    \Filament\Infolists\Components\TextEntry::make('created_at')
-                                        ->label('Submitted On')
-                                        ->dateTime('d M Y, h:i A')
-                                        ->icon('heroicon-m-calendar-days'),
-                                ])
-                                ->columnSpan(1)
-                                ->grow(false),
+                                        \Filament\Infolists\Components\TextEntry::make('department')
+                                            ->label('Department')
+                                            ->placeholder('General')
+                                            ->icon('heroicon-m-briefcase'),
+
+                                        \Filament\Infolists\Components\TextEntry::make('category.name')
+                                            ->label('Expense Category')
+                                            ->placeholder('Uncategorized')
+                                            ->icon('heroicon-m-square-3-stack-3d'),
+                                        
+                                        \Filament\Infolists\Components\TextEntry::make('created_at')
+                                            ->label('Submitted On')
+                                            ->dateTime('d M Y, h:i A')
+                                            ->icon('heroicon-m-calendar-days'),
+                                    ]),
+                            ])
+                            ->columnSpan(1)
+                            ->grow(false),
                         ])->from('lg'),
 
                         \Filament\Infolists\Components\Section::make('Bank Settlement Details')
