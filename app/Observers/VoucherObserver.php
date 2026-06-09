@@ -13,6 +13,10 @@ class VoucherObserver
      */
     public function creating(Voucher $voucher): void
     {
+        if (!empty($voucher->voucher_number)) {
+            return; // Allow manual overrides for historical data entry
+        }
+
         // Use template prefix if set, otherwise fall back to type-based prefix
         if ($voucher->type === 'petty_cash') {
             $prefix = 'PCV NO: ' . date('y') . '-';
@@ -33,24 +37,25 @@ class VoucherObserver
             $lock->block(5, function () use ($voucher, $prefix) {
                 $latest = Voucher::withTrashed()
                     ->where('voucher_number', 'like', $prefix . '%')
-                    ->orderBy('id', 'desc')
+                    ->orderByRaw('LENGTH(voucher_number) DESC')
+                    ->orderBy('voucher_number', 'desc')
                     ->first();
 
                 if ($latest) {
                     $number = intval(substr($latest->voucher_number, strlen($prefix))) + 1;
                 } else {
                     if ($voucher->type === 'petty_cash' && str_starts_with($prefix, 'PCV NO: ')) {
-                        $number = 4001; // Starts at PCV NO: 26-04001
+                        $number = 1; // Starts at PCV NO: 26-0001
                     } elseif ($voucher->type === 'receipt' && str_starts_with($prefix, 'RV NO: ')) {
                         $number = 776;  // Starts at RV NO: 0776
                     } elseif (str_contains($prefix, 'ETC-')) {
-                        $number = 1246; // Starts at PV NO: ETC-1246
+                        $number = 1149; // Starts at PV NO: ETC-1149
                     } elseif (str_contains($prefix, 'SB-')) {
-                        $number = 216;  // Starts at PV NO: SB-0216
+                        $number = 203;  // Starts at PV NO: SB-0203
                     } elseif (str_contains($prefix, 'TG-')) {
-                        $number = 564;  // Starts at PV NO: TG-0564
+                        $number = 560;  // Starts at PV NO: TG-0560
                     } elseif (str_contains($prefix, 'IC-')) {
-                        $number = 376;  // Starts at PV NO: IC-0376
+                        $number = 346;  // Starts at PV NO: IC-0346
                     } else {
                         $number = 1;
                     }

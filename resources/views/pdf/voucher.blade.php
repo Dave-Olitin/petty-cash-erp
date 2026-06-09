@@ -212,7 +212,7 @@
                 <strong>P.V NO:</strong> {{ str_replace(['PV NO: ', 'P.V NO: '], '', trim($voucher->voucher_number)) }}
             @endif
         </td>
-        <td style="text-align:right;"><strong>DATE:</strong> {{ $voucher->created_at->format('d/m/Y') }}</td>
+        <td style="text-align:right;"><strong>DATE:</strong> {{ $voucher->date ? $voucher->date->format('d/m/Y') : $voucher->created_at->format('d/m/Y') }}</td>
     </tr>
 </table>
 

@@ -53,7 +53,7 @@ class EditVoucher extends EditRecord
             if ($newType === 'petty_cash') {
                 $prefix = 'PCV NO: ' . date('y') . '-';
                 $padLength = 5;
-                $startAt = 4001;
+                $startAt = 1;
             } elseif ($newType === 'receipt') {
                 $prefix = 'RV NO: ';
                 $padLength = 4;
@@ -75,7 +75,8 @@ class EditVoucher extends EditRecord
                     $latest = \App\Models\Voucher::withTrashed()
                         ->where('voucher_number', 'like', $prefix . '%')
                         ->where('id', '!=', $voucher->id) // exclude self
-                        ->orderBy('id', 'desc')
+                        ->orderByRaw('LENGTH(voucher_number) DESC')
+                        ->orderBy('voucher_number', 'desc')
                         ->first();
 
                     $number = $latest
@@ -98,6 +99,9 @@ class EditVoucher extends EditRecord
                 ->body("The voucher number has been updated to {$data['voucher_number']} to match the new type.")
                 ->info()
                 ->send();
+        } elseif (empty($data['voucher_number'])) {
+            // If they cleared it but didn't change the type, keep the original number
+            $data['voucher_number'] = $voucher->voucher_number;
         }
 
         // SCENARIO 1: Voucher was already APPROVED or mid-approver-chain.

@@ -24,6 +24,7 @@ class Voucher extends Model implements HasMedia
     use HasFactory, SoftDeletes, InteractsWithMedia, LogsActivity;
 
     protected $fillable = [
+        'date',
         'type',
         'department',
         'voucher_number',
@@ -49,6 +50,7 @@ class Voucher extends Model implements HasMedia
     protected function casts(): array
     {
         return [
+            'date' => 'date',
             'amount' => 'decimal:2',
             'attachment_paths' => 'array',
             'cheque_date' => 'date',

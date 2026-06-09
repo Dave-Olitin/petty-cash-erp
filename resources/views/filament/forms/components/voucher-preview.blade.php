@@ -20,8 +20,9 @@
     ]);
     
     // Fake the unfillable fields that PDF renders
-    $voucher->voucher_number = 'VCH-NEW';
-    $voucher->created_at = now();
+    $voucher->voucher_number = $get('voucher_number') ?: 'VCH-NEW';
+    $voucher->date = $get('date') ? \Carbon\Carbon::parse($get('date')) : now();
+    $voucher->created_at = $voucher->date;
     $voucher->cheque_date = null;
     $voucher->invoice_breakdown = $get('invoice_breakdown') ?? [];
 

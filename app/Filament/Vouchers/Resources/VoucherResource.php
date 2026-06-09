@@ -147,6 +147,19 @@ class VoucherResource extends Resource
                                 ->description('STEP 1')
                                 ->schema([
                                     Forms\Components\Group::make()->schema([
+                                        Forms\Components\DatePicker::make('date')
+                                            ->label('Voucher Date')
+                                            ->default(now())
+                                            ->native(false)
+                                            ->displayFormat('d/m/Y')
+                                            ->required(),
+
+                                        Forms\Components\TextInput::make('voucher_number')
+                                            ->label('Voucher Number')
+                                            ->placeholder('Auto-generated')
+                                            ->helperText('Leave empty to auto-generate. Type manually for past data.')
+                                            ->unique(ignoreRecord: true),
+
                                         Forms\Components\Select::make('type')
                                             ->options([
                                                 'petty_cash' => 'Petty Cash Request',
@@ -640,6 +653,10 @@ class VoucherResource extends Resource
                 Tables\Columns\TextColumn::make('user.name')
                     ->label('Requester')
                     ->searchable()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('date')
+                    ->label('Voucher Date')
+                    ->date('M j, Y')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('payee')
                     ->searchable(),
