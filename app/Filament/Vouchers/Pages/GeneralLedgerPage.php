@@ -312,7 +312,7 @@ class GeneralLedgerPage extends Page implements HasForms
             return collect();
         }
 
-        return Liquidation::with(['voucher.journalEntry', 'custodian'])
+        return Liquidation::with(['voucher.journalEntries', 'custodian'])
             ->whereHas('voucher', function ($q) use ($branch, $payee, $accountId, $onlyWithJE) {
                 $q->where('type', 'petty_cash');
 
@@ -322,7 +322,7 @@ class GeneralLedgerPage extends Page implements HasForms
 
                 // If account code or branch is specified, the voucher MUST have a JE that hits that account/branch
                 if (!empty($accountId) || !empty($branch)) {
-                    $q->whereHas('journalEntry.lines', function ($lineQuery) use ($accountId, $branch) {
+                    $q->whereHas('journalEntries.lines', function ($lineQuery) use ($accountId, $branch) {
                         if (!empty($accountId)) {
                             $lineQuery->whereIn('account_code_id', $accountId);
                         }
@@ -332,7 +332,7 @@ class GeneralLedgerPage extends Page implements HasForms
                     });
                 } elseif ($onlyWithJE) {
                     // If toggle is enabled but no account code/branch filter is used, just enforce existence of ANY linked JE
-                    $q->whereHas('journalEntry');
+                    $q->whereHas('journalEntries');
                 }
             })
             ->when($from, fn($q) => $q->where(function ($sub) use ($from) {

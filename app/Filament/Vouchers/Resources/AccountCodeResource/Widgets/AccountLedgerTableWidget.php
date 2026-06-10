@@ -21,7 +21,7 @@ class AccountLedgerTableWidget extends BaseWidget
             ->query(
                 JournalEntryLine::query()
                     ->where('account_code_id', $this->record->id)
-                    ->with(['journalEntry', 'journalEntry.voucher'])
+                    ->with(['journalEntry', 'journalEntry.vouchers'])
             )
             ->columns([
                 Tables\Columns\TextColumn::make('journalEntry.date')
@@ -32,10 +32,10 @@ class AccountLedgerTableWidget extends BaseWidget
                     ->label('Ref #')
                     ->searchable()
                     ->url(fn ($record) => $record->journalEntry ? \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $record->journalEntry]) : null),
-                Tables\Columns\TextColumn::make('journalEntry.voucher.voucher_number')
+                Tables\Columns\TextColumn::make('journalEntry.vouchers.voucher_number')
                     ->label('Voucher #')
                     ->searchable()
-                    ->url(fn ($record) => $record->journalEntry?->voucher ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->journalEntry->voucher]) : null),
+                    ->url(fn ($record) => $record->journalEntry?->vouchers->first() ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->journalEntry->vouchers->first()]) : null),
                 Tables\Columns\TextColumn::make('branch')
                     ->label('Branch'),
                 Tables\Columns\TextColumn::make('description')

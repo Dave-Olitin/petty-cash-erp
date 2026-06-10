@@ -359,8 +359,8 @@
                                     default    => 'bg-warning-100 text-warning-700 dark:bg-warning-900/40 dark:text-warning-300',
                                 };
 
-                                // JE is already eager-loaded via voucher.journalEntry
-                                $linkedJe = $liq->voucher?->journalEntry ?? null;
+                                // JE is already eager-loaded via voucher.journalEntries
+                                $linkedJe = $liq->voucher?->journalEntries?->first() ?? null;
                             @endphp
                             <tr class="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition-colors">
                                 {{-- Voucher # --}}
