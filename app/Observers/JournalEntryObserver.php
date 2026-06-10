@@ -39,7 +39,13 @@ class JournalEntryObserver
             $short     = max(0, $spent - $netTarget);
 
             // Determine settlement status
-            $status = 'complete';
+            if ($short > 0) {
+                $status = 'short';
+            } elseif ($returned > 0) {
+                $status = 'excess';
+            } else {
+                $status = 'complete';
+            }
 
             $existingLiquidation = $voucher->liquidation;
 

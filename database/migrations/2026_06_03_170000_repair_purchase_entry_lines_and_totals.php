@@ -6,8 +6,7 @@ use Illuminate\Support\Facades\Schema;
 use App\Models\PurchaseEntry;
 use App\Models\PurchaseEntryLine;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -16,18 +15,18 @@ return new class extends Migration
         // 1. Repair lines: sync total/amount with debit/credit for non-legacy lines
         $lines = PurchaseEntryLine::all();
         foreach ($lines as $line) {
-            $debit = (float)$line->debit;
-            $credit = (float)$line->credit;
-            $total = (float)$line->total;
-            
+            $debit = (float) $line->debit;
+            $credit = (float) $line->credit;
+            $total = (float) $line->total;
+
             $expectedTotal = $total;
             if ($debit > 0) {
                 $expectedTotal = $debit;
             } elseif ($credit > 0) {
                 $expectedTotal = $credit;
             }
-            
-            if (round($total - $expectedTotal, 2) != 0 || round((float)$line->amount - $expectedTotal, 2) != 0) {
+
+            if (round($total - $expectedTotal, 2) != 0 || round((float) $line->amount - $expectedTotal, 2) != 0) {
                 $line->total = $expectedTotal;
                 $line->amount = $expectedTotal;
                 $line->save(); // Triggers saved hook which updates parent
@@ -38,17 +37,17 @@ return new class extends Migration
         $entries = PurchaseEntry::with('lines')->get();
         foreach ($entries as $entry) {
             $lineData = $entry->lines;
-            
+
             // Recalculate based on corrected lines
-            $newGrandTotal = $lineData->sum(fn($l) => max((float)$l->total, (float)$l->debit, (float)$l->credit));
-            $newVatTotal = $lineData->sum(fn($l) => (float)$l->tax_amount);
+            $newGrandTotal = $lineData->sum(fn($l) => max((float) $l->total, (float) $l->debit, (float) $l->credit));
+            $newVatTotal = $lineData->sum(fn($l) => (float) $l->tax_amount);
             $newTotalAmount = $newGrandTotal - $newVatTotal;
-            
-            $totalDebit = $lineData->sum(fn($l) => (float)$l->debit);
-            $totalCredit = $lineData->sum(fn($l) => (float)$l->credit);
-            
-            $originalAmountPaid = (float)$entry->amount_paid;
-            
+
+            $totalDebit = $lineData->sum(fn($l) => (float) $l->debit);
+            $totalCredit = $lineData->sum(fn($l) => (float) $l->credit);
+
+            $originalAmountPaid = (float) $entry->amount_paid;
+
             $newAmountPaid = $originalAmountPaid;
             if ($entry->payment_status === 'paid') {
                 $newAmountPaid = $newGrandTotal;
@@ -64,7 +63,7 @@ return new class extends Migration
                     $entry->payment_status = 'unpaid';
                 }
             }
-            
+
             $entry->update([
                 'grand_total' => $newGrandTotal,
                 'total_vat' => $newVatTotal,

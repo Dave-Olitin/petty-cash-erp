@@ -28,15 +28,6 @@ class TrialBalancePage extends Page implements HasForms
     protected static ?int $navigationSort = 7;
     protected static string $view = 'filament.vouchers.pages.trial-balance-page';
 
-    public static function getNavigationBadge(): ?string
-    {
-        return 'Testing';
-    }
-
-    public static function getNavigationBadgeColor(): ?string
-    {
-        return 'warning';
-    }
 
     public ?array $data = [];
 

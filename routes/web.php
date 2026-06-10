@@ -74,6 +74,16 @@ Route::middleware(['auth'])->group(function () {
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.voucher', ['voucher' => $voucher])->stream($voucher->voucher_number . '.pdf');
     })->name('voucher.pdf');
 
+    Route::get('/admin/journal-entries/{journalEntry}/pdf', function (\App\Models\JournalEntry $journalEntry) {
+        if (!auth()->user()->hasAnyRole(['Admin', 'Super Admin']) && !auth()->user()->can('journal_entry.view')) {
+            abort(403);
+        }
+
+        $journalEntry->load(['voucher', 'lines.accountCode']);
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.journal-entry', ['journalEntry' => $journalEntry])->stream($journalEntry->entry_no . '.pdf');
+    })->name('journal_entry.pdf');
+
     Route::get('/admin/float-replenishments/{replenishment}/pdf', function (\App\Models\FloatReplenishment $replenishment) {
         // Head Office or Accountant check
         if (!auth()->user()->isHeadOffice() && !auth()->user()->hasRole('Accountant')) {

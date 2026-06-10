@@ -56,6 +56,14 @@ class LiquidationService
             } elseif ($existingRv && in_array($existingRv->status, ['draft', 'pending_checker', 'pending_approver'])) {
                 $breakdown = $this->buildRvBreakdown($voucher, $original, $spent, $returned, $variance, $record);
 
+                $wasTrashed = $existingRv->trashed();
+                $amountChanged = round((float) $existingRv->amount, 2) !== round($returned, 2);
+                $shouldNotify = $notifyUser && ($amountChanged || $wasTrashed);
+
+                if ($wasTrashed) {
+                    $existingRv->restore();
+                }
+
                 $existingRv->updateQuietly([
                     'amount'              => $returned,
                     'transaction_summary' => $breakdown,
@@ -71,7 +79,7 @@ class LiquidationService
                     ->event('updated')
                     ->log("Auto-RV amount updated to AED " . number_format($returned, 2) . " due to settlement edit of {$voucher->voucher_number}.");
 
-                if ($notifyUser) {
+                if ($shouldNotify) {
                     Notification::make()
                         ->title('Receipt Voucher Updated')
                         ->body("The linked receipt voucher ({$existingRv->voucher_number}) was automatically updated to AED " . number_format($returned, 2) . " to match the revised settlement.")
@@ -116,7 +124,7 @@ class LiquidationService
                         ->send();
                 }
             }
-        } elseif ($returned == 0 && $existingRv && in_array($existingRv->status, ['draft', 'pending_checker'])) {
+        } elseif ($returned == 0 && $existingRv && !$existingRv->trashed() && in_array($existingRv->status, ['draft', 'pending_checker'])) {
             $existingRv->delete();
             $causer = auth()->user() ?? \App\Models\User::first();
             activity()
@@ -159,6 +167,14 @@ class LiquidationService
             } elseif ($existingPcv && in_array($existingPcv->status, ['draft', 'pending_checker', 'pending_approver'])) {
                 $breakdown = $this->buildPcvBreakdown($voucher, $original, $spent, $shortage, $variance, $record);
 
+                $wasTrashed = $existingPcv->trashed();
+                $amountChanged = round((float) $existingPcv->amount, 2) !== round($shortage, 2);
+                $shouldNotify = $notifyUser && ($amountChanged || $wasTrashed);
+
+                if ($wasTrashed) {
+                    $existingPcv->restore();
+                }
+
                 $existingPcv->updateQuietly([
                     'amount'              => $shortage,
                     'transaction_summary' => $breakdown,
@@ -174,7 +190,7 @@ class LiquidationService
                     ->event('updated')
                     ->log("Auto-PCV amount updated to AED " . number_format($shortage, 2) . " due to settlement edit of {$voucher->voucher_number}.");
 
-                if ($notifyUser) {
+                if ($shouldNotify) {
                     Notification::make()
                         ->title('Reimbursement PCV Updated')
                         ->body("The linked reimbursement PCV ({$existingPcv->voucher_number}) was automatically updated to AED " . number_format($shortage, 2) . ".")
@@ -219,7 +235,7 @@ class LiquidationService
                         ->send();
                 }
             }
-        } elseif ($shortage == 0 && $existingPcv && in_array($existingPcv->status, ['draft', 'pending_checker'])) {
+        } elseif ($shortage == 0 && $existingPcv && !$existingPcv->trashed() && in_array($existingPcv->status, ['draft', 'pending_checker'])) {
             $existingPcv->delete();
             $causer = auth()->user() ?? \App\Models\User::first();
             activity()

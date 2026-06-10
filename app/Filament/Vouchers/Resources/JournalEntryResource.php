@@ -70,14 +70,11 @@ class JournalEntryResource extends Resource
                     Forms\Components\TextInput::make('po_number')
                         ->label('PO Number')
                         ->maxLength(255),
-                    Forms\Components\TextInput::make('invoice_no')
-                        ->label('Invoice #')
-                        ->maxLength(255),
 
                     // ── HIDDEN (kept for data integrity) ──────────────────────
                     Forms\Components\Hidden::make('reference'),
                     Forms\Components\Hidden::make('currency')->default('AED'),
-                ])->columns(4),
+                ])->columns(3),
 
                 Forms\Components\Section::make('Entry Lines')->schema([
                     Forms\Components\Repeater::make('lines')
@@ -266,6 +263,13 @@ class JournalEntryResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('print')
+                    ->label('Print')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->iconButton()
+                    ->url(fn (\App\Models\JournalEntry $record) => route('journal_entry.pdf', $record))
+                    ->openUrlInNewTab(),
             ])
             ->paginated([10, 25, 50, 100])
             ->bulkActions([
@@ -302,7 +306,7 @@ class JournalEntryResource extends Resource
             ->schema([
                 \Filament\Infolists\Components\Section::make('General Information')
                     ->schema([
-                        \Filament\Infolists\Components\Grid::make(4)
+                        \Filament\Infolists\Components\Grid::make(3)
                             ->schema([
                                 \Filament\Infolists\Components\TextEntry::make('entry_no')
                                     ->label('Entry Number')
@@ -313,9 +317,6 @@ class JournalEntryResource extends Resource
                                     ->date('M j, Y'),
                                 \Filament\Infolists\Components\TextEntry::make('po_number')
                                     ->label('PO #')
-                                    ->placeholder('—'),
-                                \Filament\Infolists\Components\TextEntry::make('invoice_no')
-                                    ->label('Invoice #')
                                     ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('voucher.voucher_number')
                                     ->label('Ref. Voucher')

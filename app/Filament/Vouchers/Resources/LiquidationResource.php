@@ -231,10 +231,11 @@ class LiquidationResource extends Resource
                                         \Filament\Infolists\Components\TextEntry::make('status')
                                             ->badge()
                                             ->color(fn ($state) => match($state) {
-                                                'complete' => 'success',
-                                                'short'    => 'danger',
-                                                'excess'   => 'info',
-                                                default    => 'warning',
+                                                'complete'     => 'success',
+                                                'short'        => 'danger',
+                                                'excess'       => 'info',
+                                                'auto_settled' => 'gray',
+                                                default        => 'warning',
                                             })
                                             ->formatStateUsing(fn ($state) => strtoupper($state)),
                                         \Filament\Infolists\Components\TextEntry::make('liquidated_at')
@@ -362,15 +363,16 @@ class LiquidationResource extends Resource
                         default                         => 'info',
                     }),
 
-                        Tables\Columns\TextColumn::make('status')
+                Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->color(fn ($state) => match ($state) {
-                        'complete' => 'success',
-                        'short'    => 'danger',
-                        'excess'   => 'info',
-                        default    => 'warning',
+                        'complete'     => 'success',
+                        'short'        => 'danger',
+                        'excess'       => 'info',
+                        'auto_settled' => 'gray',
+                        default        => 'warning',
                     })
-                    ->formatStateUsing(fn ($state) => ucfirst($state)),
+                    ->formatStateUsing(fn ($state) => $state === 'auto_settled' ? 'Auto-Settled' : ucfirst($state)),
 
                 Tables\Columns\TextColumn::make('due_date')
                     ->label('Due Date')
@@ -395,10 +397,11 @@ class LiquidationResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
-                        'pending'  => 'Pending',
-                        'complete' => 'Complete',
-                        'short'    => 'Short',
-                        'excess'   => 'Excess',
+                        'pending'      => 'Pending',
+                        'complete'     => 'Complete',
+                        'short'        => 'Short',
+                        'excess'       => 'Excess',
+                        'auto_settled' => 'Auto-Settled',
                     ]),
                 Tables\Filters\Filter::make('overdue')
                     ->label('Overdue Only')

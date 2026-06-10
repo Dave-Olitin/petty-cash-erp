@@ -19,6 +19,11 @@ class EditVoucher extends EditRecord
         ];
     }
 
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('view', ['record' => $this->record]);
+    }
+
     protected function mutateFormDataBeforeSave(array $data): array
     {
         $voucher = $this->record;
