@@ -106,9 +106,10 @@ class Voucher extends Model implements HasMedia
         return $this->hasOne(Liquidation::class);
     }
 
-    public function journalEntry(): HasOne
+    public function journalEntries(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->hasOne(JournalEntry::class);
+        return $this->belongsToMany(JournalEntry::class)
+                    ->withTimestamps();
     }
 
     public function parentVoucher(): BelongsTo

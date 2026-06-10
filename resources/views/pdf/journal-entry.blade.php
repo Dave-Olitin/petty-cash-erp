@@ -123,7 +123,7 @@
 <table style="width: 100%; margin-bottom: 12px; font-size: 11px; border-collapse: collapse;">
     <tr>
         <td style="width: 1%; white-space: nowrap; font-weight: bold; vertical-align: bottom; padding-bottom: 2px;">REF VOUCHER:&nbsp;</td>
-        <td style="border-bottom: 1px solid #000; vertical-align: bottom; padding-bottom: 2px;">{{ $journalEntry->voucher?->voucher_number ?? '—' }}</td>
+        <td style="border-bottom: 1px solid #000; vertical-align: bottom; padding-bottom: 2px;">{{ $journalEntry->vouchers->pluck('voucher_number')->join(', ') ?: '—' }}</td>
         
         <td style="width: 1%; white-space: nowrap; font-weight: bold; vertical-align: bottom; padding-bottom: 2px; padding-left: 20px;">PO NO:&nbsp;</td>
         <td style="border-bottom: 1px solid #000; vertical-align: bottom; padding-bottom: 2px;">{{ $journalEntry->po_number ?? '—' }}</td>
@@ -191,7 +191,7 @@
 </table>
 
 @php
-    $childVouchers = $journalEntry->voucher ? $journalEntry->voucher->childVouchers : collect();
+    $childVouchers = \Illuminate\Database\Eloquent\Collection::make($journalEntry->vouchers->flatMap->childVouchers);
     $childVouchers->loadMissing([
         'template',
         'items.category',

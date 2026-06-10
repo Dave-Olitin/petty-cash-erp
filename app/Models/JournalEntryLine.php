@@ -10,6 +10,8 @@ class JournalEntryLine extends Model
 {
     use HasFactory;
 
+    protected $with = ['accountCode'];
+
     protected $fillable = [
         'journal_entry_id',
         'account_code_id',

@@ -40,11 +40,17 @@ class PurchaseEntryResource extends Resource
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
+        if ($record->is_locked && !auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin'])) {
+            return false;
+        }
         return auth()->user()->hasAnyRole(['Admin', 'Super Admin']) || auth()->user()->can('purchase_entry.edit');
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
+        if ($record->is_locked && !auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin'])) {
+            return false;
+        }
         return auth()->user()->hasAnyRole(['Admin', 'Super Admin']) || auth()->user()->can('purchase_entry.delete');
     }
 
@@ -243,6 +249,7 @@ class PurchaseEntryResource extends Resource
                                                 ->label('Debit Amount')
                                                 ->numeric()
                                                 ->default(0)
+                                                ->dehydrateStateUsing(fn ($state) => $state ?? 0)
                                                 ->live(onBlur: true)
                                                 ->rules([
                                                     fn (Forms\Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
@@ -272,6 +279,7 @@ class PurchaseEntryResource extends Resource
                                                 ->label('Credit Amount')
                                                 ->numeric()
                                                 ->default(0)
+                                                ->dehydrateStateUsing(fn ($state) => $state ?? 0)
                                                 ->live(onBlur: true)
                                                 ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                                     $credit = (float) $state;
@@ -294,6 +302,7 @@ class PurchaseEntryResource extends Resource
                                         ->label('Total Amount')
                                         ->numeric()
                                         ->default(0)
+                                        ->dehydrateStateUsing(fn ($state) => $state ?? 0)
                                         ->live(onBlur: true)
                                         ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                                             $total = (float) $state;
@@ -701,6 +710,19 @@ class PurchaseEntryResource extends Resource
                     }),
             ])
             ->actions([
+                Tables\Actions\Action::make('toggle_lock')
+                    ->label(fn ($record) => $record->is_locked ? 'Unlock' : 'Lock')
+                    ->icon(fn ($record) => $record->is_locked ? 'heroicon-o-lock-open' : 'heroicon-o-lock-closed')
+                    ->color(fn ($record) => $record->is_locked ? 'warning' : 'danger')
+                    ->requiresConfirmation()
+                    ->visible(fn () => auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin']))
+                    ->action(function ($record) {
+                        $record->update(['is_locked' => !$record->is_locked]);
+                        \Filament\Notifications\Notification::make()
+                            ->title($record->is_locked ? 'Purchase Entry Locked' : 'Purchase Entry Unlocked')
+                            ->success()
+                            ->send();
+                    }),
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
             ])

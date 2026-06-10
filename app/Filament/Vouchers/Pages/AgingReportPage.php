@@ -36,6 +36,7 @@ class AgingReportPage extends Page implements HasForms
     public ?string $supplier_id    = null;
     public ?string $entity         = null;
     public ?string $payment_status = null;
+    public ?string $month_filter   = null;
 
     public function mount(): void
     {
@@ -61,6 +62,20 @@ class AgingReportPage extends Page implements HasForms
                     ->placeholder('All Suppliers')
                     ->live(),
 
+                Select::make('month_filter')
+                    ->label('Bill Month')
+                    ->options(function () {
+                        $options = [];
+                        for ($i = 0; $i < 36; $i++) {
+                            $date = now()->subMonths($i);
+                            $options[$date->format('Y-m')] = $date->format('F Y');
+                        }
+                        return $options;
+                    })
+                    ->searchable()
+                    ->placeholder('All Months')
+                    ->live(),
+
                 Select::make('entity')
                     ->label('Entity')
                     ->options(\App\Models\VoucherTemplate::where('is_active', true)->pluck('company_name', 'company_name'))
@@ -77,7 +92,7 @@ class AgingReportPage extends Page implements HasForms
                     ->placeholder('All (excl. Paid)')
                     ->live(),
             ])
-            ->columns(['sm' => 2, 'xl' => 4]);
+            ->columns(['sm' => 2, 'xl' => 5]);
     }
 
     // ── Data ─────────────────────────────────────────────────────────────
@@ -105,6 +120,13 @@ class AgingReportPage extends Page implements HasForms
         }
         if ($this->payment_status) {
             $query->where('payment_status', $this->payment_status);
+        }
+        if ($this->month_filter) {
+            $parts = explode('-', $this->month_filter);
+            if (count($parts) === 2) {
+                $query->whereYear('date', $parts[0])
+                      ->whereMonth('date', $parts[1]);
+            }
         }
 
         $entries = $query->get();

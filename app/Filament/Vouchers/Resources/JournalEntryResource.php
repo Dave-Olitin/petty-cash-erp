@@ -36,18 +36,24 @@ class JournalEntryResource extends Resource
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
+        if ($record->is_locked && !auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin'])) {
+            return false;
+        }
         return auth()->user()->hasAnyRole(['Admin', 'Super Admin']) || auth()->user()->can('journal_entry.edit');
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
+        if ($record->is_locked && !auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin'])) {
+            return false;
+        }
         return auth()->user()->hasAnyRole(['Admin', 'Super Admin']) || auth()->user()->can('journal_entry.delete');
     }
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
         return parent::getEloquentQuery()->with([
-            'voucher',
+            'vouchers',
             'lines.accountCode',
         ]);
     }
@@ -62,11 +68,12 @@ class JournalEntryResource extends Resource
                         ->default(now())
                         ->native(false)
                         ->displayFormat('d/m/Y'),
-                    Forms\Components\Select::make('voucher_id')
-                        ->relationship('voucher', 'voucher_number')
+                    Forms\Components\Select::make('vouchers')
+                        ->relationship('vouchers', 'voucher_number')
+                        ->multiple()
                         ->searchable()
                         ->preload()
-                        ->label('Linked Voucher'),
+                        ->label('Linked Vouchers'),
                     Forms\Components\TextInput::make('po_number')
                         ->label('PO Number')
                         ->maxLength(255),
@@ -217,8 +224,9 @@ class JournalEntryResource extends Resource
                     ->label('Date')
                     ->date()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('voucher.voucher_number')
-                    ->label('Ref. Voucher')
+                Tables\Columns\TextColumn::make('vouchers.voucher_number')
+                    ->label('Source Vouchers')
+                    ->badge()
                     ->searchable()
                     ->default('—'),
                 Tables\Columns\TextColumn::make('total_debit')
@@ -261,6 +269,19 @@ class JournalEntryResource extends Resource
                     }),
             ])
             ->actions([
+                Tables\Actions\Action::make('toggle_lock')
+                    ->label(fn ($record) => $record->is_locked ? 'Unlock' : 'Lock')
+                    ->icon(fn ($record) => $record->is_locked ? 'heroicon-o-lock-open' : 'heroicon-o-lock-closed')
+                    ->color(fn ($record) => $record->is_locked ? 'warning' : 'danger')
+                    ->requiresConfirmation()
+                    ->visible(fn () => auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin']))
+                    ->action(function ($record) {
+                        $record->update(['is_locked' => !$record->is_locked]);
+                        \Filament\Notifications\Notification::make()
+                            ->title($record->is_locked ? 'Journal Entry Locked' : 'Journal Entry Unlocked')
+                            ->success()
+                            ->send();
+                    }),
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\Action::make('print')
@@ -318,10 +339,10 @@ class JournalEntryResource extends Resource
                                 \Filament\Infolists\Components\TextEntry::make('po_number')
                                     ->label('PO #')
                                     ->placeholder('—'),
-                                \Filament\Infolists\Components\TextEntry::make('voucher.voucher_number')
-                                    ->label('Ref. Voucher')
-                                    ->placeholder('—')
-                                    ->url(fn ($record) => $record->voucher_id ? \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+                                \Filament\Infolists\Components\TextEntry::make('vouchers.voucher_number')
+                                    ->label('Source Vouchers')
+                                    ->badge()
+                                    ->placeholder('—'),
                             ])->columns(4),
                     ]),
 
@@ -424,44 +445,55 @@ class JournalEntryResource extends Resource
                             ])
                     ])->compact(),
                 
-                \Filament\Infolists\Components\Section::make('Related Child Vouchers (Generated from Liquidation)')
+                \Filament\Infolists\Components\Section::make('Related Settlement Vouchers (Generated from Liquidation)')
                     ->schema([
-                        \Filament\Infolists\Components\RepeatableEntry::make('voucher.childVouchers')
+                        \Filament\Infolists\Components\RepeatableEntry::make('vouchers')
                             ->label('')
                             ->schema([
-                                \Filament\Infolists\Components\Grid::make(4)
+                                \Filament\Infolists\Components\TextEntry::make('voucher_number')
+                                    ->label('Source Voucher')
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->url(fn ($record) => \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->id])),
+                                \Filament\Infolists\Components\RepeatableEntry::make('childVouchers')
+                                    ->label('Generated Settlement Vouchers')
                                     ->schema([
-                                        \Filament\Infolists\Components\TextEntry::make('voucher_number')
-                                            ->label('Voucher Number')
-                                            ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                            ->url(fn ($record) => \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->id])),
-                                        \Filament\Infolists\Components\TextEntry::make('type')
-                                            ->label('Type')
-                                            ->badge()
-                                            ->formatStateUsing(fn (string $state): string => match ($state) {
-                                                'payment' => 'Payment Voucher',
-                                                'receipt' => 'Receipt Voucher',
-                                                'petty_cash' => 'Petty Cash Voucher',
-                                                default => ucfirst($state),
-                                            })
-                                            ->color(fn (string $state): string => match ($state) {
-                                                'payment' => 'danger',
-                                                'receipt' => 'success',
-                                                'petty_cash' => 'warning',
-                                                default => 'gray',
-                                            }),
-                                        \Filament\Infolists\Components\TextEntry::make('amount')
-                                            ->label('Amount')
-                                            ->money('AED'),
-                                        \Filament\Infolists\Components\TextEntry::make('status')
-                                            ->label('Status')
-                                            ->badge(),
+                                        \Filament\Infolists\Components\Grid::make(4)
+                                            ->schema([
+                                                \Filament\Infolists\Components\TextEntry::make('voucher_number')
+                                                    ->label('Voucher Number')
+                                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                                    ->url(fn ($record) => \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record->id])),
+                                                \Filament\Infolists\Components\TextEntry::make('type')
+                                                    ->label('Type')
+                                                    ->badge()
+                                                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                                                        'payment' => 'Payment Voucher',
+                                                        'receipt' => 'Receipt Voucher',
+                                                        'petty_cash' => 'Petty Cash Voucher',
+                                                        default => ucfirst($state),
+                                                    })
+                                                    ->color(fn (string $state): string => match ($state) {
+                                                        'payment' => 'danger',
+                                                        'receipt' => 'success',
+                                                        'petty_cash' => 'warning',
+                                                        default => 'gray',
+                                                    }),
+                                                \Filament\Infolists\Components\TextEntry::make('amount')
+                                                    ->label('Amount')
+                                                    ->money('AED'),
+                                                \Filament\Infolists\Components\TextEntry::make('status')
+                                                    ->label('Status')
+                                                    ->badge(),
+                                            ])
                                     ])
+                                    ->columns(1)
+                                    ->contained(true)
+                                    ->visible(fn ($record) => $record->childVouchers()->count() > 0)
                             ])
                             ->columns(1)
-                            ->contained(true)
+                            ->contained(false)
                     ])
-                    ->visible(fn ($record) => $record->voucher && $record->voucher->childVouchers()->count() > 0)
+                    ->visible(fn ($record) => $record->vouchers()->whereHas('childVouchers')->exists())
                     ->collapsed(false),
             ]);
     }

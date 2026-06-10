@@ -1286,20 +1286,20 @@ class VoucherResource extends Resource
 
                             // Minor Column: Audit sidebar
                             \Filament\Infolists\Components\Group::make([
-                                \Filament\Infolists\Components\Section::make('Parent Reference')
+                                \Filament\Infolists\Components\Section::make('Source Reference')
                                     ->compact()
                                     ->visible(fn ($record) => $record->parent_voucher_id !== null)
                                     ->schema([
                                         \Filament\Infolists\Components\TextEntry::make('parentVoucher.voucher_number')
-                                            ->label('Parent Voucher')
+                                            ->label('Source Voucher')
                                             ->icon('heroicon-m-link')
                                             ->url(fn ($record) => $record->parent_voucher_id ? static::getUrl('view', ['record' => $record->parent_voucher_id]) : null),
                                             
-                                        \Filament\Infolists\Components\TextEntry::make('parentVoucher.journalEntry.entry_no')
-                                            ->label('Parent Journal Entry')
+                                        \Filament\Infolists\Components\TextEntry::make('parentVoucher.journalEntries.0.entry_no')
+                                            ->label('Source Journal Entry')
                                             ->icon('heroicon-m-document-text')
-                                            ->visible(fn ($record) => $record->parentVoucher && $record->parentVoucher->journalEntry)
-                                            ->url(fn ($record) => $record->parentVoucher && $record->parentVoucher->journalEntry ? \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $record->parentVoucher->journalEntry->id]) : null),
+                                            ->visible(fn ($record) => $record->parentVoucher && $record->parentVoucher->journalEntries->count() > 0)
+                                            ->url(fn ($record) => $record->parentVoucher && $record->parentVoucher->journalEntries->count() > 0 ? \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $record->parentVoucher->journalEntries->first()->id]) : null),
                                     ]),
 
                                 \Filament\Infolists\Components\Section::make('Identity & Date')

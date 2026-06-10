@@ -9,7 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use App\Observers\PurchaseEntryObserver;
 
+#[ObservedBy(PurchaseEntryObserver::class)]
 class PurchaseEntry extends Model
 {
     use HasFactory;
@@ -47,6 +50,7 @@ class PurchaseEntry extends Model
         'payment_status',
         'amount_paid',
         'balance_due',
+        'is_locked',
     ];
 
     protected function casts(): array
@@ -61,6 +65,7 @@ class PurchaseEntry extends Model
             'total_credit'  => 'decimal:2',
             'amount_paid'   => 'decimal:2',
             'balance_due'   => 'decimal:2',
+            'is_locked'     => 'boolean',
         ];
     }
 

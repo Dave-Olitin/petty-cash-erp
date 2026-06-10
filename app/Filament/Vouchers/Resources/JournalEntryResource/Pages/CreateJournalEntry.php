@@ -17,7 +17,7 @@ class CreateJournalEntry extends CreateRecord
                 ->label('Create')
                 ->requiresConfirmation()
                 ->modalHeading('Submit Journal Entry')
-                ->modalDescription('Are you sure you want to submit this journal entry? Please double-check the amounts. If the totals result in a shortage or excess, the system will automatically generate the corresponding child vouchers.')
+                ->modalDescription('Are you sure you want to submit this journal entry? Please double-check the amounts. If the totals result in a shortage or excess, the system will automatically generate the corresponding settlement vouchers.')
                 ->modalSubmitActionLabel('Yes, Submit')
                 ->action(function () {
                     $this->create();
@@ -25,5 +25,10 @@ class CreateJournalEntry extends CreateRecord
             ...(static::canCreateAnother() ? [$this->getCreateAnotherFormAction()] : []),
             $this->getCancelFormAction(),
         ];
+    }
+
+    protected function afterCreate(): void
+    {
+        app(\App\Observers\JournalEntryObserver::class)->processAutoLiquidation($this->record);
     }
 }

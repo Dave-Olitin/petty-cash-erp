@@ -79,7 +79,7 @@ Route::middleware(['auth'])->group(function () {
             abort(403);
         }
 
-        $journalEntry->load(['voucher', 'lines.accountCode']);
+        $journalEntry->load(['vouchers.childVouchers', 'lines.accountCode']);
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.journal-entry', ['journalEntry' => $journalEntry])->stream($journalEntry->entry_no . '.pdf');
     })->name('journal_entry.pdf');

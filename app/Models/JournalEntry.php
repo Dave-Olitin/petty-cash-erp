@@ -25,8 +25,8 @@ class JournalEntry extends Model
         'currency',
         'total_debit',
         'total_credit',
-        'voucher_id',
         'created_by',
+        'is_locked',
     ];
 
     protected function casts(): array
@@ -35,6 +35,7 @@ class JournalEntry extends Model
             'date' => 'date',
             'total_debit' => 'decimal:2',
             'total_credit' => 'decimal:2',
+            'is_locked' => 'boolean',
         ];
     }
 
@@ -63,9 +64,10 @@ class JournalEntry extends Model
         });
     }
 
-    public function voucher(): BelongsTo
+    public function vouchers(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsTo(Voucher::class);
+        return $this->belongsToMany(Voucher::class)
+                    ->withTimestamps();
     }
 
     public function lines(): HasMany

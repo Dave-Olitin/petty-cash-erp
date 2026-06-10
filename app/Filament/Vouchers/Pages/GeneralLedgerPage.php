@@ -149,7 +149,7 @@ class GeneralLedgerPage extends Page implements HasForms
         // ── 1. VoucherItem rows ──────────────────────────────────────────────
         if ($dataSource !== 'je_only') {
             // Include all vouchers, even if they have a linked Journal Entry.
-            $voucherItems = VoucherItem::with(['voucher', 'voucher.journalEntry', 'accountCode'])
+            $voucherItems = VoucherItem::with(['voucher', 'voucher.journalEntries', 'accountCode'])
                 ->whereHas('voucher', fn($q) => $q->where('status', 'paid'))
                 ->when(!empty($accountId), function ($q) use ($accountId) {
                     $codes = AccountCode::whereIn('id', $accountId)->pluck('code');
@@ -164,8 +164,8 @@ class GeneralLedgerPage extends Page implements HasForms
                 ->filter(fn($item) => $item->accountCode !== null)
                 ->map(fn($item) => (object) [
                     'date'            => $item->voucher?->created_at,
-                    'je_ref'          => $item->voucher?->journalEntry?->entry_no,
-                    'je_id'           => $item->voucher?->journalEntry?->id,
+                    'je_ref'          => $item->voucher?->journalEntries?->first()?->entry_no,
+                    'je_id'           => $item->voucher?->journalEntries?->first()?->id,
                     'voucher_id'      => $item->voucher_id,
                     'voucher_number'  => $item->voucher?->voucher_number,
                     'voucher_type'    => $item->voucher?->type,
@@ -175,7 +175,7 @@ class GeneralLedgerPage extends Page implements HasForms
                     'debit'           => (float) $item->debit,
                     'credit'          => (float) $item->credit,
                     'source'          => 'voucher',
-                    'is_info_only'    => ($dataSource === 'both' && $item->voucher?->journalEntry !== null),
+                    'is_info_only'    => ($dataSource === 'both' && $item->voucher?->journalEntries?->count() > 0),
                     'account_code_id' => $item->accountCode->id,
                     'account'         => $item->accountCode,
                     'running_balance' => 0.0,
@@ -187,13 +187,13 @@ class GeneralLedgerPage extends Page implements HasForms
 
         // ── 2. JournalEntryLine rows ─────────────────────────────────────────
         if ($dataSource !== 'vouchers_only') {
-            $jeLines = JournalEntryLine::with(['journalEntry', 'journalEntry.voucher', 'accountCode'])
+            $jeLines = JournalEntryLine::with(['journalEntry', 'journalEntry.vouchers', 'accountCode'])
                 ->when(!empty($accountId), fn($q) => $q->whereIn('account_code_id', $accountId))
                 ->when(!empty($branch),    fn($q) => $q->whereIn('branch', $branch))
-                ->when(!empty($basis),     fn($q) => $q->whereHas('journalEntry.voucher', fn($v) => $v->whereIn('type', $basis)))
+                ->when(!empty($basis),     fn($q) => $q->whereHas('journalEntry.vouchers', fn($v) => $v->whereIn('type', $basis)))
                 ->when(!empty($payee), fn($q) => $q->where(function ($sub) use ($payee) {
                     $sub->where('supplier_name', 'like', '%' . $payee . '%')
-                        ->orWhereHas('journalEntry.voucher', fn($v) => $v->where('payee', 'like', '%' . $payee . '%'));
+                        ->orWhereHas('journalEntry.vouchers', fn($v) => $v->where('payee', 'like', '%' . $payee . '%'));
                 }))
                 ->when($from, fn($q) => $q->whereHas('journalEntry', fn($j) => $j->whereDate('date', '>=', $from)))
                 ->when($to,   fn($q) => $q->whereHas('journalEntry', fn($j) => $j->whereDate('date', '<=', $to)))
@@ -203,11 +203,11 @@ class GeneralLedgerPage extends Page implements HasForms
                     'date'            => $line->journalEntry?->date,
                     'je_ref'          => $line->journalEntry?->entry_no,
                     'je_id'           => $line->journal_entry_id,
-                    'voucher_id'      => $line->journalEntry?->voucher_id,
-                    'voucher_number'  => $line->journalEntry?->voucher?->voucher_number,
-                    'voucher_type'    => $line->journalEntry?->voucher?->type,
-                    'voucher_amount'  => $line->journalEntry?->voucher?->amount,
-                    'payee'           => $line->supplier_name ?: ($line->journalEntry?->voucher?->payee ?? null),
+                    'voucher_id'      => $line->journalEntry?->vouchers->first()?->id,
+                    'voucher_number'  => $line->journalEntry?->vouchers->first()?->voucher_number,
+                    'voucher_type'    => $line->journalEntry?->vouchers->first()?->type,
+                    'voucher_amount'  => $line->journalEntry?->vouchers->first()?->amount,
+                    'payee'           => $line->supplier_name ?: ($line->journalEntry?->vouchers->first()?->payee ?? null),
                     'branch'          => $line->branch,
                     'debit'           => (float) $line->debit,
                     'credit'          => (float) $line->credit,

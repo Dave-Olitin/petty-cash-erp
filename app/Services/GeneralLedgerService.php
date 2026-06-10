@@ -58,7 +58,7 @@ class GeneralLedgerService
         return VoucherItem::query()
             ->where('account_code', $account->code)
             ->whereHas('voucher', fn($v) => $v->where('status', 'paid'))
-            ->with(['voucher', 'voucher.journalEntry'])
+            ->with(['voucher', 'voucher.journalEntries'])
             ->when($from, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '>=', $from)))
             ->when($to, fn($q) => $q->whereHas('voucher', fn($v) => $v->whereDate('created_at', '<=', $to)))
             ->when($branch, fn($q) => $q->where('branch_code', $branch))

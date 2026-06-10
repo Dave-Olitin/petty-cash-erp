@@ -8,22 +8,21 @@ use App\Models\Liquidation;
 class JournalEntryObserver
 {
     /**
-     * Fires after the JE is created or updated.
-     * If a voucher_id is set, auto-create/update a Liquidation.
+     * Fires after the JE is created or updated, AND after Filament has synced relationships.
      */
-    public function saved(JournalEntry $journalEntry): void
+    public function processAutoLiquidation(JournalEntry $journalEntry): void
     {
-        if (! $journalEntry->voucher_id) {
+        $vouchers = $journalEntry->vouchers()->with(['liquidation', 'denominations'])->get();
+
+        // If there are exactly 1 voucher, we can auto-liquidate
+        // If there are >1 vouchers, we skip auto-liquidation as requested by user ("yes manually")
+        if ($vouchers->count() !== 1) {
             return;
         }
 
-        $voucher = $journalEntry->voucher()->with(['liquidation', 'denominations'])->first();
+        $voucher = $vouchers->first();
 
-        if (! $voucher) {
-            return;
-        }
-
-        // Only auto-liquidate petty cash vouchers — payment/receipt vouchers don't need this
+        // Only auto-liquidate petty cash vouchers
         if ($voucher->type !== 'petty_cash') {
             return;
         }
@@ -49,8 +48,6 @@ class JournalEntryObserver
 
             $existingLiquidation = $voucher->liquidation;
 
-            // Guard: only skip if the liquidation is already COMPLETE and was set manually
-            // (i.e., it has no auto-liquidated tag — an accountant already settled it by hand)
             if (
                 $existingLiquidation
                 && $existingLiquidation->status === 'complete'
@@ -83,13 +80,8 @@ class JournalEntryObserver
                 $liquidationRecord = Liquidation::create($payload);
             }
 
-            // Trigger auto-generation of child vouchers (RV/PCV) based on the liquidation
             app(\App\Services\LiquidationService::class)->handleAutoGeneration($liquidationRecord, true);
 
-            // Sync the voucher's liquidation_status field —
-            // only mark 'liquidated' if the voucher has actually been paid.
-            // If the JE was created before the PCV was disbursed, leave the
-            // status alone; the VoucherObserver will set it to 'pending' on pay.
             if ($voucher->status === 'paid') {
                 $voucher->update(['liquidation_status' => 'liquidated']);
             }
@@ -97,28 +89,21 @@ class JournalEntryObserver
     }
 
     /**
-     * If the voucher_id is cleared off a JE, revert the voucher's liquidation status.
+     * Fires after a new Journal Entry is created.
      */
-    public function updated(JournalEntry $journalEntry): void
+    public function created(JournalEntry $journalEntry): void
     {
-        // If voucher_id was just removed
-        if ($journalEntry->wasChanged('voucher_id') && ! $journalEntry->voucher_id) {
-            $oldVoucherId = $journalEntry->getOriginal('voucher_id');
-            if (! $oldVoucherId) {
-                return;
-            }
+        $accountants = \App\Models\User::role('Accountant')->get();
 
-            $oldVoucher = \App\Models\Voucher::with('liquidation')->find($oldVoucherId);
-            if (! $oldVoucher) {
-                return;
-            }
+        if ($accountants->count() > 0) {
+            $creator = $journalEntry->created_by ? \App\Models\User::find($journalEntry->created_by) : auth()->user();
+            $creatorName = $creator ? $creator->name : 'System';
 
-            // Only revert if the liquidation was auto-created by us
-            $liq = $oldVoucher->liquidation;
-            if ($liq && str_contains($liq->remarks ?? '', '[auto-liquidated]')) {
-                $liq->delete();
-                $oldVoucher->update(['liquidation_status' => 'pending']);
-            }
+            \Filament\Notifications\Notification::make()
+                ->title('New Journal Entry Created')
+                ->body("{$journalEntry->entry_no} has been created by {$creatorName}.")
+                ->info()
+                ->sendToDatabase($accountants);
         }
     }
 }
