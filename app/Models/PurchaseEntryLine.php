@@ -10,6 +10,8 @@ class PurchaseEntryLine extends Model
 {
     use HasFactory;
 
+    protected $with = ['debitAccount', 'creditAccount'];
+
     protected $fillable = [
         'purchase_entry_id',
         'description',
