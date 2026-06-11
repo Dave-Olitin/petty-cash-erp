@@ -32,8 +32,8 @@ class LatestTransactions extends BaseWidget
                         return $query->where('branch_id', auth()->user()->branch_id);
                     })
                     ->latest()
-                    ->limit(10)
             )
+            ->paginated([10, 25, 50])
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime('M j, Y h:i A')
