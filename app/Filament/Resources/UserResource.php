@@ -58,6 +58,7 @@ public static function form(Form $form): Form
     public static function table(Table $table): Table
     {
         return $table
+            ->paginated([10, 25, 50])
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),

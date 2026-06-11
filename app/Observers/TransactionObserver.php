@@ -32,7 +32,7 @@ class TransactionObserver
             // TOCTOU guard: Re-check balance AFTER acquiring the lock.
             // The form-level validation happens seconds before this write,
             // so another concurrent request could have already debited the balance.
-            if ($transaction->type === 'EXPENSE' && $transaction->amount > $branch->current_balance) {
+            if ($transaction->type === 'EXPENSE' && !$branch->allow_overdraft && $transaction->amount > $branch->current_balance) {
                 // Rollback by soft-deleting this transaction immediately
                 $transaction->deleteQuietly();
 
@@ -118,6 +118,20 @@ class TransactionObserver
             // Case C: Standard Edit (Amount/Type change) — skip if currently rejected
             if ($newStatus === 'rejected') {
                 return;
+            }
+
+            // Calculate the true available balance if this edit is applied
+            $availableBalance = $branch->current_balance;
+            if ($oldType === 'EXPENSE') {
+                $availableBalance += $oldAmount;
+            } else {
+                $availableBalance -= $oldAmount;
+            }
+
+            if ($transaction->type === 'EXPENSE' && !$branch->allow_overdraft && $transaction->amount > $availableBalance) {
+                throw ValidationException::withMessages([
+                    'amount' => "Insufficient funds — the balance was updated by another request. The branch only has an available balance of AED {$availableBalance} for this transaction.",
+                ]);
             }
 
             // Revert old amount, then apply new amount

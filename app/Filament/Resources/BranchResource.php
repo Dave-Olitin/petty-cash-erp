@@ -45,6 +45,10 @@ class BranchResource extends Resource
             Forms\Components\Toggle::make('is_active')
                 ->label('Branch Active Status')
                 ->default(true),
+            Forms\Components\Toggle::make('allow_overdraft')
+                ->label('Allow Overdraft (Open Expense)')
+                ->helperText('If enabled, the branch can create expenses even when current balance is insufficient.')
+                ->default(false),
         ]);
 }
 

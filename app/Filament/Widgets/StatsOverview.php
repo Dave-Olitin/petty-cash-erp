@@ -35,17 +35,12 @@ class StatsOverview extends BaseWidget
                 ->when($branchId, fn($q) => $q->where('branch_id', $branchId));
         };
 
-        // Trend data: cached for 30s — close enough to live, saves DB load during polling
-        $cacheKey = 'stats_trends_' . ($user->id) . '_' . md5(json_encode($this->filters));
-
-        $cachedStats = \Illuminate\Support\Facades\Cache::remember($cacheKey, 30, function () use ($query) {
-            return [
-                'expenseTrend'       => $this->getTrend('EXPENSE', $this->filters['branch_id'] ?? auth()->user()->branch_id),
-                'replenishTrend'     => $this->getTrend('REPLENISHMENT', $this->filters['branch_id'] ?? auth()->user()->branch_id),
-                'totalExpenses'      => $query()->where('type', 'EXPENSE')->sum('amount'),
-                'totalReplenishments'=> $query()->where('type', 'REPLENISHMENT')->sum('amount'),
-            ];
-        });
+        $cachedStats = [
+            'expenseTrend'       => $this->getTrend('EXPENSE', $this->filters['branch_id'] ?? auth()->user()->branch_id),
+            'replenishTrend'     => $this->getTrend('REPLENISHMENT', $this->filters['branch_id'] ?? auth()->user()->branch_id),
+            'totalExpenses'      => (clone $query())->where('type', 'EXPENSE')->sum('amount'),
+            'totalReplenishments'=> (clone $query())->where('type', 'REPLENISHMENT')->sum('amount'),
+        ];
 
         // LIVE Data Construction
         if ($user->isHeadOffice() && !$branchId) {

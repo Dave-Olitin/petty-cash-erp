@@ -184,8 +184,8 @@ public static function form(Form $form): Form
                                 ->live(onBlur: true)
                                 ->default(0)
                                 ->dehydrated()
-                                ->rule(function (callable $get) {
-                                    return function (string $attribute, $value, \Closure $fail) use ($get) {
+                                ->rule(function (callable $get, ?\Illuminate\Database\Eloquent\Model $record) {
+                                    return function (string $attribute, $value, \Closure $fail) use ($get, $record) {
                                         $type = $get('type');
                                         $branchId = $get('branch_id') ?? auth()->user()->branch_id;
                                         
@@ -196,9 +196,20 @@ public static function form(Form $form): Form
                                         // Rule 1: Replenishment -> No limits
                                         if ($type === 'REPLENISHMENT') return;
 
+                                        $availableBalance = $branch->current_balance;
+
+                                        // If this is an edit of an existing transaction, add back the original transaction's impact
+                                        if ($record && $record->status !== 'rejected') {
+                                            if ($record->type === 'EXPENSE') {
+                                                $availableBalance += $record->amount;
+                                            } else {
+                                                $availableBalance -= $record->amount;
+                                            }
+                                        }
+
                                         // Rule 2: Expense -> Check Balance
-                                        if ($value > $branch->current_balance) {
-                                            $fail("Insufficient funds! The branch only has AED {$branch->current_balance}.");
+                                        if (!$branch->allow_overdraft && $value > $availableBalance) {
+                                            $fail("Insufficient funds! The branch only has an available balance of AED {$availableBalance} for this transaction.");
                                         }
 
                                         // Rule 3: Expense -> Check Transaction Limit
@@ -369,6 +380,7 @@ public static function table(Table $table): Table
 {
         return $table
             ->striped()
+            ->paginated([10, 25, 50])
             ->columns([
             Tables\Columns\TextColumn::make('created_at')
                 ->dateTime('M j, Y h:i A')
