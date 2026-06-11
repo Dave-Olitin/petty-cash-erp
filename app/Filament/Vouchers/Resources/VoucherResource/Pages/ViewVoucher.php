@@ -459,8 +459,11 @@ class ViewVoucher extends ViewRecord
                                                     "<div style='color:#6b7280;'>Voucher Total (Gross):</div><div style='text-align:right;font-family:monospace;'>AED " . number_format($target, 2) . "</div>" .
                                                     "<div style='color:#6b7280;'>Less: Cash Advance:</div><div style='text-align:right;font-family:monospace; color:#b91c1c;'>- AED " . number_format($deduction, 2) . "</div>" .
                                                     "<div style='grid-column:span 2;margin:4px 0;border-top:1px dashed #d1d5db;'></div>" .
-                                                    "<div style='font-weight:700;'>Net Cash to Pay:</div><div style='text-align:right;font-family:monospace;font-weight:700; font-size:14px;'>AED " . number_format($netCashTarget, 2) . "</div>" .
-                                                    "<div style='color:#6b7280;'>Physical Cash:</div><div style='text-align:right;font-family:monospace;'>AED " . number_format($netPhysical, 2) . "</div>" .
+                                                    "<div style='font-weight:700;'>Net Target Cash:</div><div style='text-align:right;font-family:monospace;font-weight:700; font-size:14px;'>AED " . number_format($netCashTarget, 2) . "</div>" .
+                                                    "<div style='grid-column:span 2;margin:4px 0;border-top:1px dashed #d1d5db;'></div>" .
+                                                    "<div style='color:#6b7280;'>Tendered Amount:</div><div style='text-align:right;font-family:monospace;'>AED " . number_format($tendered, 2) . "</div>" .
+                                                    "<div style='color:#6b7280;'>Less: Change Due:</div><div style='text-align:right;font-family:monospace; color:#b91c1c;'>- AED " . number_format($change, 2) . "</div>" .
+                                                    "<div style='font-weight:700; color:#4b5563;'>Net Physical Cash:</div><div style='text-align:right;font-family:monospace;font-weight:700;'>AED " . number_format($netPhysical, 2) . "</div>" .
                                                     "<div style='grid-column:span 2;margin:6px 0;border-top:1px solid #d1d5db;'></div>" .
                                                     "<div style='font-weight:700;'>Verification:</div><div style='text-align:right;'>{$statusBadge}</div>" .
                                                     "</div>" .
