@@ -168,6 +168,7 @@ class VoucherResource extends Resource
                                             ])
                                             ->required()
                                             ->default('payment')
+                                            ->disabled(fn ($record) => $record !== null && in_array($record->status, ['approved', 'paid']))
                                             ->live()
                                             ->afterStateUpdated(function (\Filament\Forms\Set $set, $state) {
                                                 if ($state === 'petty_cash') {
@@ -179,6 +180,19 @@ class VoucherResource extends Resource
                                                     $set('voucher_template_id', null);
                                                 }
                                             }),
+
+                                        Forms\Components\Select::make('is_for_liquidation')
+                                            ->label('Is this for liquidation?')
+                                            ->options([
+                                                1 => 'Yes (Requires settlement with receipts later)',
+                                                0 => 'No (Direct expense / No receipts required later)',
+                                            ])
+                                            ->default(1)
+                                            ->required()
+                                            ->disabled(fn ($record) => $record !== null && in_array($record->status, ['approved', 'paid']))
+                                            ->visible(fn (\Filament\Forms\Get $get) => $get('type') === 'petty_cash')
+                                            ->helperText('If YES, this voucher must be settled in the Liquidation module. If NO, it will be treated as a final expense (Journal only).'),
+
 
                                         Forms\Components\Select::make('voucher_template_id')
                                             ->label('Company / Header Template')
@@ -192,6 +206,7 @@ class VoucherResource extends Resource
                                             ->searchable()
                                             ->preload()
                                             ->required()
+                                            ->disabled(fn ($record) => $record !== null && in_array($record->status, ['approved', 'paid']))
                                             ->live()
                                             ->afterStateUpdated(function ($state, \Filament\Forms\Set $set, \Filament\Forms\Get $get) {
                                                 if ($state) {
@@ -321,6 +336,7 @@ class VoucherResource extends Resource
                                     Forms\Components\Repeater::make('items')
                                         ->relationship()
                                         ->label('')
+                                        ->disabled(fn ($record) => $record !== null && in_array($record->status, ['approved', 'paid']))
                                         ->schema([
                                             // Row 1: Branch, Account Code, Debit, Credit
                                             Forms\Components\Grid::make(['default' => 1, 'md' => 12])->schema([
@@ -903,36 +919,9 @@ class VoucherResource extends Resource
                                         ->label('Date')
                                         ->required()
                                         ->native(false),
-                                    Forms\Components\Select::make('bank')
+                                    Forms\Components\TextInput::make('bank')
                                         ->label('Bank / Account')
-                                        ->searchable()
-                                        ->allowHtml()
-                                        ->getSearchResultsUsing(function (string $search, ?Voucher $record = null) {
-                                            $templateId = $record?->voucher_template_id;
-                                            return \App\Models\AccountCode::where('is_active', true)
-                                                ->where(function ($query) use ($search) {
-                                                    $query->where('code', 'like', "%{$search}%")
-                                                        ->orWhere('name', 'like', "%{$search}%");
-                                                })
-                                                ->when($templateId, function ($query) use ($templateId) {
-                                                    $query->where(function ($q) use ($templateId) {
-                                                        $q->whereNull('entity')
-                                                            ->orWhereJsonLength('entity', 0)
-                                                            ->orWhereJsonContains('entity', (string) $templateId)
-                                                            ->orWhereJsonContains('entity', (int) $templateId);
-                                                    });
-                                                })
-                                                ->limit(50)
-                                                ->get()
-                                                ->mapWithKeys(fn ($ac) => [$ac->code => "{$ac->code} — {$ac->name}"])
-                                                ->toArray();
-                                        })
-                                        ->getOptionLabelUsing(fn (?string $value) => $value
-                                            ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
-                                                ? "{$ac->code} — {$ac->name}"
-                                                : $value
-                                            : null
-                                        )
+                                        ->maxLength(255)
                                         ->required(),
                                     Forms\Components\TextInput::make('amount')
                                         ->label('Amount')

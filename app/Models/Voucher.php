@@ -46,6 +46,7 @@ class Voucher extends Model implements HasMedia
         'invoice_breakdown',
         'liquidation_status',
         'parent_voucher_id',
+        'is_for_liquidation',
     ];
 
     protected function casts(): array
@@ -58,6 +59,7 @@ class Voucher extends Model implements HasMedia
             'multiple_payments' => 'array',
             'invoice_breakdown' => 'array',
             'liquidation_status' => 'string',
+            'is_for_liquidation' => 'boolean',
         ];
     }
 

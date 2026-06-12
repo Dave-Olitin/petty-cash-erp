@@ -91,7 +91,7 @@ class VoucherObserver
     {
         if ($voucher->wasChanged('status') && $voucher->status === VoucherStatus::Paid->value) {
             DB::transaction(function () use ($voucher) {
-                // ── Petty Cash: low balance check + liquidation trigger ────────────
+                // ── 1. Petty Cash: low balance check ────────────
                 if ($voucher->type === 'petty_cash') {
 
                     // ── 1. Fetch the just-saved denomination once and re-use it ───
@@ -135,8 +135,14 @@ class VoucherObserver
                             \Illuminate\Support\Facades\Log::error('Low Balance Notification Failed: ' . $e->getMessage());
                         }
                     }
+                } // Close petty_cash block
 
-                    // ── 4. Auto-trigger liquidation ───────────────────────────────
+                // ── 2. Auto-trigger liquidation ───────────────────────────────
+                if ($voucher->type === 'petty_cash' && $voucher->is_for_liquidation) {
+                    // Fetch prior deduction if available (mostly for petty cash)
+                    $denomination = $voucher->denominations()->latest()->first();
+                    $priorDeduction = $denomination ? (float) $denomination->prior_deduction : 0.0;
+
                     $isReimbursement = !is_null($voucher->parent_voucher_id) && str_contains($voucher->description ?? '', 'REIMBURSEMENT FOR LIQUIDATION');
 
                     if ($isReimbursement) {
@@ -157,30 +163,26 @@ class VoucherObserver
                             ]
                         );
                     } else {
-                        $threshold = (float) config('liquidation.minimum_amount', 0);
-                        if ((float) $voucher->amount >= $threshold) {
+                        if ($voucher->liquidation()->exists()) {
+                            $voucher->updateQuietly(['liquidation_status' => 'pending']);
+                        } else {
+                            $deadlineDays = config('liquidation.deadline_days');
+                            $dueDate = $deadlineDays ? now()->addDays((int) $deadlineDays)->toDateString() : null;
 
-                            if ($voucher->liquidation()->exists()) {
-                                $voucher->updateQuietly(['liquidation_status' => 'pending']);
-                            } else {
-                                $deadlineDays = config('liquidation.deadline_days');
-                                $dueDate = $deadlineDays ? now()->addDays((int) $deadlineDays)->toDateString() : null;
+                            $netToJustify = max(0, (float) $voucher->amount - $priorDeduction);
 
-                                $netToJustify = max(0, (float) $voucher->amount - $priorDeduction);
+                            $voucher->updateQuietly(['liquidation_status' => 'pending']);
 
-                                $voucher->updateQuietly(['liquidation_status' => 'pending']);
-
-                                \App\Models\Liquidation::create([
-                                    'voucher_id'      => $voucher->id,
-                                    'liquidated_by'   => $voucher->user_id,
-                                    'amount_spent'    => 0,
-                                    'amount_returned' => 0,
-                                    'prior_deduction' => $priorDeduction,
-                                    'amount_short'    => $netToJustify,
-                                    'status'          => 'pending',
-                                    'due_date'        => $dueDate,
-                                ]);
-                            }
+                            \App\Models\Liquidation::create([
+                                'voucher_id'      => $voucher->id,
+                                'liquidated_by'   => $voucher->user_id,
+                                'amount_spent'    => 0,
+                                'amount_returned' => 0,
+                                'prior_deduction' => $priorDeduction,
+                                'amount_short'    => $netToJustify,
+                                'status'          => 'pending',
+                                'due_date'        => $dueDate,
+                            ]);
                         }
                     }
                 }
@@ -190,7 +192,7 @@ class VoucherObserver
         }
 
         // ── Mark overdue liquidations ──────────────────────────────────────────
-        if ($voucher->type === 'petty_cash' && $voucher->liquidation_status === 'pending') {
+        if ($voucher->type === 'petty_cash' && $voucher->is_for_liquidation && $voucher->liquidation_status === 'pending') {
             $liq = $voucher->liquidation;
             if ($liq && $liq->due_date && \Carbon\Carbon::parse($liq->due_date)->isPast() && $liq->status === 'pending') {
                 DB::transaction(function () use ($voucher, $liq) {

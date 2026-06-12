@@ -122,6 +122,24 @@
         <th>AMOUNT</th>
         <td style="font-weight: bold; font-size: 13px;">AED {{ number_format($amount, 2) }}</td>
     </tr>
+    @if($replenishment->voucher_id)
+    <tr>
+        <th>LINKED VOUCHER</th>
+        <td>{{ $replenishment->voucher->voucher_number ?? 'N/A' }}</td>
+    </tr>
+    @endif
+    @if($replenishment->partial_amount)
+    <tr>
+        <th>PARTIAL AMOUNT</th>
+        <td>AED {{ number_format($replenishment->partial_amount, 2) }}</td>
+    </tr>
+    @endif
+    @if($replenishment->account_code)
+    <tr>
+        <th>ACCOUNT CODE</th>
+        <td>{{ $replenishment->account_code }}</td>
+    </tr>
+    @endif
     <tr>
         <th>REMARKS / DESCRIPTION</th>
         <td>{!! nl2br(e($replenishment->remarks ?: 'Head Office Float Funding')) !!}</td>

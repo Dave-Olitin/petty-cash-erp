@@ -21,6 +21,9 @@ class FloatReplenishment extends Model
         'remarks',
         'created_by',
         'attachment_paths',
+        'voucher_id',
+        'partial_amount',
+        'account_code',
     ];
 
     protected function casts(): array
@@ -40,5 +43,10 @@ class FloatReplenishment extends Model
     public function denominations(): MorphOne
     {
         return $this->morphOne(Denomination::class, 'denominatable');
+    }
+
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(Voucher::class, 'voucher_id');
     }
 }

@@ -46,7 +46,12 @@ class VoucherPolicy
 
     public function update(User $user, Voucher $voucher): bool
     {
-        // Paid vouchers can NEVER be edited, they are finalized.
+        // Admins, Super Admins, Accountants, and Head Office can edit vouchers at ANY time (Soft Edits)
+        if ($user->hasAnyRole(['Accountant', 'Admin', 'Super Admin', 'Head Office'])) {
+            return true;
+        }
+
+        // Paid vouchers can NEVER be edited by normal branch users.
         if ($voucher->status === 'paid') {
             return false;
         }
@@ -56,11 +61,8 @@ class VoucherPolicy
             return true;
         }
 
-        // Pending or Approved vouchers can be edited by Accountants, Head Office, Admins
+        // Pending or Approved vouchers logic for normal users
         if (in_array($voucher->status, ['pending_checker', 'pending_approver', 'approved'])) {
-            if ($user->hasAnyRole(['Accountant', 'Admin', 'Super Admin', 'Head Office'])) {
-                return true;
-            }
             // Creator can also edit their own pending_checker vouchers before it reaches approver
             if ($voucher->status === 'pending_checker' && $voucher->user_id === $user->id) {
                 return true;

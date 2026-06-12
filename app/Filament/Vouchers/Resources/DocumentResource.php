@@ -19,11 +19,11 @@ class DocumentResource extends Resource
 
     protected static ?string $navigationGroup = null;
 
-    protected static ?string $navigationLabel = 'Documents';
+    protected static ?string $navigationLabel = 'Transactions';
 
-    protected static ?string $modelLabel = 'Document';
+    protected static ?string $modelLabel = 'Transaction';
 
-    protected static ?string $pluralModelLabel = 'Documents';
+    protected static ?string $pluralModelLabel = 'Transactions';
 
     protected static ?int $navigationSort = 10;
 
@@ -284,7 +284,31 @@ class DocumentResource extends Resource
             ])
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(10)
-            ->bulkActions([]);
+            ->headerActions([
+                \pxlrbt\FilamentExcel\Actions\Tables\ExportAction::make()
+                    ->label('Export to Excel')
+                    ->exports([
+                        \pxlrbt\FilamentExcel\Exports\ExcelExport::make('table')
+                            ->fromTable()
+                            ->withColumns([
+                                \pxlrbt\FilamentExcel\Columns\Column::make('file_path')
+                                    ->heading('File Link')
+                                    ->getStateUsing(fn ($record) => asset('storage/' . $record->file_path)),
+                            ]),
+                    ]),
+            ])
+            ->bulkActions([
+                \pxlrbt\FilamentExcel\Actions\Tables\ExportBulkAction::make()
+                    ->exports([
+                        \pxlrbt\FilamentExcel\Exports\ExcelExport::make('table')
+                            ->fromTable()
+                            ->withColumns([
+                                \pxlrbt\FilamentExcel\Columns\Column::make('file_path')
+                                    ->heading('File Link')
+                                    ->getStateUsing(fn ($record) => asset('storage/' . $record->file_path)),
+                            ]),
+                    ])
+            ]);
     }
 
     public static function getPages(): array

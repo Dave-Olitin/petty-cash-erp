@@ -61,6 +61,41 @@ class Dashboard extends \Filament\Pages\Dashboard
                         ->disabled()
                         ->dehydrated(false)
                         ->placeholder('Will be generated upon save'),
+                    Forms\Components\Select::make('voucher_id')
+                        ->label('Link to Payment Voucher')
+                        ->relationship('voucher', 'voucher_number', function ($query) {
+                            return $query->where('type', 'payment')->where('status', 'paid');
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->nullable(),
+                    Forms\Components\TextInput::make('partial_amount')
+                        ->label('Partial Amount (if applicable)')
+                        ->numeric()
+                        ->prefix('AED')
+                        ->nullable(),
+                    Forms\Components\Select::make('account_code')
+                        ->label('Reference (Account Code)')
+                        ->searchable()
+                        ->getSearchResultsUsing(function (string $search) {
+                            return \App\Models\AccountCode::where('is_active', true)
+                                ->where(function ($query) use ($search) {
+                                    $query->where('code', 'like', "%{$search}%")
+                                        ->orWhere('name', 'like', "%{$search}%");
+                                })
+                                ->limit(50)
+                                ->get()
+                                ->mapWithKeys(fn ($ac) => [$ac->code => "{$ac->code} — {$ac->name}"])
+                                ->toArray();
+                        })
+                        ->getOptionLabelUsing(fn (?string $value) => $value
+                            ? (($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                ? "{$ac->code} — {$ac->name}"
+                                : $value)
+                            : null
+                        )
+                        ->nullable()
+                        ->columnSpanFull(),
                     Forms\Components\Textarea::make('remarks')
                         ->columnSpanFull(),
                     Forms\Components\Hidden::make('created_by')

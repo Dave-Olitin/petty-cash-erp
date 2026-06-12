@@ -105,6 +105,20 @@ class JournalEntryResource extends Resource
                                 ->label('Supplier')
                                 ->options(\App\Models\TaxRegistration::pluck('name', 'name'))
                                 ->searchable()
+                                ->createOptionForm([
+                                    Forms\Components\TextInput::make('trn')
+                                        ->label('TRN Number')
+                                        ->required()
+                                        ->unique('tax_registrations', 'trn'),
+                                    Forms\Components\TextInput::make('name')
+                                        ->label('Vendor / Company Name')
+                                        ->required()
+                                        ->unique('tax_registrations', 'name'),
+                                ])
+                                ->createOptionUsing(function (array $data) {
+                                    \App\Models\TaxRegistration::create($data);
+                                    return $data['name'];
+                                })
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
                                     if ($state) {

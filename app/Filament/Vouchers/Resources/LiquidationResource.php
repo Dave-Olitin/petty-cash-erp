@@ -55,6 +55,7 @@ class LiquidationResource extends Resource
                             $currentId = $record?->voucher_id;
 
                             $query = Voucher::where('type', 'petty_cash')
+                                ->where('is_for_liquidation', true)
                                 ->where('status', 'paid')
                                 ->where(function ($q) use ($currentId) {
                                     $q->whereIn('liquidation_status', ['pending', 'overdue']);
