@@ -538,6 +538,14 @@ class PurchaseEntryResource extends Resource
                     })
                     ->extraAttributes(['class' => 'font-bold tracking-tighter']),
 
+                Tables\Columns\TextColumn::make('vouchers.voucher_number')
+                    ->label('Linked Vouchers')
+                    ->badge()
+                    ->searchable()
+                    ->separator(',')
+                    ->toggleable(),
+
+
                 Tables\Columns\TextColumn::make('aging_bucket')
                     ->label('Aging')
                     ->badge()

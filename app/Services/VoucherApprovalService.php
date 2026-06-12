@@ -327,12 +327,47 @@ class VoucherApprovalService
                 ]);
             }
 
-            // Bulk update all linked purchase entries in a single query
-            $locked->purchaseEntries()->update([
-                'amount_paid'    => DB::raw('grand_total'),
-                'balance_due'    => 0,
-                'payment_status' => \App\Models\PurchaseEntry::STATUS_PAID,
-            ]);
+            // ── Smart AP Payment Distribution ─────────────────────────────────
+            // Distribute the voucher payment across linked purchase entries.
+            // Bills are paid in full (oldest first by date). If the voucher
+            // amount runs short, the last bill gets a partial payment and
+            // the rest retain their unpaid balance.
+            $linkedEntries = $locked->purchaseEntries()->orderBy('date')->orderBy('id')->get();
+
+            if ($linkedEntries->isNotEmpty()) {
+                $remaining = (float) $locked->amount;
+                $totalLinked = $linkedEntries->sum(fn ($pe) => (float) $pe->grand_total);
+
+                foreach ($linkedEntries as $pe) {
+                    $billTotal    = (float) $pe->grand_total;
+                    $alreadyPaid  = (float) $pe->amount_paid;
+                    $stillOwed    = max(0, $billTotal - $alreadyPaid);
+
+                    if ($remaining <= 0) {
+                        // No payment left — leave this bill untouched
+                        break;
+                    }
+
+                    if ($remaining >= $stillOwed) {
+                        // Voucher covers this bill fully
+                        $pe->update([
+                            'amount_paid'    => $billTotal,
+                            'balance_due'    => 0,
+                            'payment_status' => \App\Models\PurchaseEntry::STATUS_PAID,
+                        ]);
+                        $remaining -= $stillOwed;
+                    } else {
+                        // Voucher only partially covers this bill
+                        $newPaid = $alreadyPaid + $remaining;
+                        $pe->update([
+                            'amount_paid'    => round($newPaid, 2),
+                            'balance_due'    => round($billTotal - $newPaid, 2),
+                            'payment_status' => \App\Models\PurchaseEntry::STATUS_PARTIAL,
+                        ]);
+                        $remaining = 0;
+                    }
+                }
+            }
 
             // Record in approval trail
             $comment = $previousStatus !== VoucherStatus::Approved->value
@@ -420,10 +455,11 @@ class VoucherApprovalService
                 $locked->liquidation->update(['status' => 'voided']);
             }
 
-            // 2. Revert Purchase Entries (un-pay them so they show balance again)
+            // 2. Revert Purchase Entries (un-pay them so they show full balance again)
             $locked->purchaseEntries()->each(function ($pe) {
                 $pe->update([
                     'amount_paid'    => 0,
+                    'balance_due'    => $pe->grand_total,   // restore full outstanding balance
                     'payment_status' => \App\Models\PurchaseEntry::STATUS_UNPAID,
                 ]);
             });
