@@ -10,6 +10,12 @@ class CreatePurchaseEntry extends CreateRecord
 {
     protected static string $resource = PurchaseEntryResource::class;
 
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        unset($data['lines']);
+        return $data;
+    }
+
     protected function getHeaderActions(): array
     {
         return [

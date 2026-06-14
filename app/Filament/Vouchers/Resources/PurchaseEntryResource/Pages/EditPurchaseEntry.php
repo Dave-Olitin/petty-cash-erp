@@ -10,6 +10,12 @@ class EditPurchaseEntry extends EditRecord
 {
     protected static string $resource = PurchaseEntryResource::class;
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        unset($data['lines']);
+        return $data;
+    }
+
     protected function getHeaderActions(): array
     {
         return [

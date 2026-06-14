@@ -170,6 +170,8 @@ class EditVoucher extends EditRecord
                 ->info()
                 ->send();
         }
+        
+        unset($data['items'], $data['purchaseEntries']);
 
         return $data;
     }

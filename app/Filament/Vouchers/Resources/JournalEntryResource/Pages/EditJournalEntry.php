@@ -10,6 +10,12 @@ class EditJournalEntry extends EditRecord
 {
     protected static string $resource = JournalEntryResource::class;
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        unset($data['lines'], $data['vouchers']);
+        return $data;
+    }
+
     protected function getHeaderActions(): array
     {
         return [

@@ -10,6 +10,12 @@ class CreateJournalEntry extends CreateRecord
 {
     protected static string $resource = JournalEntryResource::class;
 
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        unset($data['lines'], $data['vouchers']);
+        return $data;
+    }
+
     protected function getFormActions(): array
     {
         return [
