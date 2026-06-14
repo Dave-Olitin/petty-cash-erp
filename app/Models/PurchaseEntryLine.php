@@ -85,7 +85,7 @@ class PurchaseEntryLine extends Model
 
             // Use the `total` column as the authoritative line amount.
             // As a safety net, fall back to max(debit, credit) if total is still 0.
-            $lines       = $parent->lines()->get(['total', 'debit', 'credit', 'tax_amount']);
+            $lines       = $parent->lines()->without(['debitAccount', 'creditAccount'])->get(['total', 'debit', 'credit', 'tax_amount']);
             $grandTotal  = $lines->sum(fn ($l) => max((float)$l->total, (float)$l->debit, (float)$l->credit));
             $totalVat    = $lines->sum(fn ($l) => (float)$l->tax_amount);
             $totalDebit  = $lines->sum(fn ($l) => (float)$l->debit);
