@@ -82,4 +82,22 @@
     .max-w-7xl {
         max-width: 100% !important;
     }
+
+    /* ── Sidebar Branch Dashboards Styling ── */
+    a[href*="branch_id"] .fi-navigation-item-label {
+        font-size: 0.80rem !important;
+        white-space: normal !important;
+        line-height: 1.25 !important;
+    }
+    
+    /* Make active branch stand out more */
+    a[href*="branch_id"].fi-active {
+        background-color: #f3f4f6 !important;
+        border-right: 3px solid #4f46e5 !important;
+    }
+    
+    /* Ensure the wrapper respects the active style too if active class is on parent */
+    li:has(a[href*="branch_id"].fi-active) > a {
+        font-weight: 700 !important;
+    }
 </style>

@@ -72,8 +72,21 @@ class LatestTransactions extends BaseWidget
                     ->visibleFrom('md'),
             ])
             ->actions([
-                // Minimal actions for the dashboard widget
-            ]);
+                Tables\Actions\ViewAction::make()
+                    ->infolist(fn (\Filament\Infolists\Infolist $infolist) => \App\Filament\Resources\TransactionResource::infolist($infolist))
+                    ->slideOver()
+                    ->color('info')
+                    ->icon('heroicon-o-eye')
+                    ->extraModalFooterActions([
+                        Tables\Actions\Action::make('edit')
+                            ->label('Edit')
+                            ->url(fn (Transaction $record): string => \App\Filament\Resources\TransactionResource::getUrl('edit', ['record' => $record]))
+                            ->visible(fn (\App\Models\Transaction $record) => auth()->user()->can('update', $record))
+                            ->icon('heroicon-o-pencil')
+                            ->color('warning'),
+                    ]),
+            ])
+            ->recordAction('view');
     }
 
     public static function canView(): bool

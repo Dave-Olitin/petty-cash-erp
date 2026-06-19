@@ -40,6 +40,10 @@ class AdminPanelProvider extends PanelProvider
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\\Filament\\Clusters')
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
+            ->navigationGroups([
+                \Filament\Navigation\NavigationGroup::make('Finance'),
+                \Filament\Navigation\NavigationGroup::make('Branch Dashboards'),
+            ])
             ->pages([
                 // Pages\Dashboard::class, // Replaced by our custom Dashboard
                 \App\Filament\Pages\Dashboard::class,

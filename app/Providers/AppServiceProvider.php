@@ -5,6 +5,8 @@ use App\Models\Transaction;
 use App\Observers\TransactionObserver;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Support\Facades\Blade;
+use Filament\Facades\Filament;
+use Filament\Navigation\NavigationItem;
 
 use Illuminate\Support\ServiceProvider;
 
@@ -45,6 +47,26 @@ class AppServiceProvider extends ServiceProvider
             'panels::head.end',
             fn (): \Illuminate\Contracts\View\View => view('filament.hooks.head-scripts'),
         );
+
+        Filament::serving(function () {
+            try {
+                $branches = \App\Models\Branch::where('is_active', true)->get();
+            } catch (\Exception $e) {
+                return;
+            }
+
+            $items = $branches->map(function ($branch) {
+                return NavigationItem::make('branch_' . $branch->id)
+                    ->label($branch->name)
+                    ->group('Branch Dashboards')
+                    ->icon('heroicon-o-presentation-chart-line')
+                    ->url(fn (): string => route('filament.admin.pages.dashboard', ['filters' => ['branch_id' => $branch->id]]))
+                    ->visible(fn () => auth()->check() && auth()->user()->branch_id === null)
+                    ->isActiveWhen(fn () => request()->input('filters.branch_id') == $branch->id);
+            })->toArray();
+            
+            Filament::registerNavigationItems($items);
+        });
 
     }
 }
