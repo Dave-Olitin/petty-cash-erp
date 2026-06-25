@@ -175,6 +175,17 @@ class LiquidationResource extends Resource
                                 . "<div style='margin-bottom:4px;font-weight:600;'>Net Receipts Needed: AED " . number_format($netTarget, 2) . "</div>"
                                 : '';
 
+                            $actionMsg = '';
+                            if ($diff < -0.01) {
+                                $actionMsg = "<div style='margin-top:10px;padding:10px;background-color:#fff5f5;border:1px solid #fecaca;border-radius:6px;color:#c53030;font-size:12px;font-family:sans-serif;line-height:1.4;'>" .
+                                    "ℹ️ <b>System Action:</b> Saving this will automatically draft a <b>Petty Cash Voucher (PCV)</b> for the shortage of <b>AED " . number_format(abs($diff), 2) . "</b> to reimburse the employee." .
+                                    "</div>";
+                            } elseif ($diff > 0.01) {
+                                $actionMsg = "<div style='margin-top:10px;padding:10px;background-color:#f0f7ff;border:1px solid #bfdbfe;border-radius:6px;color:#1e40af;font-size:12px;font-family:sans-serif;line-height:1.4;'>" .
+                                    "ℹ️ <b>System Action:</b> Saving this will automatically draft a <b>Receipt Voucher (RV)</b> for the excess of <b>AED " . number_format($diff, 2) . "</b> to record cash returned to the box." .
+                                    "</div>";
+                            }
+
                             return new \Illuminate\Support\HtmlString(
                                 "<div style='padding:14px;border-radius:10px;border:1px solid;{$panelStyle}font-family:monospace;'>" .
                                 "<div style='margin-bottom:4px;'>Original Voucher: AED " . number_format($original, 2) . "</div>" .
@@ -182,6 +193,7 @@ class LiquidationResource extends Resource
                                 "<div style='margin-bottom:4px;'>Spent:    AED " . number_format($spent, 2) . "</div>" .
                                 "<div style='margin-bottom:8px;'>Returned: AED " . number_format($returned, 2) . "</div>" .
                                 "<div style='padding-top:8px;border-top:1px solid #e5e7eb;font-family:sans-serif;'>Status: {$statusMsg}</div>" .
+                                $actionMsg .
                                 "</div>"
                             );
                         }),

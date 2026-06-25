@@ -16,6 +16,44 @@ class CreateLiquidation extends CreateRecord
         return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
     }
 
+    protected function getFormActions(): array
+    {
+        return [
+            \Filament\Actions\Action::make('create_liquidation')
+                ->label('Create')
+                ->requiresConfirmation()
+                ->modalHeading('Confirm Liquidation Settlement')
+                ->modalDescription(function () {
+                    $data = $this->form->getRawState();
+                    $voucher = \App\Models\Voucher::find($data['voucher_id'] ?? null);
+                    if (!$voucher) {
+                        return 'Are you sure you want to submit this liquidation?';
+                    }
+
+                    $original  = (float) $voucher->amount;
+                    $deduction = (float) ($data['prior_deduction'] ?? 0);
+                    $netTarget = max(0, $original - $deduction);
+                    $spent     = (float) ($data['amount_spent'] ?? 0);
+                    $returned  = (float) ($data['amount_returned'] ?? 0);
+                    $diff      = round(($spent + $returned) - $netTarget, 2);
+
+                    if ($diff < -0.01) {
+                        return "You have entered a shortage of AED " . number_format(abs($diff), 2) . ". Saving this will automatically draft a Petty Cash Voucher (PCV) to reimburse the employee. Are you sure you want to proceed?";
+                    } elseif ($diff > 0.01) {
+                        return "You have entered an excess of AED " . number_format($diff, 2) . ". Saving this will automatically draft a Receipt Voucher (RV) to record the returned cash. Are you sure you want to proceed?";
+                    }
+
+                    return "The liquidation amounts balance perfectly. No extra settlement vouchers will be generated. Are you sure you want to proceed?";
+                })
+                ->modalSubmitActionLabel('Yes, Submit')
+                ->action(function () {
+                    $this->create();
+                }),
+            ...(static::canCreateAnother() ? [$this->getCreateAnotherFormAction()] : []),
+            $this->getCancelFormAction(),
+        ];
+    }
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         // Remove placeholder keys (prefixed with _) before saving
