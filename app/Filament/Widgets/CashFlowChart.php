@@ -57,7 +57,7 @@ class CashFlowChart extends ChartWidget
                 ->whereNull('deleted_at')
                 ->where('status', '!=', 'rejected')
                 ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
-                ->select('created_at', 'type', 'amount')
+                ->select('created_at', 'type', 'amount', 'status')
                 ->get();
 
             // 3. Map Results — group in PHP using Carbon (DB-agnostic)

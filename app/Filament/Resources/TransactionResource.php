@@ -42,17 +42,10 @@ public static function form(Form $form): Form
             Forms\Components\Section::make('Transaction Details')
                 ->schema([
                     Forms\Components\Select::make('type')
-                        ->options(function () {
-                            $options = [
-                                'EXPENSE' => 'Expense (Money Out)',
-                            ];
-
-                            if (auth()->user()->isHeadOffice()) {
-                                $options['REPLENISHMENT'] = 'Replenishment (Money In)';
-                            }
-
-                            return $options;
-                        })
+                        ->options([
+                            'EXPENSE' => 'Expense (Money Out)',
+                            'REPLENISHMENT' => 'Replenishment (Money In)',
+                        ])
                         ->required()
                         ->live() 
                         ->afterStateUpdated(function (callable $set, $state) {

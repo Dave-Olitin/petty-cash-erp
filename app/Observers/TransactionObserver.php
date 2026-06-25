@@ -12,10 +12,30 @@ use App\Notifications\TransactionStatusNotification;
 class TransactionObserver
 {
     /**
-     * Handle the Transaction "created" event.
-     * Uses a DB transaction with lock to prevent race conditions on concurrent balance updates.
-     * Also performs a server-side balance double-check (TOCTOU guard).
+     * Helper to calculate the financial impact of a transaction on the branch balance.
      */
+    private function calculateBalanceImpact(string $type, ?string $status, float $amount): float
+    {
+        $status = $status ?? 'pending';
+        
+        if ($status === 'rejected') {
+            return 0.0;
+        }
+
+        if ($type === 'EXPENSE') {
+            // Expenses deduct from balance as long as they are pending or approved.
+            // This reserves the funds immediately.
+            return -$amount;
+        }
+
+        if ($type === 'REPLENISHMENT') {
+            // As requested, replenishments add to balance immediately, even if pending
+            return $amount;
+        }
+
+        return 0.0;
+    }
+
     public function created(Transaction $transaction): void
     {
         if (!$transaction->branch_id) {
@@ -29,11 +49,10 @@ class TransactionObserver
                 return;
             }
 
+            $impact = $this->calculateBalanceImpact($transaction->type, $transaction->status, $transaction->amount);
+
             // TOCTOU guard: Re-check balance AFTER acquiring the lock.
-            // The form-level validation happens seconds before this write,
-            // so another concurrent request could have already debited the balance.
-            if ($transaction->type === 'EXPENSE' && !$branch->allow_overdraft && $transaction->amount > $branch->current_balance) {
-                // Rollback by soft-deleting this transaction immediately
+            if ($impact < 0 && !$branch->allow_overdraft && abs($impact) > $branch->current_balance) {
                 $transaction->deleteQuietly();
 
                 throw ValidationException::withMessages([
@@ -41,24 +60,20 @@ class TransactionObserver
                 ]);
             }
 
-            if ($transaction->type === 'EXPENSE') {
-                $branch->decrement('current_balance', $transaction->amount);
-            } else {
-                $branch->increment('current_balance', $transaction->amount);
+            if ($impact != 0) {
+                $branch->increment('current_balance', $impact);
             }
         });
 
-        // Fix #8: Wrap notification dispatch in try/catch so SMTP/queue failures
-        // don't surface as a 500 when the transaction itself saved successfully.
+        // Notifications
         try {
             if ($transaction->status === 'pending') {
                 $headOfficeUsers = User::whereNull('branch_id')->get();
                 Notification::send($headOfficeUsers, new TransactionStatusNotification($transaction, 'created'));
             } elseif ($transaction->type === 'REPLENISHMENT' && $transaction->status === 'approved') {
-                // If HQ generates a replenishment (which is usually auto-approved), notify the branch users
                 $branchUsers = User::where('branch_id', $transaction->branch_id)->get();
                 if ($branchUsers->isNotEmpty()) {
-                    Notification::send($branchUsers, new TransactionStatusNotification($transaction, 'created')); // 'created' here acts as a "you received funds" notice
+                    Notification::send($branchUsers, new TransactionStatusNotification($transaction, 'created'));
                 }
             }
         } catch (\Exception $e) {
@@ -66,19 +81,12 @@ class TransactionObserver
         }
     }
 
-    /**
-     * Handle the Transaction "updated" event.
-     * Handles all status transitions and amount/type changes.
-     */
     public function updated(Transaction $transaction): void
     {
         if (!$transaction->branch_id) {
             return;
         }
 
-        // Fix #3: Skip the entire balance recalculation if no financial fields changed.
-        // This prevents unnecessary lockForUpdate() contention on non-financial edits
-        // (description, payee, receipt_path, etc.)
         if (!$transaction->isDirty('amount', 'type', 'status')) {
             return;
         }
@@ -95,70 +103,33 @@ class TransactionObserver
                 return;
             }
 
-            // Case A: Transaction was JUST Rejected — reverse the balance impact
-            if ($oldStatus !== 'rejected' && $newStatus === 'rejected') {
-                if ($oldType === 'EXPENSE') {
-                    $branch->increment('current_balance', $oldAmount);
-                } else {
-                    $branch->decrement('current_balance', $oldAmount);
-                }
+            $oldImpact = $this->calculateBalanceImpact($oldType, $oldStatus, $oldAmount);
+            $newImpact = $this->calculateBalanceImpact($transaction->type, $transaction->status, $transaction->amount);
+
+            $impactDifference = $newImpact - $oldImpact;
+
+            if ($impactDifference == 0) {
                 return;
             }
 
-            // Case B: Transaction was UN-Rejected (e.g. re-approved from rejected state)
-            if ($oldStatus === 'rejected' && $newStatus !== 'rejected') {
-                if ($transaction->type === 'EXPENSE') {
-                    $branch->decrement('current_balance', $transaction->amount);
-                } else {
-                    $branch->increment('current_balance', $transaction->amount);
-                }
-                return;
-            }
+            $availableBalance = $branch->current_balance - $oldImpact;
 
-            // Case C: Standard Edit (Amount/Type change) — skip if currently rejected
-            if ($newStatus === 'rejected') {
-                return;
-            }
-
-            // Calculate the true available balance if this edit is applied
-            $availableBalance = $branch->current_balance;
-            if ($oldType === 'EXPENSE') {
-                $availableBalance += $oldAmount;
-            } else {
-                $availableBalance -= $oldAmount;
-            }
-
-            if ($transaction->type === 'EXPENSE' && !$branch->allow_overdraft && $transaction->amount > $availableBalance) {
+            if ($newImpact < 0 && !$branch->allow_overdraft && abs($newImpact) > $availableBalance) {
                 throw ValidationException::withMessages([
                     'amount' => "Insufficient funds — the balance was updated by another request. The branch only has an available balance of AED {$availableBalance} for this transaction.",
                 ]);
             }
 
-            // Revert old amount, then apply new amount
-            if ($oldType === 'EXPENSE') {
-                $branch->increment('current_balance', $oldAmount);
-            } else {
-                $branch->decrement('current_balance', $oldAmount);
-            }
-
-            if ($transaction->type === 'EXPENSE') {
-                $branch->decrement('current_balance', $transaction->amount);
-            } else {
-                $branch->increment('current_balance', $transaction->amount);
-            }
+            $branch->increment('current_balance', $impactDifference);
         });
 
-        // Fix #8: Wrap notification dispatch in try/catch so SMTP/queue failures
-        // don't surface as a 500 when the status update itself saved successfully.
         try {
             if ($oldStatus === 'pending' && $newStatus === 'approved') {
-                // Notify the user who created it
                 $transaction->user->notify(new TransactionStatusNotification($transaction, 'approved'));
                 
-                // ALSO specify to notify the whole branch if it's a Replenishment (so everyone knows funds arrived)
                 if ($transaction->type === 'REPLENISHMENT') {
                     $branchUsers = User::where('branch_id', $transaction->branch_id)
-                        ->where('id', '!=', $transaction->user_id) // Don't notify the creator twice
+                        ->where('id', '!=', $transaction->user_id)
                         ->get();
                     if ($branchUsers->isNotEmpty()) {
                         Notification::send($branchUsers, new TransactionStatusNotification($transaction, 'approved'));
@@ -172,20 +143,10 @@ class TransactionObserver
         }
     }
 
-    /**
-     * Handle the Transaction "deleted" event (Void / Soft Delete).
-     * IMPORTANT: If the transaction was already 'rejected', the balance was
-     * already reversed when the rejection happened. Reversing again would
-     * cause a double-refund bug, so we skip it.
-     */
     public function deleted(Transaction $transaction): void
     {
         if (!$transaction->branch_id) {
             return;
-        }
-
-        if ($transaction->status === 'rejected') {
-            return; // Balance was already reversed at rejection time
         }
 
         DB::transaction(function () use ($transaction) {
@@ -195,18 +156,14 @@ class TransactionObserver
                 return;
             }
 
-            if ($transaction->type === 'EXPENSE') {
-                $branch->increment('current_balance', $transaction->amount);
-            } else {
-                $branch->decrement('current_balance', $transaction->amount);
+            $impact = $this->calculateBalanceImpact($transaction->type, $transaction->status, $transaction->amount);
+
+            if ($impact != 0) {
+                $branch->decrement('current_balance', $impact);
             }
         });
     }
 
-    /**
-     * Handle the Transaction "restored" event (Un-void).
-     * Re-applies the transaction effect as if it were just created.
-     */
     public function restored(Transaction $transaction): void
     {
         $this->created($transaction);

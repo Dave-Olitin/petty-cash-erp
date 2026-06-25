@@ -102,6 +102,7 @@ class StatsOverview extends BaseWidget
 
         return Transaction::query()
             ->where('type', $type)
+            ->where('status', '!=', 'rejected')
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->whereBetween('created_at', [$from, $to])
             ->selectRaw('DATE(created_at) as date, sum(amount) as total')
