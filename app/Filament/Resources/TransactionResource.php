@@ -86,8 +86,7 @@ public static function form(Form $form): Form
                     Forms\Components\TextInput::make('reference_pcv_no')
                         ->label('Reference PCV No.')
                         ->maxLength(255)
-                        ->visible(fn (callable $get) => $get('type') === 'REPLENISHMENT')
-                        ->required(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
+                        ->visible(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
                     Forms\Components\TextInput::make('receiver_name')
                         ->label('Receiver Name')
                         ->maxLength(255)
