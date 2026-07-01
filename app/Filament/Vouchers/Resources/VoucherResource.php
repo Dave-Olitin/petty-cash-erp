@@ -702,6 +702,31 @@ class VoucherResource extends Resource
                         default => 'gray',
                     })
                     ->formatStateUsing(fn (string $state): string => ucwords(str_replace('_', ' ', $state))),
+                Tables\Columns\TextColumn::make('is_for_liquidation')
+                    ->label('Liquidation')
+                    ->badge()
+                    ->visible(fn () => true)
+                    ->formatStateUsing(fn ($state, $record) => match(true) {
+                        $record->type !== 'petty_cash' || $record->status === 'voided' => null,
+                        !$state => 'Direct Expense',
+                        $record->liquidation_status === 'liquidated' => 'Liquidated',
+                        $record->liquidation_status === 'overdue' => 'Overdue',
+                        default => 'Pending'
+                    })
+                    ->color(fn ($state, $record) => match(true) {
+                        $record->type !== 'petty_cash' || $record->status === 'voided' => 'gray',
+                        !$state => 'success',
+                        $record->liquidation_status === 'liquidated' => 'info',
+                        $record->liquidation_status === 'overdue' => 'danger',
+                        default => 'warning'
+                    })
+                    ->icon(fn ($state, $record) => match(true) {
+                        $record->type !== 'petty_cash' || $record->status === 'voided' => null,
+                        !$state => 'heroicon-m-check-badge',
+                        $record->liquidation_status === 'liquidated' => 'heroicon-m-check-circle',
+                        $record->liquidation_status === 'overdue' => 'heroicon-m-exclamation-circle',
+                        default => 'heroicon-m-clock'
+                    }),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -1088,7 +1113,10 @@ class VoucherResource extends Resource
                     ->color('info')
                     ->iconButton()
                     ->tooltip('Add/update receipts and descriptions for this paid voucher')
-                    ->visible(fn (Voucher $record): bool => $record->status === 'paid' && (auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Accountant', 'Approver']) || auth()->id() === $record->user_id))
+                    ->visible(fn (Voucher $record): bool =>
+                        $record->status === 'paid' &&
+                        (auth()->user()->can('voucher.manage_attachments') || auth()->id() === $record->user_id)
+                    )
                     ->fillForm(fn (Voucher $record): array => [
                         'attachment_paths' => $record->attachment_paths,
                         'description'      => $record->description,
@@ -1113,10 +1141,21 @@ class VoucherResource extends Resource
                             'description'      => $data['description'] ?? null,
                         ]);
 
+                        $isOwn = auth()->id() === $record->user_id;
+                        $logMsg = $isOwn
+                            ? 'Managed attachments on own voucher.'
+                            : 'Managed attachments on another user\'s voucher (permission: voucher.manage_attachments). Requester: ' . optional($record->user)->name . '.';
+
                         activity()
                             ->performedOn($record)
                             ->causedBy(auth()->user())
-                            ->log('Attachments and descriptions updated post-disbursement');
+                            ->withProperties([
+                                'managed_by'      => auth()->user()->name,
+                                'managed_by_id'   => auth()->id(),
+                                'is_own_voucher'  => $isOwn,
+                                'voucher_owner'   => optional($record->user)->name,
+                            ])
+                            ->log($logMsg);
 
                         Notification::make()->title('Attachments and notes securely updated')->success()->send();
                     }),
@@ -1205,7 +1244,7 @@ class VoucherResource extends Resource
                         \Filament\Infolists\Components\Split::make([
                             // Major Column: Financials & Identity
                             \Filament\Infolists\Components\Grid::make(1)->schema([
-                                \Filament\Infolists\Components\Grid::make(3)->schema([
+                                \Filament\Infolists\Components\Grid::make(4)->schema([
                                     \Filament\Infolists\Components\TextEntry::make('voucher_number')
                                         ->label('Voucher Number')
                                         ->weight(\Filament\Support\Enums\FontWeight::Bold)
@@ -1245,6 +1284,29 @@ class VoucherResource extends Resource
                                             'receipt'         => 'Receipt Voucher',
                                             'bank_encashment' => 'Bank Encashment',
                                             default           => 'Payment Voucher'
+                                        }),
+
+                                    \Filament\Infolists\Components\TextEntry::make('is_for_liquidation')
+                                        ->label('Liquidation')
+                                        ->badge()
+                                        ->visible(fn ($record) => $record && $record->type === 'petty_cash' && $record->status !== 'voided')
+                                        ->icon(fn (bool $state, $record): string => match(true) {
+                                            !$state => 'heroicon-m-check-badge',
+                                            $record->liquidation_status === 'liquidated' => 'heroicon-m-check-circle',
+                                            $record->liquidation_status === 'overdue' => 'heroicon-m-exclamation-circle',
+                                            default => 'heroicon-m-clock'
+                                        })
+                                        ->color(fn (bool $state, $record): string => match(true) {
+                                            !$state => 'success',
+                                            $record->liquidation_status === 'liquidated' => 'info',
+                                            $record->liquidation_status === 'overdue' => 'danger',
+                                            default => 'warning'
+                                        })
+                                        ->formatStateUsing(fn (bool $state, $record): string => match(true) {
+                                            !$state => 'DIRECT EXPENSE',
+                                            $record->liquidation_status === 'liquidated' => 'LIQUIDATED',
+                                            $record->liquidation_status === 'overdue' => 'OVERDUE',
+                                            default => 'PENDING'
                                         }),
                                 ]),
 

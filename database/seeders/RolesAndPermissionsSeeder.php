@@ -35,6 +35,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'voucher.pay',        // Can pay a voucher (any payable status)
             'voucher.void_only',  // Can completely void a paid voucher without cloning
             'voucher.void_and_reissue', // Can void and clone a paid voucher
+            'voucher.manage_attachments', // Can manage attachments on anyone's paid voucher
 
             // Float management
             'voucher.manage_float', // Can view/add head office float replenishments
@@ -103,6 +104,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'purchase_entry.edit',
             'purchase_entry.delete',
             'liquidation.edit_settled',
+            'voucher.manage_attachments',
             'gl_report.view',
         ]);
 

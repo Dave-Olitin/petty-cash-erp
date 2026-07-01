@@ -254,7 +254,10 @@ class ViewVoucher extends ViewRecord
                 ->label('Manage Attachments & Notes')
                 ->icon('heroicon-o-paper-clip')
                 ->color('info')
-                ->visible(fn (): bool => $record->status === 'paid' && (auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Accountant', 'Approver']) || auth()->id() === $record->user_id))
+                ->visible(fn (): bool =>
+                    $record->status === 'paid' &&
+                    (auth()->user()->can('voucher.manage_attachments') || auth()->id() === $record->user_id)
+                )
                 ->fillForm(fn (): array => [
                     'attachment_paths' => $record->attachment_paths,
                     'description'      => $record->description,
@@ -279,14 +282,26 @@ class ViewVoucher extends ViewRecord
                         'description'      => $data['description'] ?? null,
                     ]);
 
+                    $isOwn = auth()->id() === $record->user_id;
+                    $logMsg = $isOwn
+                        ? 'Managed attachments on own voucher (via View page).'
+                        : 'Managed attachments on another user\'s voucher (permission: voucher.manage_attachments). Requester: ' . optional($record->user)->name . '.';
+
                     activity()
                         ->performedOn($record)
                         ->causedBy(auth()->user())
-                        ->log('Attachments and descriptions updated post-disbursement via View page');
+                        ->withProperties([
+                            'managed_by'     => auth()->user()->name,
+                            'managed_by_id'  => auth()->id(),
+                            'is_own_voucher' => $isOwn,
+                            'voucher_owner'  => optional($record->user)->name,
+                        ])
+                        ->log($logMsg);
 
                     Notification::make()->title('Attachments and notes securely updated')->success()->send();
                     $record->refresh();
                 }),
+
 
             Actions\Action::make('mark_paid_page')
                 ->label(fn () => $record->type === 'receipt' ? 'Collect Funds' : 'Disburse Funds')

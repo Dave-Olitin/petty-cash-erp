@@ -720,7 +720,7 @@ class PurchaseEntryResource extends Resource
             ->actions([
                 Tables\Actions\Action::make('toggle_lock')
                     ->label(fn ($record) => $record->is_locked ? 'Unlock' : 'Lock')
-                    ->icon(fn ($record) => $record->is_locked ? 'heroicon-o-lock-open' : 'heroicon-o-lock-closed')
+                    ->icon(fn ($record) => $record->is_locked ? 'heroicon-o-lock-closed' : 'heroicon-o-lock-open')
                     ->color(fn ($record) => $record->is_locked ? 'warning' : 'danger')
                     ->requiresConfirmation()
                     ->visible(fn () => auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin']))
