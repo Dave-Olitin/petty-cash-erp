@@ -132,6 +132,19 @@ class DocumentResource extends Resource
                     ->tooltip(fn ($state) => $state && strlen($state) > 55 ? $state : null)
                     ->toggleable(isToggledHiddenByDefault: false),
 
+                Tables\Columns\TextColumn::make('description')
+                    ->label('Description')
+                    ->state(fn ($record) => $record->voucher?->description ?? $record->floatReplenishment?->remarks ?? '—')
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(fn ($q) =>
+                            $q->whereHas('voucher', fn ($v) => $v->where('description', 'like', "%{$search}%"))
+                              ->orWhereHas('floatReplenishment', fn ($f) => $f->where('remarks', 'like', "%{$search}%"))
+                        );
+                    })
+                    ->limit(55)
+                    ->tooltip(fn ($state) => $state && strlen($state) > 55 ? $state : null)
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 Tables\Columns\TextColumn::make('amount')
                     ->label('Amount')
                     ->state(fn ($record) => $record->voucher?->amount ?? $record->floatReplenishment?->amount ?? 0)

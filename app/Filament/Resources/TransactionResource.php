@@ -369,6 +369,18 @@ public static function table(Table $table): Table
         ])
         ->defaultSort('created_at', 'desc')
         ->filters([
+            Tables\Filters\Filter::make('description')
+                ->form([
+                    Forms\Components\TextInput::make('description_search')
+                        ->label('Description')
+                        ->placeholder('Search description...'),
+                ])
+                ->query(function (Builder $query, array $data): Builder {
+                    return $query->when(
+                        $data['description_search'],
+                        fn (Builder $query, $text): Builder => $query->where('description', 'like', "%{$text}%"),
+                    );
+                }),
             Tables\Filters\SelectFilter::make('status')
                 ->options([
                     'pending' => 'Pending',
