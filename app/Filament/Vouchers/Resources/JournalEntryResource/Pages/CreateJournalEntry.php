@@ -12,7 +12,7 @@ class CreateJournalEntry extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        unset($data['lines'], $data['vouchers']);
+        unset($data['lines'], $data['vouchers'], $data['purchaseEntries']);
         return $data;
     }
 
@@ -35,6 +35,8 @@ class CreateJournalEntry extends CreateRecord
 
     protected function afterCreate(): void
     {
+        $this->record->refresh();
         app(\App\Observers\JournalEntryObserver::class)->processAutoLiquidation($this->record);
+        app(\App\Services\JournalEntryService::class)->distributePayments($this->record);
     }
 }

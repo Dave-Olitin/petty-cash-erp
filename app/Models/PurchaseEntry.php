@@ -198,6 +198,58 @@ class PurchaseEntry extends Model
 
     public function vouchers()
     {
-        return $this->belongsToMany(Voucher::class);
+        return $this->belongsToMany(Voucher::class)
+                    ->withPivot('amount_applied')
+                    ->withTimestamps();
+    }
+
+    public function journalEntries()
+    {
+        return $this->belongsToMany(JournalEntry::class)
+                    ->withPivot('amount_applied')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Recalculate and persist payment totals from all linked sources (Vouchers + Journals).
+     *
+     * Best practice: derive `amount_paid`, `balance_due`, and `payment_status`
+     * from live pivot data rather than storing them as independent state that
+     * can drift.
+     *
+     * @return $this
+     */
+    public function recalculatePayments(): static
+    {
+        // 1. Sum the actual amount applied from PAID vouchers
+        $voucherPaid = (float) $this->vouchers()
+            ->where('vouchers.status', 'paid')
+            ->sum('purchase_entry_voucher.amount_applied');
+
+        // 2. Sum the actual amount applied from Journal Entries
+        $journalPaid = (float) $this->journalEntries()
+            ->sum('journal_entry_purchase_entry.amount_applied');
+
+        $totalPaid = $voucherPaid + $journalPaid;
+        $billTotal  = (float) $this->grand_total;
+        
+        // Safety cap (a bill shouldn't mathematically be overpaid)
+        $amountPaid = min($totalPaid, $billTotal);
+        $balanceDue = max(0, $billTotal - $amountPaid);
+
+        $status = self::STATUS_UNPAID;
+        if ($amountPaid >= $billTotal && $billTotal > 0) {
+            $status = self::STATUS_PAID;
+        } elseif ($amountPaid > 0) {
+            $status = self::STATUS_PARTIAL;
+        }
+
+        $this->update([
+            'amount_paid'    => round($amountPaid, 2),
+            'balance_due'    => round($balanceDue, 2),
+            'payment_status' => $status,
+        ]);
+
+        return $this;
     }
 }

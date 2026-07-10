@@ -329,44 +329,37 @@ class VoucherApprovalService
 
             // ── Smart AP Payment Distribution ─────────────────────────────────
             // Distribute the voucher payment across linked purchase entries.
-            // Bills are paid in full (oldest first by date). If the voucher
-            // amount runs short, the last bill gets a partial payment and
-            // the rest retain their unpaid balance.
+            // We save the EXACT amount applied to the pivot table to handle voids safely.
             $linkedEntries = $locked->purchaseEntries()->orderBy('date')->orderBy('id')->get();
 
             if ($linkedEntries->isNotEmpty()) {
                 $remaining = (float) $locked->amount;
-                $totalLinked = $linkedEntries->sum(fn ($pe) => (float) $pe->grand_total);
 
                 foreach ($linkedEntries as $pe) {
                     $billTotal    = (float) $pe->grand_total;
                     $alreadyPaid  = (float) $pe->amount_paid;
-                    $stillOwed    = max(0, $billTotal - $alreadyPaid);
+                    
+                    $previouslyApplied = (float) $pe->pivot->amount_applied;
+                    $actualAlreadyPaid = max(0, $alreadyPaid - $previouslyApplied);
+                    
+                    $stillOwed    = max(0, $billTotal - $actualAlreadyPaid);
 
                     if ($remaining <= 0) {
-                        // No payment left — leave this bill untouched
-                        break;
-                    }
-
-                    if ($remaining >= $stillOwed) {
-                        // Voucher covers this bill fully
-                        $pe->update([
-                            'amount_paid'    => $billTotal,
-                            'balance_due'    => 0,
-                            'payment_status' => \App\Models\PurchaseEntry::STATUS_PAID,
-                        ]);
-                        $remaining -= $stillOwed;
+                        $applied = 0;
                     } else {
-                        // Voucher only partially covers this bill
-                        $newPaid = $alreadyPaid + $remaining;
-                        $pe->update([
-                            'amount_paid'    => round($newPaid, 2),
-                            'balance_due'    => round($billTotal - $newPaid, 2),
-                            'payment_status' => \App\Models\PurchaseEntry::STATUS_PARTIAL,
-                        ]);
-                        $remaining = 0;
+                        $applied = min($remaining, $stillOwed);
                     }
+                    
+                    // Save the exact amount we applied to the pivot table
+                    $locked->purchaseEntries()->updateExistingPivot($pe->id, [
+                        'amount_applied' => $applied
+                    ]);
+
+                    $remaining -= $applied;
                 }
+                
+                // Now safely recalculate all linked entries from the pivot single source of truth
+                $linkedEntries->each(fn ($pe) => $pe->recalculatePayments());
             }
 
             // Record in approval trail
@@ -455,24 +448,20 @@ class VoucherApprovalService
                 $locked->liquidation->update(['status' => 'voided']);
             }
 
-            // 2. Revert Purchase Entries (un-pay them so they show full balance again)
-            $locked->purchaseEntries()->each(function ($pe) {
-                $pe->update([
-                    'amount_paid'    => 0,
-                    'balance_due'    => $pe->grand_total,   // restore full outstanding balance
-                    'payment_status' => \App\Models\PurchaseEntry::STATUS_UNPAID,
-                ]);
-            });
-
-            // 3. Handle physical denominations if any exist
-            // By changing the voucher status to Voided, the dashboard/float calculators 
-            // will automatically ignore this voucher's denomination records.
-
-            // 4. Update the current Voucher to Voided
+            // 2. Update the current Voucher to Voided FIRST, 
+            // so it is excluded from the purchase entry recalculations below.
             $locked->update([
                 'status' => VoucherStatus::Voided->value,
                 'liquidation_status' => 'not_required', 
             ]);
+
+            // 3. Revert Purchase Entries — recalculate from remaining paid vouchers.
+            // Since the voucher is now 'voided' in the DB transaction, it won't be counted in the pivot sum.
+            $locked->purchaseEntries()->each(fn ($pe) => $pe->recalculatePayments());
+
+            // 4. Handle physical denominations if any exist
+            // By changing the voucher status to Voided, the dashboard/float calculators 
+            // will automatically ignore this voucher's denomination records.
 
             $locked->approvals()->create([
                 'user_id'  => $actor->id,

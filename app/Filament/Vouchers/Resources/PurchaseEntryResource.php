@@ -363,15 +363,12 @@ class PurchaseEntryResource extends Resource
                                     ->label('Grand Total (Invoice)')
                                     ->content(function (Forms\Get $get) {
                                         $lines = $get('lines') ?? [];
-                                        // Use max(debit, credit, total) per line — matches model logic.
-                                        // A purchase entry line typically has ONLY debit filled (expense DR),
-                                        // with the AP credit posted separately. So debit IS the line total.
-                                        $sum = (float) collect($lines)->sum(function ($i) {
-                                            $debit  = (float)($i['debit']  ?? 0);
-                                            $credit = (float)($i['credit'] ?? 0);
-                                            $total  = (float)($i['total']  ?? 0);
-                                            return max($debit, $credit, $total);
-                                        });
+                                        
+                                        $totalDebit = (float) collect($lines)->sum(fn ($i) => (float)($i['debit'] ?? 0));
+                                        $totalCredit = (float) collect($lines)->sum(fn ($i) => (float)($i['credit'] ?? 0));
+                                        $pureTotals = (float) collect($lines)->sum(fn ($i) => (empty($i['debit']) && empty($i['credit'])) ? (float)($i['total'] ?? 0) : 0);
+                                        
+                                        $sum = max($totalDebit, $totalCredit) + $pureTotals;
                                         $isReturn = $get('entry_type') === 'return';
 
                                         return new \Illuminate\Support\HtmlString(
@@ -762,7 +759,8 @@ class PurchaseEntryResource extends Resource
                             ]));
                         }),
                 ]),
-            ]);
+            ])
+            ->defaultPaginationPageOption(25);
     }
 
     // ── Tabs ─────────────────────────────────────────────────────────────
@@ -829,6 +827,9 @@ class PurchaseEntryResource extends Resource
                                 \Filament\Infolists\Components\TextEntry::make('po_number')
                                     ->label('PO Number')
                                     ->placeholder('—'),
+                                \Filament\Infolists\Components\TextEntry::make('user.name')
+                                    ->label('Created By')
+                                    ->placeholder('System'),
                                 \Filament\Infolists\Components\TextEntry::make('payment_status')
                                     ->label('Payment Status')
                                     ->badge()
@@ -932,6 +933,40 @@ class PurchaseEntryResource extends Resource
                                     ->extraAttributes(['class' => 'text-xl font-mono font-bold text-red-600 pl-4 border-l-4 border-red-400']),
                             ])
                     ])->compact(),
+
+                \Filament\Infolists\Components\Section::make('Linked Payments')
+                    ->schema([
+                        \Filament\Infolists\Components\RepeatableEntry::make('vouchers')
+                            ->label('Payment Vouchers')
+                            ->schema([
+                                \Filament\Infolists\Components\TextEntry::make('voucher_number')
+                                    ->label('Voucher No')
+                                    ->url(fn ($record) => \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $record]))
+                                    ->color('primary')
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold),
+                                \Filament\Infolists\Components\TextEntry::make('pivot.amount_applied')
+                                    ->label('Amount Applied')
+                                    ->money('AED'),
+                                \Filament\Infolists\Components\TextEntry::make('status')
+                                    ->badge()
+                                    ->color(fn ($state) => match ($state) { 'paid' => 'success', 'void' => 'danger', default => 'warning' }),
+                            ])->columns(3)
+                            ->hidden(fn ($record) => $record->vouchers->isEmpty()),
+                            
+                        \Filament\Infolists\Components\RepeatableEntry::make('journalEntries')
+                            ->label('Journal Entries')
+                            ->schema([
+                                \Filament\Infolists\Components\TextEntry::make('entry_no')
+                                    ->label('Entry No')
+                                    ->url(fn ($record) => \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('edit', ['record' => $record]))
+                                    ->color('primary')
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold),
+                                \Filament\Infolists\Components\TextEntry::make('pivot.amount_applied')
+                                    ->label('Amount Applied')
+                                    ->money('AED'),
+                            ])->columns(2)
+                            ->hidden(fn ($record) => $record->journalEntries->isEmpty()),
+                    ])->hidden(fn ($record) => $record->vouchers->isEmpty() && $record->journalEntries->isEmpty()),
             ]);
     }
 }

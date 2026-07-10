@@ -90,7 +90,9 @@ class Voucher extends Model implements HasMedia
 
     public function purchaseEntries(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsToMany(PurchaseEntry::class);
+        return $this->belongsToMany(PurchaseEntry::class)
+                    ->withPivot('amount_applied')
+                    ->withTimestamps();
     }
 
     public function items(): HasMany

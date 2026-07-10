@@ -70,6 +70,13 @@ class JournalEntry extends Model
                     ->withTimestamps();
     }
 
+    public function purchaseEntries(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(PurchaseEntry::class)
+                    ->withPivot('amount_applied')
+                    ->withTimestamps();
+    }
+
     public function lines(): HasMany
     {
         return $this->hasMany(JournalEntryLine::class);

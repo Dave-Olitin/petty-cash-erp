@@ -83,13 +83,17 @@ class PurchaseEntryLine extends Model
             $parent = PurchaseEntry::find($purchaseEntryId);
             if (! $parent) return;
 
-            // Use the `total` column as the authoritative line amount.
-            // As a safety net, fall back to max(debit, credit) if total is still 0.
+            // The invoice amount is the max of total debits or total credits (for double-entry balanced lines)
+            // PLUS any legacy/misc lines that only have a 'total' without DR/CR assigned.
             $lines       = $parent->lines()->without(['debitAccount', 'creditAccount'])->get(['total', 'debit', 'credit', 'tax_amount']);
-            $grandTotal  = $lines->sum(fn ($l) => max((float)$l->total, (float)$l->debit, (float)$l->credit));
-            $totalVat    = $lines->sum(fn ($l) => (float)$l->tax_amount);
+            
             $totalDebit  = $lines->sum(fn ($l) => (float)$l->debit);
             $totalCredit = $lines->sum(fn ($l) => (float)$l->credit);
+            $pureTotals  = $lines->sum(fn ($l) => (empty($l->debit) && empty($l->credit)) ? (float)$l->total : 0);
+            
+            $grandTotal  = max($totalDebit, $totalCredit) + $pureTotals;
+            
+            $totalVat    = $lines->sum(fn ($l) => (float)$l->tax_amount);
 
             $balanceDue = max(0, $grandTotal - (float) $parent->amount_paid);
 

@@ -106,4 +106,26 @@ class JournalEntryObserver
                 ->sendToDatabase($accountants);
         }
     }
+
+    protected $linkedPurchaseEntries = null;
+
+    /**
+     * Fires before a Journal Entry is deleted.
+     */
+    public function deleting(JournalEntry $journalEntry): void
+    {
+        // Capture linked entries before the DB cascades the pivot rows
+        $this->linkedPurchaseEntries = $journalEntry->purchaseEntries()->get();
+    }
+
+    /**
+     * Fires after a Journal Entry is deleted.
+     */
+    public function deleted(JournalEntry $journalEntry): void
+    {
+        // Recalculate any invoices that were previously paid by this journal entry
+        if ($this->linkedPurchaseEntries) {
+            $this->linkedPurchaseEntries->each(fn ($pe) => $pe->recalculatePayments());
+        }
+    }
 }

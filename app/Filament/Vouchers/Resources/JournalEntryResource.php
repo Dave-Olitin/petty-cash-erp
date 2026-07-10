@@ -74,6 +74,20 @@ class JournalEntryResource extends Resource
                         ->searchable()
                         ->preload()
                         ->label('Linked Vouchers'),
+                    Forms\Components\Select::make('purchaseEntries')
+                        ->relationship(
+                            'purchaseEntries', 
+                            'entry_no', 
+                            fn (\Illuminate\Database\Eloquent\Builder $query) => $query->with('taxRegistration')
+                        )
+                        ->multiple()
+                        ->getOptionLabelFromRecordUsing(fn ($record) =>
+                            $record->entry_no . ' — ' . ($record->taxRegistration?->name ?? $record->supplier_name ?? 'No Supplier') . ' — AED ' . number_format($record->grand_total ?? $record->total_amount ?? 0, 2)
+                        )
+                        ->searchable()
+                        ->preload()
+                        ->label('Linked Purchase Entries')
+                        ->placeholder('Optional — link purchase entries'),
                     Forms\Components\TextInput::make('po_number')
                         ->label('PO Number')
                         ->maxLength(255),
@@ -81,7 +95,7 @@ class JournalEntryResource extends Resource
                     // ── HIDDEN (kept for data integrity) ──────────────────────
                     Forms\Components\Hidden::make('reference'),
                     Forms\Components\Hidden::make('currency')->default('AED'),
-                ])->columns(3),
+                ])->columns(4),
 
                 Forms\Components\Section::make('Entry Lines')->schema([
                     Forms\Components\Repeater::make('lines')
