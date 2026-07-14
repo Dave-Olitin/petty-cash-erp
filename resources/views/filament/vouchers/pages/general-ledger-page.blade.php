@@ -109,10 +109,17 @@
                                 {{-- JE Ref --}}
                                 <td class="px-6 py-3">
                                     @if($line->je_ref)
-                                        <a href="{{ \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $line->je_id]) }}"
-                                           class="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">
-                                            {{ $line->je_ref }}
-                                        </a>
+                                        @if($line->source === 'purchase_entry')
+                                            <a href="{{ \App\Filament\Vouchers\Resources\PurchaseEntryResource::getUrl('view', ['record' => $line->purchase_entry_id]) }}"
+                                               class="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">
+                                                {{ $line->je_ref }}
+                                            </a>
+                                        @else
+                                            <a href="{{ \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $line->je_id]) }}"
+                                               class="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">
+                                                {{ $line->je_ref }}
+                                            </a>
+                                        @endif
                                     @else
                                         <span class="text-gray-400">—</span>
                                     @endif
@@ -123,6 +130,10 @@
                                     @if($isJeSource)
                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                                             JE
+                                        </span>
+                                    @elseif($line->source === 'purchase_entry')
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                            PE
                                         </span>
                                     @elseif(!empty($line->is_info_only))
                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400 border border-gray-200 dark:border-gray-700" title="This voucher has a linked Journal Entry. Excluded from ledger balance to prevent double-counting.">

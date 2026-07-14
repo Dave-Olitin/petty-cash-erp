@@ -113,7 +113,11 @@ class GeneralLedgerExport implements FromCollection, WithHeadings, WithMapping, 
         return [
             optional($line->date)->format('d/m/Y') ?? '',
             $line->je_ref ?? '',
-            strtoupper($line->source ?? 'voucher') === 'JE' ? 'JE' : (!empty($line->is_info_only) ? 'VCH (INFO)' : 'VCH'),
+            match(strtolower($line->source ?? 'voucher')) {
+                'je' => 'JE',
+                'purchase_entry' => 'PE',
+                default => !empty($line->is_info_only) ? 'VCH (INFO)' : 'VCH'
+            },
             $line->voucher_number ?? '',
             $line->payee ?? '',
             $line->branch ?? '',
