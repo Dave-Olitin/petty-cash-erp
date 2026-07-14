@@ -250,6 +250,42 @@ class ViewVoucher extends ViewRecord
                     });
                 }),
 
+            Actions\Action::make('undo_reject_page')
+                ->label('Undo Rejection')
+                ->icon('heroicon-m-arrow-uturn-left')
+                ->color('warning')
+                ->requiresConfirmation()
+                ->modalHeading('Revert Accidental Rejection')
+                ->modalDescription('This will completely remove the rejection log and magically restore the voucher to the exact pending state it was in right before it was rejected.')
+                ->visible(fn (): bool => $record->status === 'rejected' && auth()->user()->hasAnyRole(['Admin', 'Super Admin']))
+                ->action(function () use ($record) {
+                    \Illuminate\Support\Facades\DB::transaction(function () use ($record) {
+                        $lockedRecord = \App\Models\Voucher::lockForUpdate()->find($record->id);
+                        if ($lockedRecord->status !== 'rejected') return;
+
+                        // Delete the rejection log entirely
+                        $lockedRecord->approvals()->where('action', 'rejected')->delete();
+
+                        // Check the last valid action to know where to restore it to
+                        $lastApproval = $lockedRecord->approvals()->latest()->first();
+
+                        if (!$lastApproval) {
+                            // It was never checked/approved, meaning it was submitted to the checker and immediately rejected
+                            $lockedRecord->update(['status' => 'pending_checker', 'current_approval_step' => null]);
+                        } else {
+                            if ($lastApproval->action === 'checked') {
+                                $lockedRecord->update(['status' => 'pending_approver', 'current_approval_step' => 1]);
+                            } elseif ($lastApproval->action === 'approved') {
+                                $approvalCount = $lockedRecord->approvals()->where('action', 'approved')->count();
+                                $lockedRecord->update(['status' => 'pending_approver', 'current_approval_step' => $approvalCount + 1]);
+                            }
+                        }
+
+                        \Filament\Notifications\Notification::make()->title('Rejection reversed. Restored to pending workflow.')->success()->send();
+                        $record->refresh();
+                    });
+                }),
+
             Actions\Action::make('update_attachments_page')
                 ->label('Manage Attachments & Notes')
                 ->icon('heroicon-o-paper-clip')
