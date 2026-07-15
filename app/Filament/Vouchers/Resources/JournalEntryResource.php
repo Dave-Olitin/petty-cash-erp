@@ -301,6 +301,7 @@ class JournalEntryResource extends Resource
                     ->label(fn ($record) => $record->is_locked ? 'Unlock' : 'Lock')
                     ->icon(fn ($record) => $record->is_locked ? 'heroicon-o-lock-open' : 'heroicon-o-lock-closed')
                     ->color(fn ($record) => $record->is_locked ? 'warning' : 'danger')
+                    ->iconButton()
                     ->requiresConfirmation()
                     ->visible(fn () => auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin']))
                     ->action(function ($record) {
@@ -310,8 +311,8 @@ class JournalEntryResource extends Resource
                             ->success()
                             ->send();
                     }),
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\ViewAction::make()->iconButton(),
+                Tables\Actions\EditAction::make()->iconButton(),
                 Tables\Actions\Action::make('print')
                     ->label('Print')
                     ->icon('heroicon-o-printer')
