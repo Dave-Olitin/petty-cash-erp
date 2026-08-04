@@ -109,37 +109,77 @@ class EditVoucher extends EditRecord
             $data['voucher_number'] = $voucher->voucher_number;
         }
 
+        $amountChanged = abs((float) ($data['amount'] ?? 0) - (float) $voucher->amount) > 0.01;
+
+        if ($voucher->status === 'paid' && $amountChanged) {
+            \Filament\Notifications\Notification::make()
+                ->title('Action Denied')
+                ->body('You cannot change the total amount of a Paid voucher. Please Void & Reissue it instead.')
+                ->danger()
+                ->persistent()
+                ->send();
+            $this->halt();
+        }
+
         // SCENARIO 1: Voucher was already APPROVED or mid-approver-chain.
-        // Wipe all signatures and restart the approval chain.
         if (in_array($voucher->status, ['approved', 'pending_approver'])) {
-            $data['status'] = 'pending_checker';
-            $data['current_approval_step'] = 1;
+            if ($amountChanged) {
+                // Wipe all signatures and restart the approval chain.
+                $data['status'] = 'pending_checker';
+                $data['current_approval_step'] = 1;
 
-            // Notify everyone who already signed it about the reset
-            $previousApprovers = $voucher->approvals()->with('user')->get()->pluck('user')->filter()->unique('id');
-            foreach ($previousApprovers as $approver) {
-                if ($approver->id !== auth()->id()) {
-                    \Filament\Notifications\Notification::make()
-                        ->title('Voucher Edited & Reset')
-                        ->body("Voucher #{$voucher->voucher_number} was edited by " . auth()->user()->name . ". Your previous approval was cleared and it has returned to step 1.")
-                        ->warning()
-                        ->sendToDatabase($approver);
+                // Notify everyone who already signed it about the reset
+                $previousApprovers = $voucher->approvals()->with('user')->get()->pluck('user')->filter()->unique('id');
+                foreach ($previousApprovers as $approver) {
+                    if ($approver->id !== auth()->id()) {
+                        \Filament\Notifications\Notification::make()
+                            ->title('Voucher Edited & Reset')
+                            ->body("Voucher #{$voucher->voucher_number} was edited by " . auth()->user()->name . ". Your previous approval was cleared and it has returned to step 1.")
+                            ->warning()
+                            ->sendToDatabase($approver);
+                    }
                 }
+
+                $voucher->approvals()->delete();
+
+                activity()
+                    ->performedOn($voucher)
+                    ->causedBy(auth()->user())
+                    ->event('demoted')
+                    ->log('Voucher #' . $voucher->voucher_number . ' was edited after being approved/submitted by ' . auth()->user()->name . '. All approvals cleared. Status reset to Pending Checker.');
+
+                \Filament\Notifications\Notification::make()
+                    ->title('⚠️ Approval Reset')
+                    ->body('Because you changed the Total Amount, all previous approvals have been cleared and it must go through the approval process again.')
+                    ->warning()
+                    ->persistent()
+                    ->send();
+            } else {
+                // Reclassification only (amount did not change)
+                activity()
+                    ->performedOn($voucher)
+                    ->causedBy(auth()->user())
+                    ->event('reclassified')
+                    ->log('Voucher #' . $voucher->voucher_number . ' ledgers were reclassified by ' . auth()->user()->name . '. Total amount remained the same.');
+                
+                \Filament\Notifications\Notification::make()
+                    ->title('Ledgers Reclassified')
+                    ->body('Ledger entries updated successfully without affecting the approval status.')
+                    ->success()
+                    ->send();
             }
-
-            $voucher->approvals()->delete();
-
+        } elseif ($voucher->status === 'paid' && !$amountChanged) {
+            // Reclassification on a paid voucher
             activity()
                 ->performedOn($voucher)
                 ->causedBy(auth()->user())
-                ->event('demoted')
-                ->log('Voucher #' . $voucher->voucher_number . ' was edited after being approved/submitted by ' . auth()->user()->name . '. All approvals cleared. Status reset to Pending Checker.');
-
+                ->event('reclassified')
+                ->log('Paid Voucher #' . $voucher->voucher_number . ' ledgers were reclassified by ' . auth()->user()->name . '. Total amount remained the same.');
+                
             \Filament\Notifications\Notification::make()
-                ->title('⚠️ Approval Reset')
-                ->body('This voucher was already approved. Because you edited it, all previous approvals have been cleared and it must go through the approval process again.')
-                ->warning()
-                ->persistent()
+                ->title('Ledgers Reclassified')
+                ->body('Ledger entries updated successfully. General Ledger adjusted.')
+                ->success()
                 ->send();
         }
 

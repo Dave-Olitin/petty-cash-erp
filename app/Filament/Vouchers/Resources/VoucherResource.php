@@ -336,7 +336,7 @@ class VoucherResource extends Resource
                                     Forms\Components\Repeater::make('items')
                                         ->relationship()
                                         ->label('')
-                                        ->disabled(fn ($record) => $record !== null && in_array($record->status, ['approved', 'paid']))
+                                        ->disabled(fn ($record) => $record !== null && in_array($record->status, ['approved', 'paid']) && !auth()->user()->hasRole('Admin'))
                                         ->schema([
                                             // Row 1: Branch, Account Code, Debit, Credit
                                             Forms\Components\Grid::make(['default' => 1, 'md' => 12])->schema([
