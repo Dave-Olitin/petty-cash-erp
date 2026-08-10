@@ -261,18 +261,33 @@
             </tr>
         </thead>
         <tbody>
-            @php $peTotal = 0; @endphp
+            @php 
+                $peTotal = 0; 
+                $projectedRemaining = (float) $voucher->amount;
+            @endphp
             @foreach($voucher->purchaseEntries as $pe)
                 @php 
                     $pivotApplied = (float) ($pe->pivot->amount_applied ?? 0);
-                    $peAmount = $pivotApplied > 0
-                        ? $pivotApplied
-                        : (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
-                    if ($pe->isReturn()) $peAmount = -$peAmount;
-                    $peTotal += $peAmount; 
-                    
                     $peGrandTotal = (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
                     if ($pe->isReturn()) $peGrandTotal = -$peGrandTotal;
+                    
+                    if ($voucher->status === 'paid') {
+                        $peAmount = $pivotApplied;
+                    } else {
+                        // Project what it will apply based on siblings
+                        $otherPaid = (float) $pe->vouchers()
+                            ->where('vouchers.status', 'paid')
+                            ->where('vouchers.id', '!=', $voucher->id)
+                            ->sum('purchase_entry_voucher.amount_applied');
+                            
+                        $stillOwed = max(0, abs($peGrandTotal) - $otherPaid);
+                        
+                        $peAmount = min($projectedRemaining, $stillOwed);
+                        $projectedRemaining -= $peAmount;
+                    }
+
+                    if ($pe->isReturn()) $peAmount = -$peAmount;
+                    $peTotal += $peAmount; 
                     
                     $supplier = $pe->taxRegistration?->name ?? $pe->supplier_name ?? '—';
                     $po = $pe->po_number ?: '—';
@@ -296,6 +311,9 @@
                                     @php 
                                        $isThis = $sv->id === $voucher->id; 
                                        $svAmt = (float)($sv->pivot->amount_applied ?? 0);
+                                       if ($isThis && $voucher->status !== 'paid') {
+                                           $svAmt = $peAmount; // Use projected amount
+                                       }
                                        $svDate = $sv->date ? $sv->date->format('d/m/Y') : '—';
                                        
                                        $statusText = match($sv->status) {
