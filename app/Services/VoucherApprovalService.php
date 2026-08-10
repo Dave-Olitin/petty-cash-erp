@@ -421,6 +421,52 @@ class VoucherApprovalService
     }
 
     /**
+     * Re-distribute the voucher's amount across all linked purchase entries.
+     *
+     * This is the same logic as markPaid(), but extracted into a standalone method
+     * so it can be called after a form save (e.g., when purchase entries are linked
+     * to a voucher that was already paid, Filament's sync() sets amount_applied = 0).
+     */
+    public function redistributeLinkedEntries(Voucher $voucher): void
+    {
+        DB::transaction(function () use ($voucher) {
+            $linkedEntries = $voucher->purchaseEntries()->orderBy('date')->orderBy('id')->get();
+
+            if ($linkedEntries->isEmpty()) {
+                return;
+            }
+
+            $remaining = (float) $voucher->amount;
+
+            foreach ($linkedEntries as $pe) {
+                $billTotal   = (float) $pe->grand_total;
+                // Read how much other paid vouchers have already applied (excluding this voucher).
+                $otherPaid = (float) $pe->vouchers()
+                    ->where('vouchers.status', 'paid')
+                    ->where('vouchers.id', '!=', $voucher->id)
+                    ->sum('purchase_entry_voucher.amount_applied');
+
+                $stillOwed = max(0, $billTotal - $otherPaid);
+
+                if ($remaining <= 0) {
+                    $applied = 0;
+                } else {
+                    $applied = min($remaining, $stillOwed);
+                }
+
+                $voucher->purchaseEntries()->updateExistingPivot($pe->id, [
+                    'amount_applied' => $applied,
+                ]);
+
+                $remaining -= $applied;
+            }
+
+            // Recalculate payment status on all linked entries from the pivot source of truth
+            $linkedEntries->each(fn ($pe) => $pe->recalculatePayments());
+        });
+    }
+
+    /**
      * Voids a disbursed (paid) voucher.
      * If $reissue is true, prepares and returns a re-issued draft clone.
      * Returns true on pure void success, the newly created clone Voucher if reissued, or an error string if invalid.

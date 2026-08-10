@@ -253,34 +253,81 @@
     <table style="width: 100%; border-collapse: collapse; margin-top: 5px; border: 1px solid #000;">
         <thead>
             <tr style="border-bottom: 1px solid #000; background-color: #f8f8f8;">
-                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Entry No.</th>
-                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Supplier</th>
-                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">PO #</th>
-                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">INV #</th>
-                <th style="padding: 4px; border-right: 1px solid #000; text-align: left;">Description</th>
-                <th style="padding: 4px; text-align: right;">Amount (AED)</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left; width: 14%;">Entry No.</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: left; width: 44%;">Supplier & Details</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: right; width: 14%;">Invoice Total</th>
+                <th style="padding: 4px; border-right: 1px solid #000; text-align: right; width: 14%;">Applied Here</th>
+                <th style="padding: 4px; text-align: right; width: 14%;">Balance Due</th>
             </tr>
         </thead>
         <tbody>
             @php $peTotal = 0; @endphp
             @foreach($voucher->purchaseEntries as $pe)
                 @php 
-                    $peAmount = (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
+                    $pivotApplied = (float) ($pe->pivot->amount_applied ?? 0);
+                    $peAmount = $pivotApplied > 0
+                        ? $pivotApplied
+                        : (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
                     if ($pe->isReturn()) $peAmount = -$peAmount;
                     $peTotal += $peAmount; 
+                    
+                    $peGrandTotal = (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
+                    if ($pe->isReturn()) $peGrandTotal = -$peGrandTotal;
+                    
+                    $supplier = $pe->taxRegistration?->name ?? $pe->supplier_name ?? '—';
+                    $po = $pe->po_number ?: '—';
+                    $inv = $pe->invoice_no ?: '—';
+                    $desc = strtoupper($pe->lines->first()?->description ?: '—');
+                    
+                    $allSiblings = $pe->vouchers()->withPivot('amount_applied')->orderBy('date')->orderBy('vouchers.id')->get();
                 @endphp
                 <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->entry_no ?? '—' }}</td>
-                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->taxRegistration?->name ?? $pe->supplier_name ?? '—' }}</td>
-                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->po_number ?: '—' }}</td>
-                    <td style="padding: 4px; border-right: 1px solid #000;">{{ $pe->invoice_no ?: '—' }}</td>
-                    <td style="padding: 4px; border-right: 1px solid #000;">{{ strtoupper($pe->lines->first()?->description ?: '—') }}</td>
-                    <td style="padding: 4px; text-align: right;">{{ number_format($peAmount, 2) }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000; vertical-align: top;">{{ $pe->entry_no ?? '—' }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000; vertical-align: top;">
+                        <strong style="font-size: 11px;">{{ $supplier }}</strong><br>
+                        <span style="color: #444;">PO: {{ $po }} | INV: {{ $inv }}</span><br>
+                        {{ $desc }}
+                        
+                        @if($allSiblings->count() > 1)
+                            <div style="margin-top: 6px; padding: 4px; background-color: #f9f9f9; border: 1px solid #ddd; font-size: 9px;">
+                                <strong>Payment History for this Entry:</strong>
+                                <table style="width: 100%; border-collapse: collapse; margin-top: 2px;">
+                                @foreach($allSiblings as $sv)
+                                    @php 
+                                       $isThis = $sv->id === $voucher->id; 
+                                       $svAmt = (float)($sv->pivot->amount_applied ?? 0);
+                                       $svDate = $sv->date ? $sv->date->format('d/m/Y') : '—';
+                                       
+                                       $statusText = match($sv->status) {
+                                            'paid'             => 'Paid',
+                                            'pending_checker'  => 'Pending',
+                                            'pending_approver' => 'Pending',
+                                            default            => ucwords(str_replace('_', ' ', $sv->status)),
+                                        };
+                                    @endphp
+                                    <tr>
+                                        <td style="padding: 1px 0; {{ $isThis ? 'font-weight: bold; color: #000;' : 'color: #555;' }}">
+                                            &bull; {{ $sv->voucher_number }} 
+                                            {{ $isThis ? '(THIS PAYMENT)' : "($statusText - $svDate)" }}
+                                        </td>
+                                        <td style="padding: 1px 0; text-align: right; {{ $isThis ? 'font-weight: bold; color: #000;' : 'color: #555;' }}">
+                                            {{ number_format($svAmt, 2) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                                </table>
+                            </div>
+                        @endif
+                    </td>
+                    <td style="padding: 4px; border-right: 1px solid #000; text-align: right; vertical-align: top;">{{ number_format($peGrandTotal, 2) }}</td>
+                    <td style="padding: 4px; border-right: 1px solid #000; text-align: right; vertical-align: top; font-weight: bold;">{{ number_format($peAmount, 2) }}</td>
+                    <td style="padding: 4px; text-align: right; vertical-align: top; font-weight: bold;">{{ number_format(max(0, $pe->balance_due), 2) }}</td>
                 </tr>
             @endforeach
             <tr style="border-top: 1px solid #000;">
-                <td colspan="5" style="padding: 4px; font-weight: bold; text-align: right; border-right: 1px solid #000;">TOTAL LINKED ENTRIES:</td>
-                <td style="padding: 4px; text-align: right; font-weight: bold;">{{ number_format($peTotal, 2) }}</td>
+                <td colspan="3" style="padding: 4px; font-weight: bold; text-align: right; border-right: 1px solid #000;">TOTAL APPLIED IN THIS VOUCHER:</td>
+                <td style="padding: 4px; text-align: right; font-weight: bold; border-right: 1px solid #000;">{{ number_format($peTotal, 2) }}</td>
+                <td style="padding: 4px; background-color: #f8f8f8;"></td>
             </tr>
         </tbody>
     </table>

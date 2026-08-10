@@ -3,12 +3,15 @@
 namespace App\Filament\Vouchers\Resources\VoucherResource\Pages;
 
 use App\Filament\Vouchers\Resources\VoucherResource;
+use App\Services\VoucherApprovalService;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
 class EditVoucher extends EditRecord
 {
     protected static string $resource = VoucherResource::class;
+
+    protected array $oldPurchaseEntryIds = [];
 
     protected function getHeaderActions(): array
     {
@@ -27,6 +30,9 @@ class EditVoucher extends EditRecord
     protected function mutateFormDataBeforeSave(array $data): array
     {
         $voucher = $this->record;
+        
+        // Track the currently tagged PEs before the save so we can detect if any are untagged
+        $this->oldPurchaseEntryIds = $voucher->purchaseEntries()->pluck('purchase_entries.id')->toArray();
 
         // VAL: If this is an auto-generated RV from liquidation, its amount must perfectly match the liquidation return.
         if ($voucher->type === 'receipt' && str_contains($voucher->description, 'LIQUIDATION OF')) {
@@ -214,5 +220,44 @@ class EditVoucher extends EditRecord
         unset($data['items'], $data['purchaseEntries']);
 
         return $data;
+    }
+
+    protected function afterSave(): void
+    {
+        $voucher = $this->record->fresh();
+        
+        $newPurchaseEntryIds = $voucher->purchaseEntries()->pluck('purchase_entries.id')->toArray();
+        $allAffectedPeIds = array_unique(array_merge($this->oldPurchaseEntryIds, $newPurchaseEntryIds));
+
+        // 1. If the voucher is paid, re-distribute amount_applied across currently linked PEs.
+        // This populates the correct values since Filament's sync() inserts amount_applied = 0.
+        if ($voucher->status === 'paid') {
+            app(VoucherApprovalService::class)->redistributeLinkedEntries($voucher);
+        }
+
+        // 2. Handle sibling vouchers and parent PE balances for ALL affected PEs (kept, added, OR removed).
+        // If a PE was untagged, it might still have other paid sibling vouchers that now need to 
+        // absorb the balance. We must also recalculate the PE's total amount_paid.
+        if (!empty($allAffectedPeIds)) {
+            $siblingVoucherIds = collect();
+            $affectedPEs = \App\Models\PurchaseEntry::whereIn('id', $allAffectedPeIds)->get();
+            
+            $affectedPEs->each(function ($pe) use ($voucher, $siblingVoucherIds) {
+                // Find all OTHER paid vouchers linked to this PE
+                $pe->vouchers()
+                    ->where('vouchers.status', 'paid')
+                    ->where('vouchers.id', '!=', $voucher->id)
+                    ->each(function ($siblingVoucher) use ($siblingVoucherIds) {
+                        if (!$siblingVoucherIds->contains($siblingVoucher->id)) {
+                            $siblingVoucherIds->push($siblingVoucher->id);
+                            app(VoucherApprovalService::class)->redistributeLinkedEntries($siblingVoucher);
+                        }
+                    });
+                    
+                // Force a final recalculation on the PE. This is crucial for untagged PEs
+                // that have no other paid vouchers linked to them anymore.
+                $pe->recalculatePayments();
+            });
+        }
     }
 }
