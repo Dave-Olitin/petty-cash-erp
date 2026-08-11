@@ -330,12 +330,18 @@ class VoucherApprovalService
             // ── Smart AP Payment Distribution ─────────────────────────────────
             // Distribute the voucher payment across linked purchase entries.
             // We save the EXACT amount applied to the pivot table to handle voids safely.
-            $linkedEntries = $locked->purchaseEntries()->orderBy('date')->orderBy('id')->get();
+            $linkedEntries = $locked->purchaseEntries()->get();
 
-            if ($linkedEntries->isNotEmpty()) {
+            // Sort: Returns first, then by date, then id
+            $sortedEntries = $linkedEntries->sortBy(function ($pe) {
+                $typeSort = $pe->isReturn() ? 0 : 1;
+                return sprintf('%d-%s-%010d', $typeSort, $pe->date ? $pe->date->toDateString() : '9999-12-31', $pe->id);
+            });
+
+            if ($sortedEntries->isNotEmpty()) {
                 $remaining = (float) $locked->amount;
 
-                foreach ($linkedEntries as $pe) {
+                foreach ($sortedEntries as $pe) {
                     $billTotal    = (float) $pe->grand_total;
                     $alreadyPaid  = (float) $pe->amount_paid;
                     
@@ -344,22 +350,26 @@ class VoucherApprovalService
                     
                     $stillOwed    = max(0, $billTotal - $actualAlreadyPaid);
 
-                    if ($remaining <= 0) {
-                        $applied = 0;
+                    if ($pe->isReturn()) {
+                        $applied = $stillOwed;
+                        $remaining += $applied;
                     } else {
-                        $applied = min($remaining, $stillOwed);
+                        if ($remaining <= 0) {
+                            $applied = 0;
+                        } else {
+                            $applied = min($remaining, $stillOwed);
+                        }
+                        $remaining -= $applied;
                     }
                     
                     // Save the exact amount we applied to the pivot table
                     $locked->purchaseEntries()->updateExistingPivot($pe->id, [
                         'amount_applied' => $applied
                     ]);
-
-                    $remaining -= $applied;
                 }
                 
                 // Now safely recalculate all linked entries from the pivot single source of truth
-                $linkedEntries->each(fn ($pe) => $pe->recalculatePayments());
+                $sortedEntries->each(fn ($pe) => $pe->recalculatePayments());
             }
 
             // Record in approval trail
@@ -430,15 +440,20 @@ class VoucherApprovalService
     public function redistributeLinkedEntries(Voucher $voucher): void
     {
         DB::transaction(function () use ($voucher) {
-            $linkedEntries = $voucher->purchaseEntries()->orderBy('date')->orderBy('id')->get();
+            $linkedEntries = $voucher->purchaseEntries()->get();
 
-            if ($linkedEntries->isEmpty()) {
+            $sortedEntries = $linkedEntries->sortBy(function ($pe) {
+                $typeSort = $pe->isReturn() ? 0 : 1;
+                return sprintf('%d-%s-%010d', $typeSort, $pe->date ? $pe->date->toDateString() : '9999-12-31', $pe->id);
+            });
+
+            if ($sortedEntries->isEmpty()) {
                 return;
             }
 
             $remaining = (float) $voucher->amount;
 
-            foreach ($linkedEntries as $pe) {
+            foreach ($sortedEntries as $pe) {
                 $billTotal   = (float) $pe->grand_total;
                 // Read how much other paid vouchers have already applied (excluding this voucher).
                 $otherPaid = (float) $pe->vouchers()
@@ -448,21 +463,25 @@ class VoucherApprovalService
 
                 $stillOwed = max(0, $billTotal - $otherPaid);
 
-                if ($remaining <= 0) {
-                    $applied = 0;
+                if ($pe->isReturn()) {
+                    $applied = $stillOwed;
+                    $remaining += $applied;
                 } else {
-                    $applied = min($remaining, $stillOwed);
+                    if ($remaining <= 0) {
+                        $applied = 0;
+                    } else {
+                        $applied = min($remaining, $stillOwed);
+                    }
+                    $remaining -= $applied;
                 }
 
                 $voucher->purchaseEntries()->updateExistingPivot($pe->id, [
                     'amount_applied' => $applied,
                 ]);
-
-                $remaining -= $applied;
             }
 
             // Recalculate payment status on all linked entries from the pivot source of truth
-            $linkedEntries->each(fn ($pe) => $pe->recalculatePayments());
+            $sortedEntries->each(fn ($pe) => $pe->recalculatePayments());
         });
     }
 

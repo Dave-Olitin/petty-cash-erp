@@ -247,7 +247,13 @@
 @endif
 
 @if($voucher->purchaseEntries && $voucher->purchaseEntries->count() > 0)
-@php $voucher->purchaseEntries->loadMissing('lines'); @endphp
+@php 
+    $voucher->purchaseEntries->loadMissing('lines');
+    $sortedPEs = $voucher->purchaseEntries->sortBy(function ($pe) {
+        $typeSort = $pe->isReturn() ? 0 : 1;
+        return sprintf('%d-%s-%010d', $typeSort, $pe->date ? $pe->date->toDateString() : '9999-12-31', $pe->id);
+    });
+@endphp
 <div style="margin-top: 20px; font-size: 10px;">
     <strong>LINKED PURCHASE ENTRIES (SYSTEM):</strong>
     <table style="width: 100%; border-collapse: collapse; margin-top: 5px; border: 1px solid #000;">
@@ -264,12 +270,24 @@
             @php 
                 $peTotal = 0; 
                 $projectedRemaining = (float) $voucher->amount;
+                
+                // First pass to add all returns to the pool so purchases have accurate funds
+                foreach($sortedPEs as $pe) {
+                    if ($pe->isReturn() && $voucher->status !== 'paid') {
+                        $peGrandTotal = (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
+                        $otherPaid = (float) $pe->vouchers()
+                            ->where('vouchers.status', 'paid')
+                            ->where('vouchers.id', '!=', $voucher->id)
+                            ->sum('purchase_entry_voucher.amount_applied');
+                        $stillOwed = max(0, abs($peGrandTotal) - $otherPaid);
+                        $projectedRemaining += $stillOwed;
+                    }
+                }
             @endphp
-            @foreach($voucher->purchaseEntries as $pe)
+            @foreach($sortedPEs as $pe)
                 @php 
                     $pivotApplied = (float) ($pe->pivot->amount_applied ?? 0);
                     $peGrandTotal = (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
-                    if ($pe->isReturn()) $peGrandTotal = -$peGrandTotal;
                     
                     if ($voucher->status === 'paid') {
                         $peAmount = $pivotApplied;
@@ -282,11 +300,19 @@
                             
                         $stillOwed = max(0, abs($peGrandTotal) - $otherPaid);
                         
-                        $peAmount = min($projectedRemaining, $stillOwed);
-                        $projectedRemaining -= $peAmount;
+                        if ($pe->isReturn()) {
+                            $peAmount = $stillOwed;
+                            // already added to projectedRemaining in first pass
+                        } else {
+                            $peAmount = min($projectedRemaining, $stillOwed);
+                            $projectedRemaining -= $peAmount;
+                        }
                     }
 
-                    if ($pe->isReturn()) $peAmount = -$peAmount;
+                    if ($pe->isReturn()) {
+                        $peAmount = -$peAmount;
+                        $peGrandTotal = -$peGrandTotal;
+                    }
                     $peTotal += $peAmount; 
                     
                     $supplier = $pe->taxRegistration?->name ?? $pe->supplier_name ?? '—';
