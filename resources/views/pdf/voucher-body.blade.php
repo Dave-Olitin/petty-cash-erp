@@ -269,6 +269,8 @@
         <tbody>
             @php 
                 $peTotal = 0; 
+                $invoiceTotalSum = 0;
+                $balanceDueSum = 0;
                 $projectedRemaining = (float) $voucher->amount;
                 
                 // First pass to add all returns to the pool so purchases have accurate funds
@@ -313,7 +315,15 @@
                         $peAmount = -$peAmount;
                         $peGrandTotal = -$peGrandTotal;
                     }
+                    
+                    $displayBalanceDue = max(0, $pe->balance_due);
+                    if ($pe->isReturn()) {
+                        $displayBalanceDue = -$displayBalanceDue;
+                    }
+
                     $peTotal += $peAmount; 
+                    $invoiceTotalSum += $peGrandTotal;
+                    $balanceDueSum += $displayBalanceDue;
                     
                     $supplier = $pe->taxRegistration?->name ?? $pe->supplier_name ?? '—';
                     $po = $pe->po_number ?: '—';
@@ -365,13 +375,14 @@
                     </td>
                     <td style="padding: 4px; border-right: 1px solid #000; text-align: right; vertical-align: top;">{{ number_format($peGrandTotal, 2) }}</td>
                     <td style="padding: 4px; border-right: 1px solid #000; text-align: right; vertical-align: top; font-weight: bold;">{{ number_format($peAmount, 2) }}</td>
-                    <td style="padding: 4px; text-align: right; vertical-align: top; font-weight: bold;">{{ number_format(max(0, $pe->balance_due), 2) }}</td>
+                    <td style="padding: 4px; text-align: right; vertical-align: top; font-weight: bold;">{{ number_format($displayBalanceDue, 2) }}</td>
                 </tr>
             @endforeach
             <tr style="border-top: 1px solid #000;">
-                <td colspan="3" style="padding: 4px; font-weight: bold; text-align: right; border-right: 1px solid #000;">TOTAL APPLIED IN THIS VOUCHER:</td>
+                <td colspan="2" style="padding: 4px; font-weight: bold; text-align: right; border-right: 1px solid #000;">TOTAL:</td>
+                <td style="padding: 4px; text-align: right; font-weight: bold; border-right: 1px solid #000;">{{ number_format($invoiceTotalSum, 2) }}</td>
                 <td style="padding: 4px; text-align: right; font-weight: bold; border-right: 1px solid #000;">{{ number_format($peTotal, 2) }}</td>
-                <td style="padding: 4px; background-color: #f8f8f8;"></td>
+                <td style="padding: 4px; text-align: right; font-weight: bold;">{{ number_format($balanceDueSum, 2) }}</td>
             </tr>
         </tbody>
     </table>
