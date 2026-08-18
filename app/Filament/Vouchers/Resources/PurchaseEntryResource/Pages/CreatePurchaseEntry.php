@@ -21,7 +21,7 @@ class CreatePurchaseEntry extends CreateRecord
         return [
             Actions\Action::make('back')
                 ->label('Back')
-                ->url(static::$resource::getUrl('index'))
+                ->url(fn () => url()->previous() !== url()->current() ? url()->previous() : static::$resource::getUrl('index'))
                 ->color('gray')
                 ->icon('heroicon-m-arrow-left'),
         ];
