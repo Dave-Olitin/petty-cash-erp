@@ -328,49 +328,8 @@ class VoucherApprovalService
             }
 
             // ── Smart AP Payment Distribution ─────────────────────────────────
-            // Distribute the voucher payment across linked purchase entries.
-            // We save the EXACT amount applied to the pivot table to handle voids safely.
-            $linkedEntries = $locked->purchaseEntries()->get();
-
-            // Sort: Returns first, then by date, then id
-            $sortedEntries = $linkedEntries->sortBy(function ($pe) {
-                $typeSort = $pe->isReturn() ? 0 : 1;
-                return sprintf('%d-%s-%010d', $typeSort, $pe->date ? $pe->date->toDateString() : '9999-12-31', $pe->id);
-            });
-
-            if ($sortedEntries->isNotEmpty()) {
-                $remaining = (float) $locked->amount;
-
-                foreach ($sortedEntries as $pe) {
-                    $billTotal    = (float) $pe->grand_total;
-                    $alreadyPaid  = (float) $pe->amount_paid;
-                    
-                    $previouslyApplied = (float) $pe->pivot->amount_applied;
-                    $actualAlreadyPaid = max(0, $alreadyPaid - $previouslyApplied);
-                    
-                    $stillOwed    = max(0, $billTotal - $actualAlreadyPaid);
-
-                    if ($pe->isReturn()) {
-                        $applied = $stillOwed;
-                        $remaining += $applied;
-                    } else {
-                        if ($remaining <= 0) {
-                            $applied = 0;
-                        } else {
-                            $applied = min($remaining, $stillOwed);
-                        }
-                        $remaining -= $applied;
-                    }
-                    
-                    // Save the exact amount we applied to the pivot table
-                    $locked->purchaseEntries()->updateExistingPivot($pe->id, [
-                        'amount_applied' => $applied
-                    ]);
-                }
-                
-                // Now safely recalculate all linked entries from the pivot single source of truth
-                $sortedEntries->each(fn ($pe) => $pe->recalculatePayments());
-            }
+            // Distribute payment across linked purchase entries chronologically
+            $this->redistributeLinkedEntries($locked);
 
             // Record in approval trail
             $comment = $previousStatus !== VoucherStatus::Approved->value
@@ -431,57 +390,77 @@ class VoucherApprovalService
     }
 
     /**
-     * Re-distribute the voucher's amount across all linked purchase entries.
+     * Re-distribute payment amounts across all linked purchase entries.
      *
-     * This is the same logic as markPaid(), but extracted into a standalone method
-     * so it can be called after a form save (e.g., when purchase entries are linked
-     * to a voucher that was already paid, Filament's sync() sets amount_applied = 0).
+     * To avoid order-dependent bugs (where a later paid voucher absorbs amounts before an earlier
+     * paid voucher), this method finds ALL paid vouchers linked to the affected purchase entries
+     * and processes them in strict chronological sequence (by voucher date, then voucher ID).
      */
     public function redistributeLinkedEntries(Voucher $voucher): void
     {
         DB::transaction(function () use ($voucher) {
             $linkedEntries = $voucher->purchaseEntries()->get();
 
-            $sortedEntries = $linkedEntries->sortBy(function ($pe) {
-                $typeSort = $pe->isReturn() ? 0 : 1;
-                return sprintf('%d-%s-%010d', $typeSort, $pe->date ? $pe->date->toDateString() : '9999-12-31', $pe->id);
-            });
-
-            if ($sortedEntries->isEmpty()) {
+            if ($linkedEntries->isEmpty()) {
                 return;
             }
 
-            $remaining = (float) $voucher->amount;
+            $peIds = $linkedEntries->pluck('id')->toArray();
 
-            foreach ($sortedEntries as $pe) {
-                $billTotal   = (float) $pe->grand_total;
-                // Read how much other paid vouchers have already applied (excluding this voucher).
-                $otherPaid = (float) $pe->vouchers()
-                    ->where('vouchers.status', 'paid')
-                    ->where('vouchers.id', '!=', $voucher->id)
-                    ->sum('purchase_entry_voucher.amount_applied');
+            // Find ALL paid vouchers that are linked to ANY of these purchase entries
+            $paidVouchers = Voucher::where('status', VoucherStatus::Paid->value)
+                ->whereHas('purchaseEntries', fn ($q) => $q->whereIn('purchase_entries.id', $peIds))
+                ->orderBy('date', 'asc')
+                ->orderBy('id', 'asc')
+                ->get();
 
-                $stillOwed = max(0, $billTotal - $otherPaid);
+            // Process each paid voucher in strict chronological order so earlier paid vouchers get priority
+            foreach ($paidVouchers as $v) {
+                $vEntries = $v->purchaseEntries()->get()->sortBy(function ($pe) {
+                    $typeSort = $pe->isReturn() ? 0 : 1;
+                    return sprintf('%d-%s-%010d', $typeSort, $pe->date ? $pe->date->toDateString() : '9999-12-31', $pe->id);
+                });
 
-                if ($pe->isReturn()) {
-                    $applied = $stillOwed;
-                    $remaining += $applied;
-                } else {
-                    if ($remaining <= 0) {
-                        $applied = 0;
+                $remaining = (float) $v->amount;
+
+                foreach ($vEntries as $pe) {
+                    $billTotal = (float) ($pe->grand_total ?? $pe->total_amount ?? 0);
+
+                    // Calculate how much was applied by EARLIER paid vouchers (or paid vouchers with smaller ID on the same date)
+                    $earlierPaid = (float) $pe->vouchers()
+                        ->where('vouchers.status', VoucherStatus::Paid->value)
+                        ->where('vouchers.id', '!=', $v->id)
+                        ->where(function ($q) use ($v) {
+                            $q->where('vouchers.date', '<', $v->date)
+                              ->orWhere(function ($q2) use ($v) {
+                                  $q2->where('vouchers.date', '=', $v->date)
+                                     ->where('vouchers.id', '<', $v->id);
+                              });
+                        })
+                        ->sum('purchase_entry_voucher.amount_applied');
+
+                    $stillOwed = max(0, $billTotal - $earlierPaid);
+
+                    if ($pe->isReturn()) {
+                        $applied = $stillOwed;
+                        $remaining += $applied;
                     } else {
-                        $applied = min($remaining, $stillOwed);
+                        if ($remaining <= 0) {
+                            $applied = 0;
+                        } else {
+                            $applied = min($remaining, $stillOwed);
+                        }
+                        $remaining -= $applied;
                     }
-                    $remaining -= $applied;
-                }
 
-                $voucher->purchaseEntries()->updateExistingPivot($pe->id, [
-                    'amount_applied' => $applied,
-                ]);
+                    $v->purchaseEntries()->updateExistingPivot($pe->id, [
+                        'amount_applied' => $applied,
+                    ]);
+                }
             }
 
-            // Recalculate payment status on all linked entries from the pivot source of truth
-            $sortedEntries->each(fn ($pe) => $pe->recalculatePayments());
+            // Recalculate payment status on all affected entries from the pivot source of truth
+            \App\Models\PurchaseEntry::whereIn('id', $peIds)->get()->each(fn ($pe) => $pe->recalculatePayments());
         });
     }
 

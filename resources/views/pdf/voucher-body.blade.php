@@ -341,7 +341,7 @@
                         
                         @if($allSiblings->count() > 1)
                             <div style="margin-top: 6px; padding: 4px; background-color: #f9f9f9; border: 1px solid #ddd; font-size: 9px;">
-                                <strong>Payment History for this Entry:</strong>
+                                <strong>Linked Vouchers History for this Entry:</strong>
                                 <table style="width: 100%; border-collapse: collapse; margin-top: 2px;">
                                 @foreach($allSiblings as $sv)
                                     @php 
@@ -352,17 +352,27 @@
                                        }
                                        $svDate = $sv->date ? $sv->date->format('d/m/Y') : '—';
                                        
-                                       $statusText = match($sv->status) {
+                                       $statusLabel = match($sv->status) {
                                             'paid'             => 'Paid',
-                                            'pending_checker'  => 'Pending',
-                                            'pending_approver' => 'Pending',
+                                            'pending_checker'  => 'Pending Checker',
+                                            'pending_approver' => 'Pending Approval',
+                                            'rejected'         => 'Rejected',
+                                            'voided'           => 'Voided',
+                                            'draft'            => 'Draft',
                                             default            => ucwords(str_replace('_', ' ', $sv->status)),
                                         };
+
+                                       if ($isThis) {
+                                           $tag = $voucher->status === 'paid' 
+                                               ? '(THIS VOUCHER - Paid)' 
+                                               : "(THIS VOUCHER - {$statusLabel})";
+                                       } else {
+                                           $tag = "({$statusLabel} - {$svDate})";
+                                       }
                                     @endphp
                                     <tr>
                                         <td style="padding: 1px 0; {{ $isThis ? 'font-weight: bold; color: #000;' : 'color: #555;' }}">
-                                            &bull; {{ $sv->voucher_number }} 
-                                            {{ $isThis ? '(THIS PAYMENT)' : "($statusText - $svDate)" }}
+                                            &bull; {{ $sv->voucher_number }} {{ $tag }}
                                         </td>
                                         <td style="padding: 1px 0; text-align: right; {{ $isThis ? 'font-weight: bold; color: #000;' : 'color: #555;' }}">
                                             {{ number_format($svAmt, 2) }}

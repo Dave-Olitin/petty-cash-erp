@@ -21,7 +21,8 @@ $service = app(VoucherApprovalService::class);
 // (or all paid vouchers with linked PEs — redistribution is idempotent).
 $vouchers = Voucher::where('status', 'paid')
     ->whereHas('purchaseEntries')
-    ->orderBy('id')
+    ->orderBy('date', 'asc')
+    ->orderBy('id', 'asc')
     ->get();
 
 if ($vouchers->isEmpty()) {
