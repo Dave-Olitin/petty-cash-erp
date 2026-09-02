@@ -9,9 +9,11 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
-class AgingReportExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithTitle
+class AgingReportExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithTitle, WithColumnFormatting
 {
     protected array $data;
 
@@ -61,14 +63,22 @@ class AgingReportExport implements FromCollection, WithHeadings, WithMapping, Sh
 
     public function map($row): array
     {
-        $days = $row->days_overdue;
-        $bucket = match(true) {
-            $days <= 0  => 'Current',
-            $days <= 30 => '1–30 Days',
-            $days <= 60 => '31–60 Days',
-            $days <= 90 => '61–90 Days',
-            default     => '90+ Days',
-        };
+        $isPaid = !empty($row->is_paid) || ($row->balance_due <= 0 && $row->payment_status === 'paid');
+        $days = (int) $row->days_overdue;
+
+        if ($isPaid) {
+            $daysDisplay = 'Settled';
+            $bucket = 'Settled';
+        } else {
+            $daysDisplay = $days > 0 ? $days : 'Current';
+            $bucket = match(true) {
+                $days <= 0  => 'Current',
+                $days <= 30 => '1–30 Days',
+                $days <= 60 => '31–60 Days',
+                $days <= 90 => '61–90 Days',
+                default     => '90+ Days',
+            };
+        }
 
         return [
             $row->supplier_name,
@@ -77,19 +87,31 @@ class AgingReportExport implements FromCollection, WithHeadings, WithMapping, Sh
             $row->invoice_no,
             $row->date,
             $row->due_date,
-            $days > 0 ? $days : 'Current',
-            number_format($row->grand_total, 2),
-            number_format($row->amount_paid, 2),
-            number_format($row->balance_due, 2),
+            $daysDisplay,
+            (float) $row->grand_total,
+            (float) $row->amount_paid,
+            (float) $row->balance_due,
             ucfirst($row->payment_status),
             $bucket,
+        ];
+    }
+
+    public function columnFormats(): array
+    {
+        return [
+            'H' => '#,##0.00',
+            'I' => '#,##0.00',
+            'J' => '#,##0.00',
         ];
     }
 
     public function styles(Worksheet $sheet): array
     {
         return [
-            1 => ['font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1E3A5F']]],
+            1 => [
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1E3A5F']],
+            ],
         ];
     }
 }

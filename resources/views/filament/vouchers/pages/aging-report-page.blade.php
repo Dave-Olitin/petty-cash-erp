@@ -87,7 +87,9 @@
                                         </div>
                                         <div>
                                             <p class="font-bold text-gray-900 dark:text-gray-100 leading-tight">{{ $row['supplier_name'] }}</p>
-                                            <p class="text-[10px] text-gray-500 uppercase tracking-tighter mt-0.5">{{ $row['count'] }} outstanding invoice(s)</p>
+                                            <p class="text-[10px] text-gray-500 uppercase tracking-tighter mt-0.5">
+                                                {{ $row['count'] }} {{ ($this->payment_status === 'paid') ? 'paid' : (($this->payment_status === 'all') ? 'total' : 'outstanding') }} invoice(s)
+                                            </p>
                                         </div>
                                     </div>
                                 </td>
@@ -139,7 +141,11 @@
                                                         <td class="px-4 py-3 text-gray-500">{{ $entry['date'] }}</td>
                                                         <td class="px-4 py-3 text-gray-500">{{ $entry['due_date'] }}</td>
                                                         <td class="px-4 py-3 text-center">
-                                                            @if($entry['days_overdue'] > 0)
+                                                            @if(!empty($entry['is_paid']) || $entry['payment_status'] === 'paid' || $entry['balance_due'] <= 0)
+                                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                                                    Settled
+                                                                </span>
+                                                            @elseif($entry['days_overdue'] > 0)
                                                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold {{ $entry['days_overdue'] > 60 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }}">
                                                                     {{ $entry['days_overdue'] }}d Overdue
                                                                 </span>
@@ -181,52 +187,11 @@
                             </tr>
                         @endforelse
                     </tbody>
-                    @if($totalRows > 0)
-                    <tfoot>
-                        <tr class="bg-gray-900 text-white font-mono border-t-4 border-primary-600 shadow-[0_-5px_15px_rgba(0,0,0,0.2)]">
-                            <td class="px-6 py-6 font-black text-xs uppercase tracking-[0.2em] text-primary-400 italic">Global Aging Totals</td>
-                            <td class="px-4 py-6 text-right font-black text-base">{{ number_format($gt['current'], 2) }}</td>
-                            <td class="px-4 py-6 text-right font-black text-base text-blue-300">{{ number_format($gt['b1_30'], 2) }}</td>
-                            <td class="px-4 py-6 text-right font-black text-base text-yellow-300 bg-white/5">{{ number_format($gt['b31_60'], 2) }}</td>
-                            <td class="px-4 py-6 text-right font-black text-base text-orange-300 bg-white/5">{{ number_format($gt['b61_90'], 2) }}</td>
-                            <td class="px-4 py-6 text-right font-black text-base text-red-300 bg-white/5 underline decoration-double">{{ number_format($gt['b90plus'], 2) }}</td>
-                            <td class="px-6 py-6 text-right font-black text-2xl text-primary-400 border-l border-white/10 bg-black/20">
-                                <span class="text-[10px] font-normal opacity-50 mr-1 italic">AED</span>
-                                {{ number_format($gt['total'], 2) }}
-                            </td>
-                        </tr>
-                    </tfoot>
-                    @endif
+
                 </table>
             </div>
         </div>
 
-        {{-- ── Legend & Metadata ───────────────────────────────────────────── --}}
-        @if($totalRows > 0)
-        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mt-8 px-4 pb-6">
-            <div class="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded shadow-sm bg-yellow-400"></span>
-                    <span class="text-[9px] uppercase font-black tracking-widest text-gray-500">Watch List (31-60)</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded shadow-sm bg-orange-500"></span>
-                    <span class="text-[9px] uppercase font-black tracking-widest text-gray-500">Critical (61-90)</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded shadow-sm bg-red-600"></span>
-                    <span class="text-[9px] uppercase font-black tracking-widest text-gray-500">High Risk (90+)</span>
-                </div>
-            </div>
-            <div class="text-center md:text-right font-mono italic">
-                <p class="text-[9px] text-gray-400">
-                    Report Generated: {{ now()->format('d/m/Y H:i:s') }}
-                </p>
-                <p class="text-[9px] text-gray-300 uppercase tracking-tighter mt-0.5">
-                    Ref As-of: {{ $asOf }}
-                </p>
-            </div>
-        </div>
-        @endif
+
     </div>
 </x-filament-panels::page>

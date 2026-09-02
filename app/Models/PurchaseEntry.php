@@ -106,6 +106,15 @@ class PurchaseEntry extends Model
             $grand = (float) ($model->grand_total ?? 0);
             $paid  = (float) ($model->amount_paid  ?? 0);
             $model->balance_due = max(0, $grand - $paid);
+
+            // Enforce payment_status consistency to prevent bad data in the future
+            if ($paid >= $grand && $grand > 0) {
+                $model->payment_status = self::STATUS_PAID;
+            } elseif ($paid > 0) {
+                $model->payment_status = self::STATUS_PARTIAL;
+            } else {
+                $model->payment_status = self::STATUS_UNPAID;
+            }
         });
     }
 

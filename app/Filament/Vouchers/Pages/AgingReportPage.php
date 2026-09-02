@@ -26,7 +26,7 @@ class AgingReportPage extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return auth()->user()->hasAnyRole(['Admin', 'Super Admin'])
+        return auth()->user()->hasAnyRole(['Accountant', 'Admin', 'Super Admin'])
             || auth()->user()->can('purchase_entry.view');
     }
 
@@ -41,6 +41,7 @@ class AgingReportPage extends Page implements HasForms
     public function mount(): void
     {
         $this->as_of_date = now()->toDateString();
+        $this->payment_status = 'outstanding';
     }
 
     // ── Form ─────────────────────────────────────────────────────────────
@@ -86,10 +87,13 @@ class AgingReportPage extends Page implements HasForms
                 Select::make('payment_status')
                     ->label('Payment Status')
                     ->options([
-                        'unpaid'  => 'Unpaid Only',
-                        'partial' => 'Partially Paid Only',
+                        'outstanding' => 'Outstanding Only (Unpaid & Partial)',
+                        'unpaid'      => 'Unpaid Only',
+                        'partial'     => 'Partially Paid Only',
+                        'paid'        => 'Paid Only',
+                        'all'         => 'All Invoices',
                     ])
-                    ->placeholder('All (excl. Paid)')
+                    ->default('outstanding')
                     ->live(),
             ])
             ->columns(['sm' => 2, 'xl' => 5]);
@@ -103,23 +107,29 @@ class AgingReportPage extends Page implements HasForms
      */
     public function getAgingData(): array
     {
-        $asOf = Carbon::parse($this->as_of_date ?? now());
+        $asOf = Carbon::parse($this->as_of_date ?? now())->startOfDay();
 
         $query = PurchaseEntry::query()
             ->with('taxRegistration')
-            ->whereIn('payment_status', [
-                PurchaseEntry::STATUS_UNPAID,
-                PurchaseEntry::STATUS_PARTIAL,
-            ]);
+            ->where('date', '<=', $asOf->toDateString());
+
+        $statusFilter = $this->payment_status ?? 'outstanding';
+        if ($statusFilter === 'outstanding') {
+            $query->whereIn('payment_status', [PurchaseEntry::STATUS_UNPAID, PurchaseEntry::STATUS_PARTIAL]);
+        } elseif ($statusFilter === 'unpaid') {
+            $query->where('payment_status', PurchaseEntry::STATUS_UNPAID);
+        } elseif ($statusFilter === 'partial') {
+            $query->where('payment_status', PurchaseEntry::STATUS_PARTIAL);
+        } elseif ($statusFilter === 'paid') {
+            $query->where('payment_status', PurchaseEntry::STATUS_PAID);
+        }
+        // 'all' includes all statuses without filtering
 
         if ($this->supplier_id) {
             $query->where('tax_registration_id', $this->supplier_id);
         }
         if ($this->entity) {
             $query->where('entity', $this->entity);
-        }
-        if ($this->payment_status) {
-            $query->where('payment_status', $this->payment_status);
         }
         if ($this->month_filter) {
             $parts = explode('-', $this->month_filter);
@@ -129,7 +139,7 @@ class AgingReportPage extends Page implements HasForms
             }
         }
 
-        $entries = $query->get();
+        $entries = $query->orderBy('date', 'desc')->get();
 
         // ── Bucket thresholds (days overdue relative to as_of_date) ──────
         $buckets = [
@@ -141,29 +151,35 @@ class AgingReportPage extends Page implements HasForms
         ];
 
         // ── Group by supplier ─────────────────────────────────────────────
-        $grouped = $entries->groupBy(fn ($e) => $e->tax_registration_id ?? 'unknown');
+        $grouped = $entries->groupBy(function ($e) {
+            if ($e->tax_registration_id) {
+                return 'tax_' . $e->tax_registration_id;
+            }
+            $name = trim($e->supplier_name ?? '');
+            return 'supp_' . ($name !== '' ? strtolower($name) : 'unknown');
+        });
 
         $rows = [];
         $grandTotals = array_fill_keys(array_keys($buckets), 0.0);
         $grandTotals['total'] = 0.0;
         $grandTotals['count'] = 0;
 
-        foreach ($grouped as $supplierId => $supplierEntries) {
+        foreach ($grouped as $groupKey => $supplierEntries) {
             $firstEntry = $supplierEntries->first();
             
             $supplierName = $firstEntry?->taxRegistration?->name 
-                         ?? $firstEntry?->supplier_name 
-                         ?? 'Unknown Supplier';
+                         ?: $firstEntry?->supplier_name 
+                         ?: 'Unknown Supplier';
                          
             $supplierTrn = $firstEntry?->taxRegistration?->trn 
-                        ?? $firstEntry?->supplier_trn 
-                        ?? '—';
+                        ?: $firstEntry?->supplier_trn 
+                        ?: '—';
 
             $row = [
                 'supplier_name' => $supplierName,
                 'supplier_trn'  => $supplierTrn,
                 'entries'       => [],
-                'count'         => $supplierEntries->count(),
+                'count'         => 0,
                 'total'         => 0.0,
             ];
 
@@ -172,9 +188,13 @@ class AgingReportPage extends Page implements HasForms
             }
 
             foreach ($supplierEntries as $entry) {
-                $dueDate  = $entry->due_date ? Carbon::instance($entry->due_date) : null;
+                $rawDue   = $entry->due_date ?? $entry->date;
+                $dueDate  = $rawDue ? Carbon::parse($rawDue)->startOfDay() : null;
                 $balance  = (float) $entry->balance_due;
-                $overdue  = $dueDate ? max(0, (int) $asOf->diffInDays($dueDate, false) * -1) : 0;
+                $isPaid   = ($entry->payment_status === PurchaseEntry::STATUS_PAID || $balance <= 0);
+
+                // Days overdue: 0 if paid, otherwise diff from due date to as-of date
+                $overdue  = ($isPaid || ! $dueDate) ? 0 : max(0, (int) $dueDate->diffInDays($asOf, false));
 
                 // Deduct if it's a Return
                 if ($entry->entry_type === PurchaseEntry::TYPE_RETURN) {
@@ -201,17 +221,19 @@ class AgingReportPage extends Page implements HasForms
 
                 $row['total'] += $balance;
                 $grandTotals['total'] += $balance;
+                $row['count']++;
 
                 $row['entries'][] = [
                     'entry_no'       => $entry->entry_no,
                     'date'           => $entry->date?->format('d/m/Y'),
-                    'due_date'       => $dueDate?->format('d/m/Y') ?? '—',
+                    'due_date'       => $entry->due_date?->format('d/m/Y') ?? ($entry->date ? $entry->date->format('d/m/Y') . ' (On Bill)' : '—'),
                     'days_overdue'   => $overdue,
                     'grand_total'    => (float) $entry->grand_total,
                     'amount_paid'    => (float) $entry->amount_paid,
-                    'balance_due'    => $balance, // Export and view will see it as negative if a return
+                    'balance_due'    => $balance,
                     'payment_status' => $entry->payment_status,
                     'invoice_no'     => $entry->invoice_no ?? '—',
+                    'is_paid'        => $isPaid,
                 ];
             }
 
@@ -219,8 +241,12 @@ class AgingReportPage extends Page implements HasForms
             $rows[] = $row;
         }
 
-        // Sort by 90+ bucket descending (most at-risk first)
-        usort($rows, fn ($a, $b) => $b['b90plus'] <=> $a['b90plus']);
+        // Multi-tier sort: 90+ bucket desc, then total balance desc, then supplier name asc
+        usort($rows, function ($a, $b) {
+            return ($b['b90plus'] <=> $a['b90plus'])
+                ?: ($b['total'] <=> $a['total'])
+                ?: strcasecmp($a['supplier_name'], $b['supplier_name']);
+        });
 
         return [
             'rows'         => $rows,
@@ -250,7 +276,7 @@ class AgingReportPage extends Page implements HasForms
                 ->label('Back to Purchases')
                 ->icon('heroicon-o-arrow-left')
                 ->color('gray')
-                ->url(fn () => \App\Filament\Vouchers\Resources\PurchaseEntryResource::getUrl('index')),
+                ->url(fn () => \App\Filament\Vouchers\Resources\PurchaseEntryResource::getUrl('index', panel: 'vouchers')),
         ];
     }
 }
