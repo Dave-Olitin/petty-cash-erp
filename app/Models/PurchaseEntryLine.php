@@ -95,10 +95,13 @@ class PurchaseEntryLine extends Model
             
             $totalVat    = $lines->sum(fn ($l) => (float)$l->tax_amount);
 
-            $balanceDue = max(0, $grandTotal - (float) $parent->amount_paid);
+            $isReturn    = $parent->entry_type === PurchaseEntry::TYPE_RETURN;
+            $balanceDue  = $isReturn ? 0 : max(0, $grandTotal - (float) $parent->amount_paid);
 
             $paymentStatus = PurchaseEntry::STATUS_UNPAID;
-            if ($grandTotal > 0) {
+            if ($isReturn) {
+                $paymentStatus = PurchaseEntry::STATUS_PAID;
+            } elseif ($grandTotal > 0) {
                 $amountPaid = (float) $parent->amount_paid;
                 if ($amountPaid >= $grandTotal) {
                     $paymentStatus = PurchaseEntry::STATUS_PAID;

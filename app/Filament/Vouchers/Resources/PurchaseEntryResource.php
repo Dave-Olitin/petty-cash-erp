@@ -60,6 +60,7 @@ class PurchaseEntryResource extends Resource
     {
         return parent::getEloquentQuery()->with([
             'taxRegistration',
+            'refundAccount',
             'lines.debitAccount',
             'lines.creditAccount',
             'user',
@@ -79,20 +80,20 @@ class PurchaseEntryResource extends Resource
                             ->label('Type')
                             ->options([
                                 'purchase' => '🛒 Purchase Bill — Normal supplier invoice (increases AP)',
-                                'return'   => '↩ Purchase Return — Debit note to supplier (reduces AP)',
+                                'return'   => '↩ Purchase Return — Refund / Return to Account Code',
                             ])
                             ->default('purchase')
                             ->required()
                             ->live()
                             ->native(false)
                             ->helperText(fn (Forms\Get $get) => $get('entry_type') === 'return'
-                                ? new \Illuminate\Support\HtmlString('<span class="text-xs text-amber-600 font-semibold">⚠ A Purchase Return reverses the original bill. The grand total will reduce the supplier balance.</span>')
-                                : null
+                                ? new \Illuminate\Support\HtmlString('<span class="text-xs text-green-600 font-semibold">✓ Records the supplier & dates for tracking, but routes the refund directly to an Account Code without reducing the Supplier AP balance.</span>')
+                                : new \Illuminate\Support\HtmlString('<span class="text-xs text-gray-500">Normal invoice from a vendor. Increases Accounts Payable until paid.</span>')
                             ),
                     ])->columns(1)->compact(),
 
-                // ── Purchase Bill Details ─────────────────────────────────
-                Forms\Components\Section::make('Purchase Bill Details')->schema([
+                // ── Purchase Bill / Return Details ─────────────────────────
+                Forms\Components\Section::make(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Purchase Return Details' : 'Purchase Bill Details')->schema([
 
                     Forms\Components\Select::make('entity')
                         ->label('Entity')
@@ -104,12 +105,13 @@ class PurchaseEntryResource extends Resource
                     Forms\Components\Hidden::make('branch'),
 
                     Forms\Components\Select::make('tax_registration_id')
-                        ->label('Supplier')
+                        ->label(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Supplier (Reference Only)' : 'Supplier')
                         ->relationship('taxRegistration', 'name', fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('is_active', true))
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->name)
                         ->searchable()
                         ->preload()
                         ->live()
+                        ->helperText(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Preserved for vendor history — does NOT reduce supplier AP balance.' : null)
                         ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                             if ($state) {
                                 $tax = \App\Models\TaxRegistration::find($state);
@@ -134,7 +136,7 @@ class PurchaseEntryResource extends Resource
 
                     // ── Dates ────────────────────────────────────────────
                     Forms\Components\DatePicker::make('date')
-                        ->label('Bill Date')
+                        ->label(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Return Date' : 'Bill Date')
                         ->required()
                         ->default(now())
                         ->native(false)
@@ -159,6 +161,7 @@ class PurchaseEntryResource extends Resource
                         ->label('Due Date')
                         ->native(false)
                         ->displayFormat('d/m/Y')
+                        ->visible(fn (Forms\Get $get) => $get('entry_type') !== 'return')
                         ->helperText(function (Forms\Get $get) {
                             $taxId = $get('tax_registration_id');
                             if (!$taxId) {
@@ -183,6 +186,22 @@ class PurchaseEntryResource extends Resource
                             );
                         }),
 
+                    // ── Refund Account Code for PR ────────────────────────
+                    Forms\Components\Select::make('refund_account_id')
+                        ->label('Refund Received In (Account Code)')
+                        ->relationship('refundAccount', 'code')
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
+                        ->searchable(['code', 'name'])
+                        ->preload()
+                        ->native(false)
+                        ->required(fn (Forms\Get $get) => $get('entry_type') === 'return')
+                        ->visible(fn (Forms\Get $get) => $get('entry_type') === 'return')
+                        ->helperText('Select the asset account that received the refunded funds (e.g. Cash on Hand, Petty Cash, or Bank).')
+                        ->default(function () {
+                            return \App\Models\AccountCode::where('code', 'like', '1001%')->orWhere('name', 'like', '%CASH ON HAND%')->value('id');
+                        })
+                        ->columnSpan(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 2 : 1),
+
                     // Hidden fields kept for data integrity
                     Forms\Components\Hidden::make('supplier_name'),
                     Forms\Components\Hidden::make('supplier_trn'),
@@ -198,14 +217,14 @@ class PurchaseEntryResource extends Resource
                             ->label('PO Number')
                             ->placeholder('e.g. PO-2024-001'),
                         Forms\Components\TextInput::make('invoice_no')
-                            ->label('Invoice Number')
+                            ->label(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Credit Memo / Invoice #' : 'Invoice Number')
                             ->placeholder('e.g. INV-2023001'),
                     ])
                     ->columns(2)
                     ->collapsed(),
 
                 // ── Entry Lines ───────────────────────────────────────────
-                Forms\Components\Section::make('Entry Lines')->schema([
+                Forms\Components\Section::make(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Return Items' : 'Purchase Items')->schema([
                     Forms\Components\Repeater::make('lines')
                         ->relationship('lines')
                         ->live()
@@ -237,89 +256,56 @@ class PurchaseEntryResource extends Resource
                                             // ── Expense/Item Account ──────────────
                                             Forms\Components\Select::make('debit_account_id')
                                                 ->relationship('debitAccount', 'code')
-                                                ->label('Account')
+                                                ->label(fn (Forms\Get $get) => $get('../../entry_type') === 'return' ? 'Account (Expense / Item Being Reversed)' : 'Account')
                                                 ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
                                                 ->searchable(['code', 'name'])
                                                 ->native(false)
                                                 ->required()
-                                                ->columnSpan(6),
-
-                                            // ── DR Amount ───────────────────────
-                                            Forms\Components\TextInput::make('debit')
-                                                ->label('Debit Amount')
-                                                ->numeric()
-                                                ->default(0)
-                                                ->dehydrateStateUsing(fn ($state) => $state ?? 0)
-                                                ->live(onBlur: true)
-                                                ->rules([
-                                                    fn (Forms\Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
-                                                        $debit = (float) $value;
-                                                        $credit = (float) $get('credit');
-                                                        if ($debit <= 0 && $credit <= 0) {
-                                                            $fail('Either Debit Amount or Credit Amount must be greater than 0.');
+                                                ->afterStateHydrated(function ($component, $state, ?\App\Models\PurchaseEntryLine $record) {
+                                                    if ($record && empty($state)) {
+                                                        if ($record->credit_account_id) {
+                                                            $component->state($record->credit_account_id);
                                                         }
-                                                    },
-                                                ])
-                                                ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
-                                                    $debit = (float) $state;
-                                                    if ($debit > 0) {
-                                                        $set('total', $debit);
-                                                        $set('amount', $debit);
-                                                        $set('tax_amount', 0);
                                                     }
                                                 })
-                                                ->prefix('DR')
-                                                ->prefixIcon('heroicon-m-plus-circle')
-                                                ->prefixIconColor('success')
-                                                ->extraInputAttributes(['class' => 'font-bold text-success-600'])
-                                                ->columnSpan(3),
+                                                ->columnSpan(8),
 
-                                            // ── CR Amount ───────────────────────
-                                            Forms\Components\TextInput::make('credit')
-                                                ->label('Credit Amount')
+                                            // ── Simple, Clean Amount Field ───────
+                                            Forms\Components\TextInput::make('amount')
+                                                ->label(fn (Forms\Get $get) => $get('../../entry_type') === 'return' ? 'Return Amount (AED)' : 'Amount (AED)')
                                                 ->numeric()
-                                                ->default(0)
-                                                ->dehydrateStateUsing(fn ($state) => $state ?? 0)
+                                                ->required()
+                                                ->prefix('AED')
+                                                ->extraInputAttributes(['class' => 'font-bold text-primary-600'])
                                                 ->live(onBlur: true)
-                                                ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
-                                                    $credit = (float) $state;
-                                                    if ($credit > 0 && (float) $get('debit') === 0.0) {
-                                                        $set('total', $credit);
-                                                        $set('amount', $credit);
-                                                        $set('tax_amount', 0);
+                                                ->afterStateHydrated(function (Forms\Components\TextInput $component, $state, ?\App\Models\PurchaseEntryLine $record) {
+                                                    if ($record && ($state === null || (float)$state === 0.0)) {
+                                                        $amt = max((float)($record->debit ?? 0), (float)($record->credit ?? 0), (float)($record->total ?? 0), (float)($record->amount ?? 0));
+                                                        $component->state($amt);
                                                     }
                                                 })
-                                                ->prefix('CR')
-                                                ->prefixIcon('heroicon-m-minus-circle')
-                                                ->prefixIconColor('danger')
-                                                ->extraInputAttributes(['class' => 'font-bold text-danger-600'])
-                                                ->columnSpan(3),
+                                                ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                                                    $val = (float) ($state ?? 0);
+                                                    $set('total', $val);
+                                                    $isReturn = $get('../../entry_type') === 'return';
+                                                    if ($isReturn) {
+                                                        $set('credit', $val);
+                                                        $set('debit', 0);
+                                                    } else {
+                                                        $set('debit', $val);
+                                                        $set('credit', 0);
+                                                    }
+                                                })
+                                                ->columnSpan(4),
+
+                                            // Hidden accounting columns synced automatically
+                                            Forms\Components\Hidden::make('debit')->default(0),
+                                            Forms\Components\Hidden::make('credit')->default(0),
+                                            Forms\Components\Hidden::make('total')->default(0),
+                                            Forms\Components\Hidden::make('tax_percentage')->default(0),
+                                            Forms\Components\Hidden::make('tax_amount')->default(0),
                                         ])
                                         ->columnSpanFull(),
-
-                                    // ── Line Total (hidden fallback) ─────
-                                    Forms\Components\TextInput::make('total')
-                                        ->label('Total Amount')
-                                        ->numeric()
-                                        ->default(0)
-                                        ->dehydrateStateUsing(fn ($state) => $state ?? 0)
-                                        ->live(onBlur: true)
-                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
-                                            $total = (float) $state;
-                                            $set('amount', $total);
-                                            $set('tax_amount', 0);
-                                            if ((float) $get('credit') === 0.0) {
-                                                $set('debit', $total);
-                                            }
-                                        })
-                                        ->prefix('AED')
-                                        ->extraInputAttributes(['class' => 'font-bold text-primary-600'])
-                                        ->hidden(),
-
-                                    // Hidden fields kept for data integrity
-                                    Forms\Components\Hidden::make('amount')->default(0),
-                                    Forms\Components\Hidden::make('tax_percentage')->default(0),
-                                    Forms\Components\Hidden::make('tax_amount')->default(0),
                                 ])
                         ])
                         ->itemLabel(fn (array $state): ?string => $state['description'] ?? 'New Line Item')
@@ -333,42 +319,13 @@ class PurchaseEntryResource extends Resource
                     ->schema([
                         Forms\Components\Grid::make(3)
                             ->schema([
-                                Forms\Components\Placeholder::make('total_debit_sum')
-                                    ->label('Total Debit (DR)')
-                                    ->content(function (Forms\Get $get) {
-                                        $lines = $get('lines') ?? [];
-                                        $sum = (float) collect($lines)->sum(fn ($i) => (float)($i['debit'] ?? 0));
-                                        return new \Illuminate\Support\HtmlString(
-                                            '<div class="flex flex-col">' .
-                                            '<span class="text-2xl font-mono font-bold text-success-600">' . number_format($sum, 2) . '</span>' .
-                                            '<span class="text-[10px] uppercase tracking-wider text-gray-400">Total DR — AED</span>' .
-                                            '</div>'
-                                        );
-                                    }),
-
-                                Forms\Components\Placeholder::make('total_credit_sum')
-                                    ->label('Total Credit (CR)')
-                                    ->content(function (Forms\Get $get) {
-                                        $lines = $get('lines') ?? [];
-                                        $sum = (float) collect($lines)->sum(fn ($i) => (float)($i['credit'] ?? 0));
-                                        return new \Illuminate\Support\HtmlString(
-                                            '<div class="flex flex-col">' .
-                                            '<span class="text-2xl font-mono font-bold text-danger-600">' . number_format($sum, 2) . '</span>' .
-                                            '<span class="text-[10px] uppercase tracking-wider text-gray-400">Total CR — AED</span>' .
-                                            '</div>'
-                                        );
-                                    }),
-
                                 Forms\Components\Placeholder::make('grand_total_sum')
-                                    ->label('Grand Total (Invoice)')
+                                    ->label(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Total Refund Amount' : 'Grand Total (Invoice)')
                                     ->content(function (Forms\Get $get) {
                                         $lines = $get('lines') ?? [];
-                                        
-                                        $totalDebit = (float) collect($lines)->sum(fn ($i) => (float)($i['debit'] ?? 0));
-                                        $totalCredit = (float) collect($lines)->sum(fn ($i) => (float)($i['credit'] ?? 0));
-                                        $pureTotals = (float) collect($lines)->sum(fn ($i) => (empty($i['debit']) && empty($i['credit'])) ? (float)($i['total'] ?? 0) : 0);
-                                        
-                                        $sum = max($totalDebit, $totalCredit) + $pureTotals;
+                                        $sum = (float) collect($lines)->sum(function ($i) {
+                                            return max((float)($i['amount'] ?? 0), (float)($i['debit'] ?? 0), (float)($i['credit'] ?? 0), (float)($i['total'] ?? 0));
+                                        });
                                         $isReturn = $get('entry_type') === 'return';
 
                                         return new \Illuminate\Support\HtmlString(
@@ -377,44 +334,48 @@ class PurchaseEntryResource extends Resource
                                             ($isReturn ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase">Return</span>' : '') .
                                             '<span class="text-3xl font-mono font-black text-primary-600">' . number_format($sum, 2) . '</span>' .
                                             '</div>' .
-                                            '<span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mt-1">Invoice Total — AED</span>' .
+                                            '<span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mt-1">' . ($isReturn ? 'Total Refund — AED' : 'Invoice Total — AED') . '</span>' .
+                                            '</div>'
+                                        );
+                                    }),
+
+                                Forms\Components\Placeholder::make('accounting_entry_preview')
+                                    ->label('Accounting Entry Preview')
+                                    ->columnSpan(2)
+                                    ->content(function (Forms\Get $get) {
+                                        $lines = $get('lines') ?? [];
+                                        $sum = (float) collect($lines)->sum(function ($i) {
+                                            return max((float)($i['amount'] ?? 0), (float)($i['debit'] ?? 0), (float)($i['credit'] ?? 0), (float)($i['total'] ?? 0));
+                                        });
+                                        $isReturn = $get('entry_type') === 'return';
+
+                                        if ($isReturn) {
+                                            $refundId = $get('refund_account_id');
+                                            $refundName = 'Cash on Hand (Default)';
+                                            if ($refundId && $acct = \App\Models\AccountCode::find($refundId)) {
+                                                $refundName = "{$acct->code} — {$acct->name}";
+                                            }
+
+                                            return new \Illuminate\Support\HtmlString(
+                                                '<div class="flex flex-col p-3 rounded-xl bg-green-50/70 border border-green-200 dark:bg-green-950/20 dark:border-green-900 text-xs text-green-900 dark:text-green-300">' .
+                                                '<span class="font-bold uppercase tracking-wider mb-1 text-green-800">Double-Entry Breakdown:</span>' .
+                                                '<div>• <strong>DR (Received In):</strong> ' . e($refundName) . ' (AED ' . number_format($sum, 2) . ')</div>' .
+                                                '<div>• <strong>CR (Reversed):</strong> Item Account(s) (AED ' . number_format($sum, 2) . ')</div>' .
+                                                '<div class="text-[11px] text-green-700 font-semibold mt-1">✓ Supplier AP balance will NOT be reduced.</div>' .
+                                                '</div>'
+                                            );
+                                        }
+
+                                        return new \Illuminate\Support\HtmlString(
+                                            '<div class="flex flex-col p-3 rounded-xl bg-blue-50/70 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-900 text-xs text-blue-900 dark:text-blue-300">' .
+                                            '<span class="font-bold uppercase tracking-wider mb-1 text-blue-800">Double-Entry Breakdown:</span>' .
+                                            '<div>• <strong>DR (Expense/Asset):</strong> Item Account(s) (AED ' . number_format($sum, 2) . ')</div>' .
+                                            '<div>• <strong>CR (Liability):</strong> Accounts Payable Supplier (AED ' . number_format($sum, 2) . ')</div>' .
+                                            '<div class="text-[11px] text-blue-700 font-semibold mt-1">✓ Increases Supplier AP Balance until paid.</div>' .
                                             '</div>'
                                         );
                                     }),
                             ]),
-
-                        // ── Informational balance note ────────────────────────────────────
-                        // For Purchase Entries, DR ≠ CR is NORMAL until payment is made.
-                        // The Debit side records the expense; the Credit (AP) is posted
-                        // later when the supplier payment voucher is raised.
-                        // This indicator simply shows if you have chosen to post both sides.
-                        Forms\Components\Placeholder::make('entry_balance')
-                            ->label('')
-                            ->content(function (Forms\Get $get) {
-                                $lines = $get('lines') ?? [];
-                                $dr = (float) collect($lines)->sum(fn ($i) => (float)($i['debit'] ?? 0));
-                                $cr = (float) collect($lines)->sum(fn ($i) => (float)($i['credit'] ?? 0));
-                                $diff = round(abs($dr - $cr), 2);
-
-                                if ($dr === 0.0 && $cr === 0.0) return null;
-
-                                if ($diff <= 0.01) {
-                                    return new \Illuminate\Support\HtmlString(
-                                        '<div class="flex items-center gap-2 text-xs text-success-700 bg-success-50 px-3 py-1.5 rounded-lg border border-success-200 w-fit">' .
-                                        '<svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>' .
-                                        '<span class="font-semibold">Double-entry balanced — DR = CR</span>' .
-                                        '</div>'
-                                    );
-                                }
-
-                                // DR ≠ CR is fine for simple purchase bills — show as info, not error
-                                return new \Illuminate\Support\HtmlString(
-                                    '<div class="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 w-fit">' .
-                                    '<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' .
-                                    '<span class="font-semibold">Single-side entry (DR ' . ($dr > $cr ? '>' : '<') . ' CR). The Accounts Payable credit will be posted when the supplier payment is made — this is normal.</span>' .
-                                    '</div>'
-                                );
-                            })
                     ])->compact(),
 
 
@@ -837,17 +798,25 @@ class PurchaseEntryResource extends Resource
                                 \Filament\Infolists\Components\TextEntry::make('entity')
                                     ->label('Entity'),
                                 \Filament\Infolists\Components\TextEntry::make('taxRegistration.name')
-                                    ->label('Supplier'),
+                                    ->label('Supplier')
+                                    ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('invoice_no')
-                                    ->label('Invoice No')
+                                    ->label('Invoice / Doc No')
                                     ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('date')
-                                    ->label('Bill Date')
+                                    ->label(fn ($record) => $record->isReturn() ? 'Return Date' : 'Bill Date')
                                     ->date('M j, Y'),
                                 \Filament\Infolists\Components\TextEntry::make('due_date')
                                     ->label('Due Date')
                                     ->date('M j, Y')
-                                    ->placeholder('—'),
+                                    ->placeholder('—')
+                                    ->visible(fn ($record) => !$record->isReturn()),
+                                \Filament\Infolists\Components\TextEntry::make('refundAccount.name')
+                                    ->label('Refund Received In')
+                                    ->formatStateUsing(fn ($state, $record) => $record->refundAccount ? "{$record->refundAccount->code} — {$record->refundAccount->name}" : '1001 — Cash on Hand (Default)')
+                                    ->color('success')
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->visible(fn ($record) => $record->isReturn()),
                                 \Filament\Infolists\Components\TextEntry::make('po_number')
                                     ->label('PO Number')
                                     ->placeholder('—'),
@@ -855,14 +824,14 @@ class PurchaseEntryResource extends Resource
                                     ->label('Created By')
                                     ->placeholder('System'),
                                 \Filament\Infolists\Components\TextEntry::make('payment_status')
-                                    ->label('Payment Status')
+                                    ->label('Status')
                                     ->badge()
-                                    ->formatStateUsing(fn ($state) => match ($state) {
+                                    ->formatStateUsing(fn ($state, $record) => $record->isReturn() ? 'SETTLED' : match ($state) {
                                         'paid'    => 'PAID',
                                         'partial' => 'PARTIAL',
                                         default   => 'UNPAID',
                                     })
-                                    ->color(fn ($state) => match ($state) {
+                                    ->color(fn ($state, $record) => $record->isReturn() ? 'success' : match ($state) {
                                         'paid'    => 'success',
                                         'partial' => 'warning',
                                         default   => 'danger',
@@ -871,62 +840,76 @@ class PurchaseEntryResource extends Resource
                                 \Filament\Infolists\Components\TextEntry::make('aging_bucket')
                                     ->label('Aging')
                                     ->badge()
-                                    ->color(fn ($record) => $record->aging_color),
+                                    ->color(fn ($record) => $record->aging_color)
+                                    ->visible(fn ($record) => !$record->isReturn()),
                             ])->columns(5),
                     ]),
 
-                \Filament\Infolists\Components\Section::make('Purchase Lines (Items)')
+                \Filament\Infolists\Components\Section::make(fn ($record) => $record->isReturn() ? 'Return Lines (Items)' : 'Purchase Lines (Items)')
                     ->schema([
-                        \Filament\Infolists\Components\Grid::make(14)
-                            ->extraAttributes(['class' => 'bg-gray-100 p-2 border-b border-gray-200 rounded-t-lg'])
+                        \Filament\Infolists\Components\Grid::make(12)
+                            ->extraAttributes(['class' => 'bg-gray-100 dark:bg-gray-800 p-2 border-b border-gray-200 dark:border-gray-700 rounded-t-lg'])
                             ->schema([
-                                \Filament\Infolists\Components\TextEntry::make('header_dr_acct')->state('Debit Account (DR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
-                                \Filament\Infolists\Components\TextEntry::make('header_cr_acct')->state('Credit Account (CR)')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
-                                \Filament\Infolists\Components\TextEntry::make('header_desc')->state('Description / Item')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(3),
-                                \Filament\Infolists\Components\TextEntry::make('header_cc')->state('Branch')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(1),
-                                \Filament\Infolists\Components\TextEntry::make('header_dr')->state('DR Amount')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2)->alignEnd(),
-                                \Filament\Infolists\Components\TextEntry::make('header_cr')->state('CR Amount')->hiddenLabel()->weight(\Filament\Support\Enums\FontWeight::Bold)->columnSpan(2)->alignEnd(),
+                                \Filament\Infolists\Components\TextEntry::make('hdr_acct')
+                                    ->state('Account (Chart of Accounts)')
+                                    ->hiddenLabel()
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->columnSpan(5),
+                                \Filament\Infolists\Components\TextEntry::make('hdr_desc')
+                                    ->state('Description / Item')
+                                    ->hiddenLabel()
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->columnSpan(4),
+                                \Filament\Infolists\Components\TextEntry::make('hdr_branch')
+                                    ->state('Branch')
+                                    ->hiddenLabel()
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->columnSpan(1),
+                                \Filament\Infolists\Components\TextEntry::make('hdr_amt')
+                                    ->state('Amount')
+                                    ->hiddenLabel()
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->columnSpan(2)
+                                    ->alignEnd(),
                             ]),
 
                         \Filament\Infolists\Components\RepeatableEntry::make('lines')
                             ->label('')
                             ->schema([
-                                \Filament\Infolists\Components\Grid::make(14)
+                                \Filament\Infolists\Components\Grid::make(12)
                                     ->schema([
-                                        \Filament\Infolists\Components\TextEntry::make('debitAccount.code')
-                                            ->label('Debit Account')
+                                        \Filament\Infolists\Components\TextEntry::make('account_display')
+                                            ->label('Account')
                                             ->hiddenLabel()
-                                            ->formatStateUsing(fn ($state, $record) => $state ? $state . ' — ' . $record->debitAccount?->name : '—')
-                                            ->columnSpan(3),
-                                        \Filament\Infolists\Components\TextEntry::make('creditAccount.code')
-                                            ->label('Credit Account')
-                                            ->hiddenLabel()
-                                            ->formatStateUsing(fn ($state, $record) => $state ? $state . ' — ' . $record->creditAccount?->name : '—')
-                                            ->placeholder('—')
-                                            ->columnSpan(3),
+                                            ->state(function ($record) {
+                                                $acct = $record->debitAccount ?? $record->creditAccount;
+                                                return $acct ? "{$acct->code} — {$acct->name}" : '—';
+                                            })
+                                            ->columnSpan(5),
                                         \Filament\Infolists\Components\TextEntry::make('description')
                                             ->label('Description')
                                             ->hiddenLabel()
-                                            ->columnSpan(3),
+                                            ->placeholder('—')
+                                            ->columnSpan(4),
                                         \Filament\Infolists\Components\TextEntry::make('branch')
                                             ->label('Branch')
                                             ->hiddenLabel()
                                             ->placeholder('—')
                                             ->columnSpan(1),
-                                        \Filament\Infolists\Components\TextEntry::make('debit')
-                                            ->label('DR')
+                                        \Filament\Infolists\Components\TextEntry::make('line_amount')
+                                            ->label('Amount')
                                             ->hiddenLabel()
+                                            ->state(function ($record) {
+                                                return max(
+                                                    (float)($record->debit ?? 0),
+                                                    (float)($record->credit ?? 0),
+                                                    (float)($record->amount ?? 0),
+                                                    (float)($record->total ?? 0)
+                                                );
+                                            })
                                             ->money('AED')
                                             ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                            ->extraAttributes(['class' => 'font-mono text-blue-700'])
-                                            ->columnSpan(2)
-                                            ->alignEnd(),
-                                        \Filament\Infolists\Components\TextEntry::make('credit')
-                                            ->label('CR')
-                                            ->hiddenLabel()
-                                            ->money('AED')
-                                            ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                            ->extraAttributes(['class' => 'font-mono text-amber-700'])
+                                            ->extraAttributes(['class' => 'font-mono text-primary-700 dark:text-primary-400'])
                                             ->columnSpan(2)
                                             ->alignEnd(),
                                     ])
@@ -935,26 +918,34 @@ class PurchaseEntryResource extends Resource
                             ->contained(false)
                     ]),
 
-                \Filament\Infolists\Components\Section::make('Purchase Summary')
+                \Filament\Infolists\Components\Section::make(fn ($record) => $record->isReturn() ? 'Return Summary & Accounting Breakdown' : 'Purchase Summary')
                     ->schema([
                         \Filament\Infolists\Components\Grid::make(4)
                             ->schema([
-                                \Filament\Infolists\Components\TextEntry::make('total_debit')
-                                    ->label('Total DR')
-                                    ->money('AED')
-                                    ->extraAttributes(['class' => 'text-xl font-mono font-bold text-blue-700 pl-4 border-l-4 border-blue-400']),
-                                \Filament\Infolists\Components\TextEntry::make('total_credit')
-                                    ->label('Total CR')
-                                    ->money('AED')
-                                    ->extraAttributes(['class' => 'text-xl font-mono font-bold text-amber-700 pl-4 border-l-4 border-amber-400']),
                                 \Filament\Infolists\Components\TextEntry::make('grand_total')
-                                    ->label('Grand Total')
+                                    ->label(fn ($record) => $record->isReturn() ? 'Total Refund' : 'Grand Total')
                                     ->money('AED')
                                     ->extraAttributes(['class' => 'text-2xl font-mono font-bold text-primary-600 pl-4 border-l-4 border-primary-500']),
+                                \Filament\Infolists\Components\TextEntry::make('amount_paid')
+                                    ->label('Amount Paid')
+                                    ->money('AED')
+                                    ->extraAttributes(['class' => 'text-xl font-mono font-bold text-green-600 pl-4 border-l-4 border-green-400'])
+                                    ->visible(fn ($record) => !$record->isReturn()),
                                 \Filament\Infolists\Components\TextEntry::make('balance_due')
                                     ->label('Balance Due')
                                     ->money('AED')
-                                    ->extraAttributes(['class' => 'text-xl font-mono font-bold text-red-600 pl-4 border-l-4 border-red-400']),
+                                    ->extraAttributes(['class' => 'text-xl font-mono font-bold text-red-600 pl-4 border-l-4 border-red-400'])
+                                    ->visible(fn ($record) => !$record->isReturn()),
+                                \Filament\Infolists\Components\TextEntry::make('return_accounting_note')
+                                    ->label('Accounting Breakdown')
+                                    ->state(function ($record) {
+                                        $refundAcct = $record->refundAccount ? "{$record->refundAccount->code} — {$record->refundAccount->name}" : '1001 — Cash on Hand';
+                                        return "DR: {$refundAcct} | CR: Item Account(s) (Cost Reversed). Supplier AP balance is NOT reduced.";
+                                    })
+                                    ->columnSpan(3)
+                                    ->color('success')
+                                    ->weight(\Filament\Support\Enums\FontWeight::SemiBold)
+                                    ->visible(fn ($record) => $record->isReturn()),
                             ])
                     ])->compact(),
 

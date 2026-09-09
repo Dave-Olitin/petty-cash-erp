@@ -36,6 +36,11 @@ class GeneralLedgerPage extends Page implements HasForms
 
     public ?array $data = [];
 
+    public function boot(): void
+    {
+        @ini_set('memory_limit', '512M');
+    }
+
     public function mount(): void
     {
         $this->form->fill([

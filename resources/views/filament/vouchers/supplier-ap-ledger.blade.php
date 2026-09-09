@@ -42,7 +42,7 @@
                 </td>
                 <td style="padding:8px 10px;">
                     @if($isReturn)
-                        <span style="background:#fef9c3; color:#854d0e; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700;">RETURN</span>
+                        <span style="background:#fef9c3; color:#854d0e; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700;" title="Refunded to Account Code — does not alter Supplier AP">RETURN</span>
                     @else
                         <span style="background:#ede9fe; color:#5b21b6; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700;">BILL</span>
                     @endif
@@ -51,24 +51,30 @@
                     {{ $entry->date ? \Carbon\Carbon::parse($entry->date)->format('d M Y') : '—' }}
                 </td>
                 <td style="padding:8px 10px; color:{{ $overdue ? '#dc2626' : '#374151' }}; font-weight:{{ $overdue ? '700' : '400' }};">
-                    {{ $entry->due_date ? \Carbon\Carbon::parse($entry->due_date)->format('d M Y') : '—' }}
+                    {{ $isReturn ? '—' : ($entry->due_date ? \Carbon\Carbon::parse($entry->due_date)->format('d M Y') : '—') }}
                     @if($overdue) <span style="font-size:10px;">⚠</span> @endif
                 </td>
-                <td style="padding:8px 10px; font-family:monospace; font-size:11px; color:#374151;">{{ $entry->supplier_invoice_number ?? '—' }}</td>
-                <td style="padding:8px 10px; font-family:monospace; font-size:11px; color:#374151;">{{ $entry->lpo_number ?? '—' }}</td>
+                <td style="padding:8px 10px; font-family:monospace; font-size:11px; color:#374151;">{{ $entry->supplier_invoice_number ?? $entry->invoice_no ?? '—' }}</td>
+                <td style="padding:8px 10px; font-family:monospace; font-size:11px; color:#374151;">{{ $entry->lpo_number ?? $entry->po_number ?? '—' }}</td>
                 <td style="padding:8px 10px; text-align:right; font-family:monospace; font-weight:600; color:{{ $isReturn ? '#b45309' : '#1e293b' }};">
                     {{ $isReturn ? '- ' : '' }}AED {{ number_format(abs($entry->grand_total ?? $entry->total_amount ?? 0), 2) }}
                 </td>
                 <td style="padding:8px 10px; text-align:right; font-family:monospace; color:#059669;">
-                    AED {{ number_format($entry->amount_paid ?? 0, 2) }}
+                    {{ $isReturn ? '—' : 'AED ' . number_format($entry->amount_paid ?? 0, 2) }}
                 </td>
                 <td style="padding:8px 10px; text-align:right; font-family:monospace; font-weight:700; color:{{ $balance > 0.01 ? '#dc2626' : '#15803d' }};">
-                    AED {{ number_format(abs($balance), 2) }}
+                    {{ $isReturn ? '—' : 'AED ' . number_format(abs($balance), 2) }}
                 </td>
                 <td style="padding:8px 10px; text-align:center;">
-                    <span style="{{ $statusColors }} border-radius:4px; padding:2px 8px; font-size:10px; font-weight:700; text-transform:uppercase;">
-                        {{ $entry->payment_status ?? 'unpaid' }}
-                    </span>
+                    @if($isReturn)
+                        <span style="background:#dcfce7; color:#15803d; border-radius:4px; padding:2px 8px; font-size:10px; font-weight:700; text-transform:uppercase;">
+                            SETTLED
+                        </span>
+                    @else
+                        <span style="{{ $statusColors }} border-radius:4px; padding:2px 8px; font-size:10px; font-weight:700; text-transform:uppercase;">
+                            {{ $entry->payment_status ?? 'unpaid' }}
+                        </span>
+                    @endif
                 </td>
             </tr>
         @endforeach
@@ -76,10 +82,9 @@
     <tfoot>
         @php
             $footerBilled = $entries->where('entry_type', '!=', 'return')->sum(fn($e) => $e->grand_total ?? $e->total_amount ?? 0);
-            $footerPaid = $entries->sum('amount_paid');
-            $footerBalance = $entries->sum(function($e) {
-                $bal = $e->balance_due ?? (($e->grand_total ?? $e->total_amount ?? 0) - ($e->amount_paid ?? 0));
-                return $e->entry_type === 'return' ? -abs($bal) : $bal;
+            $footerPaid = $entries->where('entry_type', '!=', 'return')->sum('amount_paid');
+            $footerBalance = $entries->where('entry_type', '!=', 'return')->sum(function($e) {
+                return $e->balance_due ?? (($e->grand_total ?? $e->total_amount ?? 0) - ($e->amount_paid ?? 0));
             });
         @endphp
         <tr style="border-top:2px solid #e5e7eb; background:#f9fafb; font-weight:700;">

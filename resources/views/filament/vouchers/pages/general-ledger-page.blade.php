@@ -110,12 +110,12 @@
                                 <td class="px-6 py-3">
                                     @if($line->je_ref)
                                         @if($line->source === 'purchase_entry')
-                                            <a href="{{ \App\Filament\Vouchers\Resources\PurchaseEntryResource::getUrl('view', ['record' => $line->purchase_entry_id]) }}"
+                                            <a href="{{ url('/vouchers/purchase-entries/' . $line->purchase_entry_id) }}"
                                                class="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">
                                                 {{ $line->je_ref }}
                                             </a>
                                         @else
-                                            <a href="{{ \App\Filament\Vouchers\Resources\JournalEntryResource::getUrl('view', ['record' => $line->je_id]) }}"
+                                            <a href="{{ url('/vouchers/journal-entries/' . $line->je_id) }}"
                                                class="font-mono text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">
                                                 {{ $line->je_ref }}
                                             </a>
@@ -149,7 +149,7 @@
                                 {{-- Voucher # --}}
                                 <td class="px-6 py-3">
                                     @if($line->voucher_id)
-                                        <a href="{{ \App\Filament\Vouchers\Resources\VoucherResource::getUrl('view', ['record' => $line->voucher_id]) }}"
+                                        <a href="{{ url('/vouchers/vouchers/' . $line->voucher_id) }}"
                                            class="text-xs text-gray-500 dark:text-gray-400 hover:underline">
                                             {{ $line->voucher_number ?? '—' }}
                                         </a>

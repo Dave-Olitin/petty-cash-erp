@@ -48,6 +48,7 @@ class PurchaseEntry extends Model
         'total_debit',
         'total_credit',
         'payment_status',
+        'refund_account_id',
         'amount_paid',
         'balance_due',
         'is_locked',
@@ -98,11 +99,19 @@ class PurchaseEntry extends Model
             }
 
             // Initialise balance_due on creation
-            $model->balance_due = $model->grand_total ?? 0;
+            $model->balance_due = ($model->entry_type === self::TYPE_RETURN) ? 0 : ($model->grand_total ?? 0);
         });
 
         static::saving(function ($model) {
-            // Always sync balance_due with current totals
+            // For a purchase return (PR), the refund is received directly into an Account Code,
+            // so it is settled and does not create an unpaid AP debt.
+            if ($model->entry_type === self::TYPE_RETURN) {
+                $model->balance_due = 0;
+                $model->payment_status = self::STATUS_PAID;
+                return;
+            }
+
+            // Always sync balance_due with current totals for bills
             $grand = (float) ($model->grand_total ?? 0);
             $paid  = (float) ($model->amount_paid  ?? 0);
             $model->balance_due = max(0, $grand - $paid);
@@ -123,6 +132,11 @@ class PurchaseEntry extends Model
     public function taxRegistration(): BelongsTo
     {
         return $this->belongsTo(TaxRegistration::class);
+    }
+
+    public function refundAccount(): BelongsTo
+    {
+        return $this->belongsTo(AccountCode::class, 'refund_account_id');
     }
 
     public function lines(): HasMany

@@ -19,6 +19,8 @@ class GeneralLedgerService
      */
     public function getLedgerRows(?Carbon $from = null, ?Carbon $to = null, ?array $accountId = [], ?array $branch = [], ?array $basis = [], ?string $payee = null, string $dataSource = 'both'): Collection
     {
+        @ini_set('memory_limit', '512M');
+
         $rows = collect();
 
         // 1. VoucherItem rows
@@ -103,7 +105,14 @@ class GeneralLedgerService
                 ->where('name', 'NOT LIKE', '%NON TRADE%')
                 ->first();
 
-            $peLinesQuery = PurchaseEntryLine::with(['purchaseEntry.taxRegistration', 'debitAccount'])
+            // Pre-cache fallback accounts ONCE outside loop to eliminate N+1 queries & memory overhead
+            $defaultExpenseAccount = AccountCode::where('code', 'like', '50%')->first();
+            $defaultRefundAccount = AccountCode::where('code', 'like', '1001%')
+                ->orWhere('name', 'like', '%CASH ON HAND%')
+                ->orWhere('name', 'like', '%PETTY CASH%')
+                ->first();
+
+            $peLinesQuery = PurchaseEntryLine::with(['purchaseEntry.taxRegistration', 'purchaseEntry.refundAccount', 'debitAccount', 'creditAccount'])
                 ->whereHas('purchaseEntry')
                 ->when(!empty($branch), fn($q) => $q->whereIn('branch', $branch))
                 ->when(!empty($payee), fn($q) => $q->whereHas('purchaseEntry.taxRegistration', fn($s) => $s->where('name', 'like', '%' . $payee . '%')))
@@ -118,10 +127,15 @@ class GeneralLedgerService
             foreach ($peLines as $line) {
                 $isReturn = $line->purchaseEntry->entry_type === 'return';
                 $parentPayee = $line->purchaseEntry?->taxRegistration?->name ?? $line->purchaseEntry?->supplier_name;
+                $lineAmt = max((float)$line->debit, (float)$line->credit, (float)$line->amount, (float)$line->total);
+                if ($lineAmt <= 0) continue;
 
-                // Direct Line
-                if (empty($accountId) || in_array($line->debit_account_id, $accountId)) {
-                    if ($line->debitAccount !== null) {
+                if ($isReturn) {
+                    // ── PURCHASE RETURN: Routes to Refund Account Code (No AP Trade!) ──
+                    // 1. Direct Item Account Line: CREDITED (Reverses the cost/inventory)
+                    $itemAccount = $line->debitAccount ?? $line->creditAccount ?? $defaultExpenseAccount;
+
+                    if ($itemAccount && (empty($accountId) || in_array($itemAccount->id, $accountId))) {
                         $mappedPe->push((object) [
                             'date'            => $line->purchaseEntry?->date,
                             'je_ref'          => $line->purchaseEntry?->entry_no,
@@ -133,34 +147,21 @@ class GeneralLedgerService
                             'purchase_entry_id'=> $line->purchaseEntry?->id,
                             'payee'           => $parentPayee,
                             'branch'          => $line->branch,
-                            'debit'           => (float) $line->debit,
-                            'credit'          => (float) $line->credit,
+                            'debit'           => 0.0,
+                            'credit'          => $lineAmt,
                             'source'          => 'purchase_entry',
                             'is_info_only'    => false,
-                            'account_code_id' => $line->debit_account_id,
-                            'account'         => $line->debitAccount,
+                            'account_code_id' => $itemAccount->id,
+                            'account'         => $itemAccount,
                             'running_balance' => 0.0,
-                            'description'     => $line->description ?: 'Purchase Entry: ' . $line->purchaseEntry?->entry_no,
+                            'description'     => 'Return Reversal: ' . ($line->description ?: $line->purchaseEntry?->entry_no),
                         ]);
                     }
-                }
 
-                // Synthetic AP Line
-                if ($apAccount !== null && (empty($accountId) || in_array($apAccount->id, $accountId))) {
-                    $syntheticDr = 0;
-                    $syntheticCr = 0;
+                    // 2. Refund Account Line: DEBITED (Received in Cash / Bank / Petty Cash)
+                    $refundAccount = $line->purchaseEntry?->refundAccount ?? $defaultRefundAccount;
 
-                    if ($isReturn) {
-                        // Return: we reverse the DR/CR because a Return reduces liability (debit AP).
-                        $syntheticDr = (float) $line->credit;
-                        $syntheticCr = (float) $line->debit;
-                    } else {
-                        // Purchase: standard offset (credit AP for debited expenses).
-                        $syntheticDr = (float) $line->credit;
-                        $syntheticCr = (float) $line->debit;
-                    }
-
-                    if ($syntheticDr > 0 || $syntheticCr > 0) {
+                    if ($refundAccount && (empty($accountId) || in_array($refundAccount->id, $accountId))) {
                         $syntheticAp->push((object) [
                             'date'            => $line->purchaseEntry?->date,
                             'je_ref'          => $line->purchaseEntry?->entry_no,
@@ -172,8 +173,60 @@ class GeneralLedgerService
                             'purchase_entry_id'=> $line->purchaseEntry?->id,
                             'payee'           => $parentPayee,
                             'branch'          => $line->branch,
-                            'debit'           => $syntheticDr,
-                            'credit'          => $syntheticCr,
+                            'debit'           => $lineAmt,
+                            'credit'          => 0.0,
+                            'source'          => 'purchase_entry',
+                            'is_info_only'    => false,
+                            'account_code_id' => $refundAccount->id,
+                            'account'         => $refundAccount,
+                            'running_balance' => 0.0,
+                            'description'     => 'Refund Received: ' . ($line->description ?: $line->purchaseEntry?->entry_no),
+                        ]);
+                    }
+
+                } else {
+                    // ── PURCHASE BILL: Standard Double Entry (DR Expense, CR Accounts Payable) ──
+                    // 1. Direct Expense Line (DEBIT)
+                    $itemAccount = $line->debitAccount ?? $line->creditAccount ?? $defaultExpenseAccount;
+
+                    if ($itemAccount && (empty($accountId) || in_array($itemAccount->id, $accountId))) {
+                        $mappedPe->push((object) [
+                            'date'            => $line->purchaseEntry?->date,
+                            'je_ref'          => $line->purchaseEntry?->entry_no,
+                            'je_id'           => null,
+                            'voucher_id'      => null,
+                            'voucher_number'  => null,
+                            'voucher_type'    => null,
+                            'voucher_amount'  => null,
+                            'purchase_entry_id'=> $line->purchaseEntry?->id,
+                            'payee'           => $parentPayee,
+                            'branch'          => $line->branch,
+                            'debit'           => $lineAmt,
+                            'credit'          => 0.0,
+                            'source'          => 'purchase_entry',
+                            'is_info_only'    => false,
+                            'account_code_id' => $itemAccount->id,
+                            'account'         => $itemAccount,
+                            'running_balance' => 0.0,
+                            'description'     => $line->description ?: 'Purchase Entry: ' . $line->purchaseEntry?->entry_no,
+                        ]);
+                    }
+
+                    // 2. Synthetic Accounts Payable Line (CREDIT)
+                    if ($apAccount !== null && (empty($accountId) || in_array($apAccount->id, $accountId))) {
+                        $syntheticAp->push((object) [
+                            'date'            => $line->purchaseEntry?->date,
+                            'je_ref'          => $line->purchaseEntry?->entry_no,
+                            'je_id'           => null,
+                            'voucher_id'      => null,
+                            'voucher_number'  => null,
+                            'voucher_type'    => null,
+                            'voucher_amount'  => null,
+                            'purchase_entry_id'=> $line->purchaseEntry?->id,
+                            'payee'           => $parentPayee,
+                            'branch'          => $line->branch,
+                            'debit'           => 0.0,
+                            'credit'          => $lineAmt,
                             'source'          => 'purchase_entry',
                             'is_info_only'    => false,
                             'account_code_id' => $apAccount->id,

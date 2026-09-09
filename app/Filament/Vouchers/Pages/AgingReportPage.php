@@ -111,6 +111,7 @@ class AgingReportPage extends Page implements HasForms
 
         $query = PurchaseEntry::query()
             ->with('taxRegistration')
+            ->where('entry_type', PurchaseEntry::TYPE_PURCHASE)
             ->where('date', '<=', $asOf->toDateString());
 
         $statusFilter = $this->payment_status ?? 'outstanding';
@@ -195,11 +196,6 @@ class AgingReportPage extends Page implements HasForms
 
                 // Days overdue: 0 if paid, otherwise diff from due date to as-of date
                 $overdue  = ($isPaid || ! $dueDate) ? 0 : max(0, (int) $dueDate->diffInDays($asOf, false));
-
-                // Deduct if it's a Return
-                if ($entry->entry_type === PurchaseEntry::TYPE_RETURN) {
-                    $balance = -$balance;
-                }
 
                 // Classify into bucket
                 if ($overdue <= 0) {

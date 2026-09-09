@@ -27,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        @ini_set('memory_limit', '512M');
+
         \Illuminate\Database\Eloquent\Model::shouldBeStrict(!app()->isProduction());
 
         Transaction::observe(TransactionObserver::class);

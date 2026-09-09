@@ -4,15 +4,14 @@
 
     $totalBilled  = $entries->where('entry_type', '!=', 'return')->sum(fn($e) => $e->grand_total ?? $e->total_amount ?? 0);
     $totalReturns = abs($entries->where('entry_type', 'return')->sum(fn($e) => $e->grand_total ?? $e->total_amount ?? 0));
-    $totalPaid    = $entries->sum('amount_paid');
+    $totalPaid    = $entries->where('entry_type', '!=', 'return')->sum('amount_paid');
     
-    $netBalance = $entries->sum(function($e) {
-        $bal = $e->balance_due ?? (($e->grand_total ?? $e->total_amount ?? 0) - ($e->amount_paid ?? 0));
-        return $e->entry_type === 'return' ? -abs($bal) : $bal;
+    $netBalance = $entries->where('entry_type', '!=', 'return')->sum(function($e) {
+        return $e->balance_due ?? (($e->grand_total ?? $e->total_amount ?? 0) - ($e->amount_paid ?? 0));
     });
 
-    $openCount    = $entries->where('payment_status', '!=', 'paid')->count();
-    $totalBills   = $entries->count();
+    $openCount    = $entries->where('entry_type', '!=', 'return')->where('payment_status', '!=', 'paid')->count();
+    $totalBills   = $entries->where('entry_type', '!=', 'return')->count();
 
     $balanceColor = $netBalance > 0.01
         ? 'background:#fef2f2; border-color:#fca5a5; color:#b91c1c;'
