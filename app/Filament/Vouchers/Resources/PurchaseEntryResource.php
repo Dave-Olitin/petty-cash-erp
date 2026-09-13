@@ -339,7 +339,7 @@ class PurchaseEntryResource extends Resource
                                     }),
 
                                 Forms\Components\Placeholder::make('accounting_entry_preview')
-                                    ->label('Accounting Entry Preview')
+                                    ->label('GL Impact (Journal Entry Preview)')
                                     ->columnSpan(2)
                                     ->content(function (Forms\Get $get) {
                                         $lines = $get('lines') ?? [];
@@ -347,30 +347,75 @@ class PurchaseEntryResource extends Resource
                                             return max((float)($i['amount'] ?? 0), (float)($i['debit'] ?? 0), (float)($i['credit'] ?? 0), (float)($i['total'] ?? 0));
                                         });
                                         $isReturn = $get('entry_type') === 'return';
+                                        $formattedSum = number_format($sum, 2);
 
                                         if ($isReturn) {
                                             $refundId = $get('refund_account_id');
-                                            $refundName = 'Cash on Hand (Default)';
+                                            $refundName = '1001 — Cash on Hand (Default)';
                                             if ($refundId && $acct = \App\Models\AccountCode::find($refundId)) {
                                                 $refundName = "{$acct->code} — {$acct->name}";
                                             }
 
                                             return new \Illuminate\Support\HtmlString(
-                                                '<div class="flex flex-col p-3 rounded-xl bg-green-50/70 border border-green-200 dark:bg-green-950/20 dark:border-green-900 text-xs text-green-900 dark:text-green-300">' .
-                                                '<span class="font-bold uppercase tracking-wider mb-1 text-green-800">Double-Entry Breakdown:</span>' .
-                                                '<div>• <strong>DR (Received In):</strong> ' . e($refundName) . ' (AED ' . number_format($sum, 2) . ')</div>' .
-                                                '<div>• <strong>CR (Reversed):</strong> Item Account(s) (AED ' . number_format($sum, 2) . ')</div>' .
-                                                '<div class="text-[11px] text-green-700 font-semibold mt-1">✓ Supplier AP balance will NOT be reduced.</div>' .
+                                                '<div class="rounded-xl border border-green-200 dark:border-green-900 bg-green-50/60 dark:bg-green-950/20 p-3 text-xs">' .
+                                                '<div class="flex items-center justify-between font-bold text-green-900 dark:text-green-300 uppercase tracking-wider mb-2">' .
+                                                    '<span>GL Impact Preview</span>' .
+                                                    '<span class="text-[10px] px-2 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 font-bold">BALANCED</span>' .
+                                                '</div>' .
+                                                '<table class="w-full text-left font-mono">' .
+                                                    '<thead>' .
+                                                        '<tr class="text-[10px] text-gray-500 uppercase border-b border-green-200 dark:border-green-800">' .
+                                                            '<th class="pb-1 font-semibold">Account</th>' .
+                                                            '<th class="pb-1 text-right font-semibold w-24">Debit</th>' .
+                                                            '<th class="pb-1 text-right font-semibold w-24">Credit</th>' .
+                                                        '</tr>' .
+                                                    '</thead>' .
+                                                    '<tbody class="divide-y divide-green-100 dark:divide-green-900/40">' .
+                                                        '<tr>' .
+                                                            '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1">DR</span>' . e($refundName) . '</td>' .
+                                                            '<td class="py-1 text-right font-bold text-emerald-600 dark:text-emerald-400">' . $formattedSum . '</td>' .
+                                                            '<td class="py-1 text-right text-gray-400">—</td>' .
+                                                        '</tr>' .
+                                                        '<tr>' .
+                                                            '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-blue-600 dark:text-blue-400 mr-1">CR</span>Item Account(s) (Cost Reversed)</td>' .
+                                                            '<td class="py-1 text-right text-gray-400">—</td>' .
+                                                            '<td class="py-1 text-right font-bold text-blue-600 dark:text-blue-400">' . $formattedSum . '</td>' .
+                                                        '</tr>' .
+                                                    '</tbody>' .
+                                                '</table>' .
+                                                '<div class="mt-2 text-[11px] text-green-800 dark:text-green-300 font-sans">✓ Direct Refund: Asset received in cash/bank. Supplier AP balance is NOT reduced.</div>' .
                                                 '</div>'
                                             );
                                         }
 
                                         return new \Illuminate\Support\HtmlString(
-                                            '<div class="flex flex-col p-3 rounded-xl bg-blue-50/70 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-900 text-xs text-blue-900 dark:text-blue-300">' .
-                                            '<span class="font-bold uppercase tracking-wider mb-1 text-blue-800">Double-Entry Breakdown:</span>' .
-                                            '<div>• <strong>DR (Expense/Asset):</strong> Item Account(s) (AED ' . number_format($sum, 2) . ')</div>' .
-                                            '<div>• <strong>CR (Liability):</strong> Accounts Payable Supplier (AED ' . number_format($sum, 2) . ')</div>' .
-                                            '<div class="text-[11px] text-blue-700 font-semibold mt-1">✓ Increases Supplier AP Balance until paid.</div>' .
+                                            '<div class="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-3 text-xs">' .
+                                            '<div class="flex items-center justify-between font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider mb-2">' .
+                                                '<span>GL Impact Preview</span>' .
+                                                '<span class="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold">BALANCED</span>' .
+                                            '</div>' .
+                                            '<table class="w-full text-left font-mono">' .
+                                                '<thead>' .
+                                                    '<tr class="text-[10px] text-gray-500 uppercase border-b border-blue-200 dark:border-blue-800">' .
+                                                        '<th class="pb-1 font-semibold">Account</th>' .
+                                                        '<th class="pb-1 text-right font-semibold w-24">Debit</th>' .
+                                                        '<th class="pb-1 text-right font-semibold w-24">Credit</th>' .
+                                                    '</tr>' .
+                                                '</thead>' .
+                                                '<tbody class="divide-y divide-blue-100 dark:divide-blue-900/40">' .
+                                                    '<tr>' .
+                                                        '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1">DR</span>Item Account(s) (Expense/Asset)</td>' .
+                                                        '<td class="py-1 text-right font-bold text-emerald-600 dark:text-emerald-400">' . $formattedSum . '</td>' .
+                                                        '<td class="py-1 text-right text-gray-400">—</td>' .
+                                                    '</tr>' .
+                                                    '<tr>' .
+                                                        '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-blue-600 dark:text-blue-400 mr-1">CR</span>Accounts Payable (Supplier)</td>' .
+                                                        '<td class="py-1 text-right text-gray-400">—</td>' .
+                                                        '<td class="py-1 text-right font-bold text-blue-600 dark:text-blue-400">' . $formattedSum . '</td>' .
+                                                    '</tr>' .
+                                                '</tbody>' .
+                                            '</table>' .
+                                            '<div class="mt-2 text-[11px] text-blue-800 dark:text-blue-300 font-sans">✓ Standard Vendor Bill: Increases Accounts Payable until settled via payment voucher.</div>' .
                                             '</div>'
                                         );
                                     }),
@@ -917,7 +962,7 @@ class PurchaseEntryResource extends Resource
                             ->contained(false)
                     ]),
 
-                \Filament\Infolists\Components\Section::make(fn ($record) => $record->isReturn() ? 'Return Summary & Accounting Breakdown' : 'Purchase Summary')
+                \Filament\Infolists\Components\Section::make(fn ($record) => $record->isReturn() ? 'Return Summary' : 'Purchase Summary')
                     ->schema([
                         \Filament\Infolists\Components\Grid::make(4)
                             ->schema([
@@ -935,15 +980,11 @@ class PurchaseEntryResource extends Resource
                                     ->money('AED')
                                     ->extraAttributes(['class' => 'text-xl font-mono font-bold text-red-600 pl-4 border-l-4 border-red-400'])
                                     ->visible(fn ($record) => !$record->isReturn()),
-                                \Filament\Infolists\Components\TextEntry::make('return_accounting_note')
-                                    ->label('Accounting Breakdown')
-                                    ->state(function ($record) {
-                                        $refundAcct = $record->refundAccount ? "{$record->refundAccount->code} — {$record->refundAccount->name}" : '1001 — Cash on Hand';
-                                        return "DR: {$refundAcct} | CR: Item Account(s) (Cost Reversed). Supplier AP balance is NOT reduced.";
-                                    })
-                                    ->columnSpan(3)
+                                \Filament\Infolists\Components\TextEntry::make('refund_account_display')
+                                    ->label('Refund Received In')
+                                    ->state(fn ($record) => $record->refundAccount ? "{$record->refundAccount->code} — {$record->refundAccount->name}" : '1001 — Cash on Hand (Default)')
+                                    ->badge()
                                     ->color('success')
-                                    ->weight(\Filament\Support\Enums\FontWeight::SemiBold)
                                     ->visible(fn ($record) => $record->isReturn()),
                             ])
                     ])->compact(),
