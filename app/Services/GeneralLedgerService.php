@@ -101,9 +101,14 @@ class GeneralLedgerService
         // 3. PurchaseEntryLine rows (and Synthetic AP)
         if (in_array($dataSource, ['both', 'all', 'purchases_only'])) {
             // Find default AP account (e.g. Accounts Payable Trade)
-            $apAccount = AccountCode::where('name', 'LIKE', '%ACCOUNTS PAYABLE%')
+            $defaultApAccount = AccountCode::where('name', 'LIKE', '%ACCOUNTS PAYABLE%')
                 ->where('name', 'NOT LIKE', '%NON TRADE%')
                 ->first();
+
+            // Pre-cache supplier liability accounts (2000-01.%) indexed by lowercased name for fast lookup
+            $supplierSubAccounts = AccountCode::where('code', 'like', '2000-01%')
+                ->get()
+                ->keyBy(fn($a) => mb_strtolower(trim($a->name)));
 
             // Pre-cache fallback accounts ONCE outside loop to eliminate N+1 queries & memory overhead
             $defaultExpenseAccount = AccountCode::where('code', 'like', '50%')->first();
@@ -112,10 +117,20 @@ class GeneralLedgerService
                 ->orWhere('name', 'like', '%PETTY CASH%')
                 ->first();
 
-            $peLinesQuery = PurchaseEntryLine::with(['purchaseEntry.taxRegistration', 'purchaseEntry.refundAccount', 'debitAccount', 'creditAccount'])
+            $peLinesQuery = PurchaseEntryLine::with([
+                'purchaseEntry.taxRegistration',
+                'purchaseEntry.supplierAccount',
+                'purchaseEntry.refundAccount',
+                'debitAccount',
+                'creditAccount'
+            ])
                 ->whereHas('purchaseEntry')
                 ->when(!empty($branch), fn($q) => $q->whereIn('branch', $branch))
-                ->when(!empty($payee), fn($q) => $q->whereHas('purchaseEntry.taxRegistration', fn($s) => $s->where('name', 'like', '%' . $payee . '%')))
+                ->when(!empty($payee), fn($q) => $q->where(function ($sub) use ($payee) {
+                    $sub->whereHas('purchaseEntry.taxRegistration', fn($s) => $s->where('name', 'like', '%' . $payee . '%'))
+                        ->orWhereHas('purchaseEntry.supplierAccount', fn($s) => $s->where('name', 'like', '%' . $payee . '%'))
+                        ->orWhereHas('purchaseEntry', fn($p) => $p->where('supplier_name', 'like', '%' . $payee . '%'));
+                }))
                 ->when($from, fn($q) => $q->whereHas('purchaseEntry', fn($p) => $p->whereDate('date', '>=', $from)))
                 ->when($to,   fn($q) => $q->whereHas('purchaseEntry', fn($p) => $p->whereDate('date', '<=', $to)));
 
@@ -126,12 +141,21 @@ class GeneralLedgerService
 
             foreach ($peLines as $line) {
                 $isReturn = $line->purchaseEntry->entry_type === 'return';
-                $parentPayee = $line->purchaseEntry?->taxRegistration?->name ?? $line->purchaseEntry?->supplier_name;
+                $parentPayee = $line->purchaseEntry?->taxRegistration?->name
+                    ?? $line->purchaseEntry?->supplierAccount?->name
+                    ?? $line->purchaseEntry?->supplier_name;
                 $lineAmt = max((float)$line->debit, (float)$line->credit, (float)$line->amount, (float)$line->total);
                 if ($lineAmt <= 0) continue;
 
+                // Resolve supplier AP account: explicit supplierAccount -> match by supplier name -> default AP
+                $supplierAcct = $line->purchaseEntry?->supplierAccount;
+                if (!$supplierAcct && $parentPayee) {
+                    $supplierAcct = $supplierSubAccounts->get(mb_strtolower(trim($parentPayee)));
+                }
+                $effectiveApAccount = $supplierAcct ?? $defaultApAccount;
+
                 if ($isReturn) {
-                    // ── PURCHASE RETURN: Routes to Refund Account Code (No AP Trade!) ──
+                    // ── PURCHASE RETURN ──
                     // 1. Direct Item Account Line: CREDITED (Reverses the cost/inventory)
                     $itemAccount = $line->debitAccount ?? $line->creditAccount ?? $defaultExpenseAccount;
 
@@ -158,10 +182,13 @@ class GeneralLedgerService
                         ]);
                     }
 
-                    // 2. Refund Account Line: DEBITED (Received in Cash / Bank / Petty Cash)
-                    $refundAccount = $line->purchaseEntry?->refundAccount ?? $defaultRefundAccount;
+                    // 2. Debited Offset Line:
+                    // If physical refund received (refundAccount), DEBIT that cash/bank account.
+                    // If credit note (no refundAccount), DEBIT the supplier AP account (reduces debt).
+                    $refundAccount = $line->purchaseEntry?->refundAccount;
+                    $debitOffsetAccount = $refundAccount ?? $effectiveApAccount;
 
-                    if ($refundAccount && (empty($accountId) || in_array($refundAccount->id, $accountId))) {
+                    if ($debitOffsetAccount && (empty($accountId) || in_array($debitOffsetAccount->id, $accountId))) {
                         $syntheticAp->push((object) [
                             'date'            => $line->purchaseEntry?->date,
                             'je_ref'          => $line->purchaseEntry?->entry_no,
@@ -177,10 +204,10 @@ class GeneralLedgerService
                             'credit'          => 0.0,
                             'source'          => 'purchase_entry',
                             'is_info_only'    => false,
-                            'account_code_id' => $refundAccount->id,
-                            'account'         => $refundAccount,
+                            'account_code_id' => $debitOffsetAccount->id,
+                            'account'         => $debitOffsetAccount,
                             'running_balance' => 0.0,
-                            'description'     => 'Refund Received: ' . ($line->description ?: $line->purchaseEntry?->entry_no),
+                            'description'     => ($refundAccount ? 'Refund Received: ' : 'Return (AP Credit Note): ') . ($line->description ?: $line->purchaseEntry?->entry_no),
                         ]);
                     }
 
@@ -212,8 +239,8 @@ class GeneralLedgerService
                         ]);
                     }
 
-                    // 2. Synthetic Accounts Payable Line (CREDIT)
-                    if ($apAccount !== null && (empty($accountId) || in_array($apAccount->id, $accountId))) {
+                    // 2. Synthetic Accounts Payable Line (CREDIT) to specific Supplier AP Account
+                    if ($effectiveApAccount !== null && (empty($accountId) || in_array($effectiveApAccount->id, $accountId))) {
                         $syntheticAp->push((object) [
                             'date'            => $line->purchaseEntry?->date,
                             'je_ref'          => $line->purchaseEntry?->entry_no,
@@ -229,10 +256,10 @@ class GeneralLedgerService
                             'credit'          => $lineAmt,
                             'source'          => 'purchase_entry',
                             'is_info_only'    => false,
-                            'account_code_id' => $apAccount->id,
-                            'account'         => $apAccount,
+                            'account_code_id' => $effectiveApAccount->id,
+                            'account'         => $effectiveApAccount,
                             'running_balance' => 0.0,
-                            'description'     => 'AP Offset: ' . ($line->description ?: $line->purchaseEntry?->entry_no),
+                            'description'     => 'AP Offset (' . ($effectiveApAccount->code ?: 'AP') . '): ' . ($line->description ?: $line->purchaseEntry?->entry_no),
                         ]);
                     }
                 }

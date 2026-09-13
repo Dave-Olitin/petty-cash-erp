@@ -60,6 +60,7 @@ class PurchaseEntryResource extends Resource
     {
         return parent::getEloquentQuery()->with([
             'taxRegistration',
+            'supplierAccount',
             'refundAccount',
             'lines.debitAccount',
             'lines.creditAccount',
@@ -80,35 +81,20 @@ class PurchaseEntryResource extends Resource
                             ->label('Type')
                             ->options([
                                 'purchase' => '🛒 Purchase Bill — Normal supplier invoice (increases AP)',
-                                'return'   => '↩ Purchase Return — Refund / Return to Account Code',
+                                'return'   => '↩ Purchase Return — Credit Note / Supplier Return (reduces AP)',
                             ])
                             ->default('purchase')
                             ->required()
                             ->live()
                             ->native(false)
                             ->helperText(fn (Forms\Get $get) => $get('entry_type') === 'return'
-                                ? new \Illuminate\Support\HtmlString('<span class="text-xs text-green-600 font-semibold">✓ Records the supplier & dates for tracking, but routes the refund directly to an Account Code without reducing the Supplier AP balance.</span>')
+                                ? new \Illuminate\Support\HtmlString('<span class="text-xs text-green-600 font-semibold">✓ Debits the Supplier Account Code (reduces what is owed to the supplier).</span>')
                                 : new \Illuminate\Support\HtmlString('<span class="text-xs text-gray-500">Normal invoice from a vendor. Increases Accounts Payable until paid.</span>')
                             ),
                     ])->columns(1)->compact(),
 
                 // ── Purchase Bill / Return Details ─────────────────────────
                 Forms\Components\Section::make(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Purchase Return Details' : 'Purchase Bill Details')->schema([
-
-                    // ── Refund Account Code for PR (First Column when entry_type is return) ──
-                    Forms\Components\Select::make('refund_account_id')
-                        ->label('Refund Received In (Account Code)')
-                        ->relationship('refundAccount', 'code')
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
-                        ->searchable(['code', 'name'])
-                        ->preload()
-                        ->native(false)
-                        ->required(fn (Forms\Get $get) => $get('entry_type') === 'return')
-                        ->visible(fn (Forms\Get $get) => $get('entry_type') === 'return')
-                        ->helperText('Select the asset account that received the refunded funds (e.g. Cash on Hand, Petty Cash, or Bank).')
-                        ->default(function () {
-                            return \App\Models\AccountCode::where('code', 'like', '1001%')->orWhere('name', 'like', '%CASH ON HAND%')->value('id');
-                        }),
 
                     Forms\Components\Select::make('entity')
                         ->label('Entity')
@@ -120,22 +106,36 @@ class PurchaseEntryResource extends Resource
                     Forms\Components\Hidden::make('branch'),
 
                     Forms\Components\Select::make('tax_registration_id')
-                        ->label(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Supplier (Reference Only)' : 'Supplier')
+                        ->label('Supplier (Name & TRN)')
                         ->relationship('taxRegistration', 'name', fn (\Illuminate\Database\Eloquent\Builder $query) => $query->where('is_active', true))
                         ->getOptionLabelFromRecordUsing(fn ($record) => $record->name)
                         ->searchable()
                         ->preload()
                         ->live()
-                        ->helperText(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Preserved for vendor history — does NOT reduce supplier AP balance.' : null)
                         ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
                             if ($state) {
                                 $tax = \App\Models\TaxRegistration::find($state);
-                                if ($tax && $tax->payment_terms && $get('date')) {
-                                    $date = \Carbon\Carbon::parse($get('date'));
-                                    if (preg_match('/(\d+)/', $tax->payment_terms, $matches)) {
-                                        $set('due_date', $date->addDays((int) $matches[1])->format('Y-m-d'));
-                                    } else {
-                                        $set('due_date', $date->format('Y-m-d'));
+                                if ($tax) {
+                                    if ($tax->payment_terms && $get('date')) {
+                                        $date = \Carbon\Carbon::parse($get('date'));
+                                        if (preg_match('/(\d+)/', $tax->payment_terms, $matches)) {
+                                            $set('due_date', $date->addDays((int) $matches[1])->format('Y-m-d'));
+                                        } else {
+                                            $set('due_date', $date->format('Y-m-d'));
+                                        }
+                                    }
+
+                                    // Auto-link to matching Supplier Account Code (e.g. 2000-01.xx)
+                                    $matchingAcct = \App\Models\AccountCode::where('code', 'like', '2000-01.%')
+                                        ->where('name', $tax->name)
+                                        ->first();
+                                    if (!$matchingAcct) {
+                                        $matchingAcct = \App\Models\AccountCode::where('name', 'like', '%' . trim($tax->name) . '%')
+                                            ->where('type', 'liability')
+                                            ->first();
+                                    }
+                                    if ($matchingAcct) {
+                                        $set('supplier_account_id', $matchingAcct->id);
                                     }
                                 }
                             }
@@ -147,6 +147,43 @@ class PurchaseEntryResource extends Resource
                         ->createOptionUsing(function (array $data) {
                             $tax = \App\Models\TaxRegistration::create($data);
                             return $tax->id;
+                        }),
+
+                    Forms\Components\Select::make('supplier_account_id')
+                        ->label('Supplier Account Code (AP)')
+                        ->relationship('supplierAccount', 'code', function ($query) {
+                            return $query->where(function ($q) {
+                                $q->where('code', 'like', '2000-01%')
+                                  ->orWhere('type', 'liability');
+                            })->where('is_active', true)->orderBy('code');
+                        })
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
+                        ->searchable(['code', 'name'])
+                        ->preload()
+                        ->live()
+                        ->helperText('Supplier liability account in Chart of Accounts (e.g. 2000-01.xx).')
+                        ->afterStateHydrated(function ($component, $state, ?\App\Models\PurchaseEntry $record) {
+                            if ($record && empty($state) && $record->taxRegistration) {
+                                $matching = \App\Models\AccountCode::where('code', 'like', '2000-01.%')
+                                    ->where('name', $record->taxRegistration->name)
+                                    ->first();
+                                if ($matching) {
+                                    $component->state($matching->id);
+                                }
+                            }
+                        })
+                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                            if ($state && !$get('tax_registration_id')) {
+                                $acct = \App\Models\AccountCode::find($state);
+                                if ($acct) {
+                                    $tax = \App\Models\TaxRegistration::where('name', $acct->name)
+                                        ->orWhere('name', 'like', '%' . trim($acct->name) . '%')
+                                        ->first();
+                                    if ($tax) {
+                                        $set('tax_registration_id', $tax->id);
+                                    }
+                                }
+                            }
                         }),
 
                     // ── Dates ────────────────────────────────────────────
@@ -349,17 +386,31 @@ class PurchaseEntryResource extends Resource
                                         $isReturn = $get('entry_type') === 'return';
                                         $formattedSum = number_format($sum, 2);
 
-                                        if ($isReturn) {
-                                            $refundId = $get('refund_account_id');
-                                            $refundName = '1001 — Cash on Hand (Default)';
-                                            if ($refundId && $acct = \App\Models\AccountCode::find($refundId)) {
-                                                $refundName = "{$acct->code} — {$acct->name}";
+                                        // Resolve Supplier AP Account
+                                        $supplierAcctId = $get('supplier_account_id');
+                                        $supplierAcct = null;
+                                        if ($supplierAcctId) {
+                                            $supplierAcct = \App\Models\AccountCode::find($supplierAcctId);
+                                        } elseif ($taxId = $get('tax_registration_id')) {
+                                            $tax = \App\Models\TaxRegistration::find($taxId);
+                                            if ($tax) {
+                                                $supplierAcct = \App\Models\AccountCode::where('code', 'like', '2000-01.%')
+                                                    ->where('name', $tax->name)
+                                                    ->first();
+                                                if (!$supplierAcct) {
+                                                    $supplierAcct = \App\Models\AccountCode::where('name', 'like', '%' . trim($tax->name) . '%')
+                                                        ->where('type', 'liability')
+                                                        ->first();
+                                                }
                                             }
+                                        }
+                                        $apAccountLabel = $supplierAcct ? "{$supplierAcct->code} — {$supplierAcct->name}" : '2000-01 — Accounts Payable (Supplier)';
 
+                                        if ($isReturn) {
                                             return new \Illuminate\Support\HtmlString(
                                                 '<div class="rounded-xl border border-green-200 dark:border-green-900 bg-green-50/60 dark:bg-green-950/20 p-3 text-xs">' .
                                                 '<div class="flex items-center justify-between font-bold text-green-900 dark:text-green-300 uppercase tracking-wider mb-2">' .
-                                                    '<span>GL Impact Preview</span>' .
+                                                    '<span>GL Impact Preview (Purchase Return)</span>' .
                                                     '<span class="text-[10px] px-2 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 font-bold">BALANCED</span>' .
                                                 '</div>' .
                                                 '<table class="w-full text-left font-mono">' .
@@ -372,7 +423,7 @@ class PurchaseEntryResource extends Resource
                                                     '</thead>' .
                                                     '<tbody class="divide-y divide-green-100 dark:divide-green-900/40">' .
                                                         '<tr>' .
-                                                            '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mr-2">DR</span>' . e($refundName) . '</td>' .
+                                                            '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mr-2">DR</span>' . e($apAccountLabel) . '</td>' .
                                                             '<td class="py-1.5 text-right font-bold text-emerald-600 dark:text-emerald-400">' . $formattedSum . '</td>' .
                                                             '<td class="py-1.5 text-right text-gray-400">—</td>' .
                                                         '</tr>' .
@@ -383,7 +434,9 @@ class PurchaseEntryResource extends Resource
                                                         '</tr>' .
                                                     '</tbody>' .
                                                 '</table>' .
-                                                '<div class="mt-2 text-[11px] text-green-800 dark:text-green-300 font-sans">✓ Direct Refund: Asset received in cash/bank. Supplier AP balance is NOT reduced.</div>' .
+                                                '<div class="mt-2 text-[11px] text-green-800 dark:text-green-300 font-sans">' .
+                                                    '✓ Credit Note: Debits Supplier Account (' . e($apAccountLabel) . ') to reduce what is owed to the supplier.' .
+                                                '</div>' .
                                                 '</div>'
                                             );
                                         }
@@ -391,7 +444,7 @@ class PurchaseEntryResource extends Resource
                                         return new \Illuminate\Support\HtmlString(
                                             '<div class="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/20 p-3 text-xs">' .
                                             '<div class="flex items-center justify-between font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider mb-2">' .
-                                                '<span>GL Impact Preview</span>' .
+                                                '<span>GL Impact Preview (Purchase Bill)</span>' .
                                                 '<span class="text-[10px] px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold">BALANCED</span>' .
                                             '</div>' .
                                             '<table class="w-full text-left font-mono">' .
@@ -409,13 +462,13 @@ class PurchaseEntryResource extends Resource
                                                         '<td class="py-1.5 text-right text-gray-400">—</td>' .
                                                     '</tr>' .
                                                     '<tr>' .
-                                                        '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 mr-2">CR</span>Accounts Payable (Supplier)</td>' .
+                                                        '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 mr-2">CR</span>' . e($apAccountLabel) . '</td>' .
                                                         '<td class="py-1.5 text-right text-gray-400">—</td>' .
                                                         '<td class="py-1.5 text-right font-bold text-blue-600 dark:text-blue-400">' . $formattedSum . '</td>' .
                                                     '</tr>' .
                                                 '</tbody>' .
                                             '</table>' .
-                                            '<div class="mt-2 text-[11px] text-blue-800 dark:text-blue-300 font-sans">✓ Standard Vendor Bill: Increases Accounts Payable until settled via payment voucher.</div>' .
+                                            '<div class="mt-2 text-[11px] text-blue-800 dark:text-blue-300 font-sans">✓ Standard Vendor Bill: Credits Supplier AP Account (' . e($apAccountLabel) . '), increasing payable until settled via payment voucher.</div>' .
                                             '</div>'
                                         );
                                     }),
@@ -516,6 +569,7 @@ class PurchaseEntryResource extends Resource
 
                 Tables\Columns\TextColumn::make('taxRegistration.name')
                     ->label('Supplier')
+                    ->description(fn ($record) => $record->supplierAccount ? "{$record->supplierAccount->code} — {$record->supplierAccount->name}" : null)
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('user.name')
@@ -844,6 +898,10 @@ class PurchaseEntryResource extends Resource
                                 \Filament\Infolists\Components\TextEntry::make('taxRegistration.name')
                                     ->label('Supplier')
                                     ->placeholder('—'),
+                                \Filament\Infolists\Components\TextEntry::make('supplierAccount.name')
+                                    ->label('Supplier Account (AP)')
+                                    ->formatStateUsing(fn ($state, $record) => $record->supplierAccount ? "{$record->supplierAccount->code} — {$record->supplierAccount->name}" : '—')
+                                    ->placeholder('—'),
                                 \Filament\Infolists\Components\TextEntry::make('invoice_no')
                                     ->label('Invoice / Doc No')
                                     ->placeholder('—'),
@@ -855,12 +913,6 @@ class PurchaseEntryResource extends Resource
                                     ->date('M j, Y')
                                     ->placeholder('—')
                                     ->visible(fn ($record) => !$record->isReturn()),
-                                \Filament\Infolists\Components\TextEntry::make('refundAccount.name')
-                                    ->label('Refund Received In')
-                                    ->formatStateUsing(fn ($state, $record) => $record->refundAccount ? "{$record->refundAccount->code} — {$record->refundAccount->name}" : '1001 — Cash on Hand (Default)')
-                                    ->color('success')
-                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                    ->visible(fn ($record) => $record->isReturn()),
                                 \Filament\Infolists\Components\TextEntry::make('po_number')
                                     ->label('PO Number')
                                     ->placeholder('—'),
@@ -980,12 +1032,6 @@ class PurchaseEntryResource extends Resource
                                     ->money('AED')
                                     ->extraAttributes(['class' => 'text-xl font-mono font-bold text-red-600 pl-4 border-l-4 border-red-400'])
                                     ->visible(fn ($record) => !$record->isReturn()),
-                                \Filament\Infolists\Components\TextEntry::make('refund_account_display')
-                                    ->label('Refund Received In')
-                                    ->state(fn ($record) => $record->refundAccount ? "{$record->refundAccount->code} — {$record->refundAccount->name}" : '1001 — Cash on Hand (Default)')
-                                    ->badge()
-                                    ->color('success')
-                                    ->visible(fn ($record) => $record->isReturn()),
                             ])
                     ])->compact(),
 

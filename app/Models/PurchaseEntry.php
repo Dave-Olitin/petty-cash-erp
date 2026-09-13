@@ -32,6 +32,7 @@ class PurchaseEntry extends Model
         'entity',
         'branch',
         'tax_registration_id',
+        'supplier_account_id',
         'user_id',
         'date',
         'due_date',
@@ -132,6 +133,11 @@ class PurchaseEntry extends Model
     public function taxRegistration(): BelongsTo
     {
         return $this->belongsTo(TaxRegistration::class);
+    }
+
+    public function supplierAccount(): BelongsTo
+    {
+        return $this->belongsTo(AccountCode::class, 'supplier_account_id');
     }
 
     public function refundAccount(): BelongsTo
