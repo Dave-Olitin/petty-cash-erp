@@ -95,6 +95,21 @@ class PurchaseEntryResource extends Resource
                 // ── Purchase Bill / Return Details ─────────────────────────
                 Forms\Components\Section::make(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 'Purchase Return Details' : 'Purchase Bill Details')->schema([
 
+                    // ── Refund Account Code for PR (First Column when entry_type is return) ──
+                    Forms\Components\Select::make('refund_account_id')
+                        ->label('Refund Received In (Account Code)')
+                        ->relationship('refundAccount', 'code')
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
+                        ->searchable(['code', 'name'])
+                        ->preload()
+                        ->native(false)
+                        ->required(fn (Forms\Get $get) => $get('entry_type') === 'return')
+                        ->visible(fn (Forms\Get $get) => $get('entry_type') === 'return')
+                        ->helperText('Select the asset account that received the refunded funds (e.g. Cash on Hand, Petty Cash, or Bank).')
+                        ->default(function () {
+                            return \App\Models\AccountCode::where('code', 'like', '1001%')->orWhere('name', 'like', '%CASH ON HAND%')->value('id');
+                        }),
+
                     Forms\Components\Select::make('entity')
                         ->label('Entity')
                         ->options(\App\Models\VoucherTemplate::where('is_active', true)->pluck('company_name', 'company_name'))
@@ -185,22 +200,6 @@ class PurchaseEntryResource extends Resource
                                 '<span class="text-xs text-amber-500 italic">⚠ Payment terms "<strong>' . e($terms) . '</strong>" (e.g. COD / On Receipt) — due date defaulted to bill date. Override if needed.</span>'
                             );
                         }),
-
-                    // ── Refund Account Code for PR ────────────────────────
-                    Forms\Components\Select::make('refund_account_id')
-                        ->label('Refund Received In (Account Code)')
-                        ->relationship('refundAccount', 'code')
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
-                        ->searchable(['code', 'name'])
-                        ->preload()
-                        ->native(false)
-                        ->required(fn (Forms\Get $get) => $get('entry_type') === 'return')
-                        ->visible(fn (Forms\Get $get) => $get('entry_type') === 'return')
-                        ->helperText('Select the asset account that received the refunded funds (e.g. Cash on Hand, Petty Cash, or Bank).')
-                        ->default(function () {
-                            return \App\Models\AccountCode::where('code', 'like', '1001%')->orWhere('name', 'like', '%CASH ON HAND%')->value('id');
-                        })
-                        ->columnSpan(fn (Forms\Get $get) => $get('entry_type') === 'return' ? 2 : 1),
 
                     // Hidden fields kept for data integrity
                     Forms\Components\Hidden::make('supplier_name'),
