@@ -372,14 +372,14 @@ class PurchaseEntryResource extends Resource
                                                     '</thead>' .
                                                     '<tbody class="divide-y divide-green-100 dark:divide-green-900/40">' .
                                                         '<tr>' .
-                                                            '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1">DR</span>' . e($refundName) . '</td>' .
-                                                            '<td class="py-1 text-right font-bold text-emerald-600 dark:text-emerald-400">' . $formattedSum . '</td>' .
-                                                            '<td class="py-1 text-right text-gray-400">—</td>' .
+                                                            '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mr-2">DR</span>' . e($refundName) . '</td>' .
+                                                            '<td class="py-1.5 text-right font-bold text-emerald-600 dark:text-emerald-400">' . $formattedSum . '</td>' .
+                                                            '<td class="py-1.5 text-right text-gray-400">—</td>' .
                                                         '</tr>' .
                                                         '<tr>' .
-                                                            '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-blue-600 dark:text-blue-400 mr-1">CR</span>Item Account(s) (Cost Reversed)</td>' .
-                                                            '<td class="py-1 text-right text-gray-400">—</td>' .
-                                                            '<td class="py-1 text-right font-bold text-blue-600 dark:text-blue-400">' . $formattedSum . '</td>' .
+                                                            '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 mr-2">CR</span>Item Account(s) (Cost Reversed)</td>' .
+                                                            '<td class="py-1.5 text-right text-gray-400">—</td>' .
+                                                            '<td class="py-1.5 text-right font-bold text-blue-600 dark:text-blue-400">' . $formattedSum . '</td>' .
                                                         '</tr>' .
                                                     '</tbody>' .
                                                 '</table>' .
@@ -404,14 +404,14 @@ class PurchaseEntryResource extends Resource
                                                 '</thead>' .
                                                 '<tbody class="divide-y divide-blue-100 dark:divide-blue-900/40">' .
                                                     '<tr>' .
-                                                        '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1">DR</span>Item Account(s) (Expense/Asset)</td>' .
-                                                        '<td class="py-1 text-right font-bold text-emerald-600 dark:text-emerald-400">' . $formattedSum . '</td>' .
-                                                        '<td class="py-1 text-right text-gray-400">—</td>' .
+                                                        '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mr-2">DR</span>Item Account(s) (Expense/Asset)</td>' .
+                                                        '<td class="py-1.5 text-right font-bold text-emerald-600 dark:text-emerald-400">' . $formattedSum . '</td>' .
+                                                        '<td class="py-1.5 text-right text-gray-400">—</td>' .
                                                     '</tr>' .
                                                     '<tr>' .
-                                                        '<td class="py-1 text-gray-800 dark:text-gray-200 font-sans"><span class="font-mono font-bold text-blue-600 dark:text-blue-400 mr-1">CR</span>Accounts Payable (Supplier)</td>' .
-                                                        '<td class="py-1 text-right text-gray-400">—</td>' .
-                                                        '<td class="py-1 text-right font-bold text-blue-600 dark:text-blue-400">' . $formattedSum . '</td>' .
+                                                        '<td class="py-1.5 text-gray-800 dark:text-gray-200 font-sans"><span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-black bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 mr-2">CR</span>Accounts Payable (Supplier)</td>' .
+                                                        '<td class="py-1.5 text-right text-gray-400">—</td>' .
+                                                        '<td class="py-1.5 text-right font-bold text-blue-600 dark:text-blue-400">' . $formattedSum . '</td>' .
                                                     '</tr>' .
                                                 '</tbody>' .
                                             '</table>' .
