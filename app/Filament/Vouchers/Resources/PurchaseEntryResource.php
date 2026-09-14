@@ -267,81 +267,69 @@ class PurchaseEntryResource extends Resource
                         ->schema([
                             Forms\Components\Grid::make(12)
                                 ->schema([
-                                    // ── ROW 1: Context ─────────────────────
-                                    Forms\Components\Grid::make(12)
-                                        ->schema([
-                                            Forms\Components\TextInput::make('description')
-                                                ->label('Item Description')
-                                                ->placeholder('Nature of expense / item name...')
-                                                ->required()
-                                                ->columnSpan(8),
+                                    Forms\Components\TextInput::make('description')
+                                        ->label('Item Description')
+                                        ->placeholder('Nature of expense / item name...')
+                                        ->required()
+                                        ->columnSpan(['default' => 12, 'md' => 4]),
 
-                                            Forms\Components\Select::make('branch')
-                                                ->label('Branch')
-                                                ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
-                                                ->searchable()
-                                                ->preload()
-                                                ->placeholder('Select Branch')
-                                                ->columnSpan(4),
-                                        ])
-                                        ->columnSpanFull(),
+                                    Forms\Components\Select::make('branch')
+                                        ->label('Branch')
+                                        ->options(\App\Models\LedgerBranch::pluck('name', 'name'))
+                                        ->searchable()
+                                        ->preload()
+                                        ->placeholder('Select Branch')
+                                        ->columnSpan(['default' => 12, 'md' => 2]),
 
-                                    // ── ROW 2: Accounting ──────────────────
-                                    Forms\Components\Grid::make(12)
-                                        ->schema([
-                                            // ── Expense/Item Account ──────────────
-                                            Forms\Components\Select::make('debit_account_id')
-                                                ->relationship('debitAccount', 'code')
-                                                ->label(fn (Forms\Get $get) => $get('../../entry_type') === 'return' ? 'Account (Expense / Item Being Reversed)' : 'Account')
-                                                ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
-                                                ->searchable(['code', 'name'])
-                                                ->native(false)
-                                                ->required()
-                                                ->afterStateHydrated(function ($component, $state, ?\App\Models\PurchaseEntryLine $record) {
-                                                    if ($record && empty($state)) {
-                                                        if ($record->credit_account_id) {
-                                                            $component->state($record->credit_account_id);
-                                                        }
-                                                    }
-                                                })
-                                                ->columnSpan(8),
+                                    Forms\Components\Select::make('debit_account_id')
+                                        ->relationship('debitAccount', 'code')
+                                        ->label(fn (Forms\Get $get) => $get('../../entry_type') === 'return' ? 'Account (Reversal)' : 'Account Code')
+                                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->code . ' — ' . $record->name)
+                                        ->searchable(['code', 'name'])
+                                        ->native(false)
+                                        ->required()
+                                        ->afterStateHydrated(function ($component, $state, ?\App\Models\PurchaseEntryLine $record) {
+                                            if ($record && empty($state)) {
+                                                if ($record->credit_account_id) {
+                                                    $component->state($record->credit_account_id);
+                                                }
+                                            }
+                                        })
+                                        ->columnSpan(['default' => 12, 'md' => 4]),
 
-                                            // ── Simple, Clean Amount Field ───────
-                                            Forms\Components\TextInput::make('amount')
-                                                ->label(fn (Forms\Get $get) => $get('../../entry_type') === 'return' ? 'Return Amount (AED)' : 'Amount (AED)')
-                                                ->numeric()
-                                                ->required()
-                                                ->prefix('AED')
-                                                ->extraInputAttributes(['class' => 'font-bold text-primary-600'])
-                                                ->live(onBlur: true)
-                                                ->afterStateHydrated(function (Forms\Components\TextInput $component, $state, ?\App\Models\PurchaseEntryLine $record) {
-                                                    if ($record && ($state === null || (float)$state === 0.0)) {
-                                                        $amt = max((float)($record->debit ?? 0), (float)($record->credit ?? 0), (float)($record->total ?? 0), (float)($record->amount ?? 0));
-                                                        $component->state($amt);
-                                                    }
-                                                })
-                                                ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
-                                                    $val = (float) ($state ?? 0);
-                                                    $set('total', $val);
-                                                    $isReturn = $get('../../entry_type') === 'return';
-                                                    if ($isReturn) {
-                                                        $set('credit', $val);
-                                                        $set('debit', 0);
-                                                    } else {
-                                                        $set('debit', $val);
-                                                        $set('credit', 0);
-                                                    }
-                                                })
-                                                ->columnSpan(4),
+                                    Forms\Components\TextInput::make('amount')
+                                        ->label(fn (Forms\Get $get) => $get('../../entry_type') === 'return' ? 'Return Amount' : 'Amount')
+                                        ->numeric()
+                                        ->required()
+                                        ->prefix('AED')
+                                        ->extraInputAttributes(['class' => 'font-bold text-primary-600'])
+                                        ->live(onBlur: true)
+                                        ->afterStateHydrated(function (Forms\Components\TextInput $component, $state, ?\App\Models\PurchaseEntryLine $record) {
+                                            if ($record && ($state === null || (float)$state === 0.0)) {
+                                                $amt = max((float)($record->debit ?? 0), (float)($record->credit ?? 0), (float)($record->total ?? 0), (float)($record->amount ?? 0));
+                                                $component->state($amt);
+                                            }
+                                        })
+                                        ->afterStateUpdated(function (Forms\Get $get, Forms\Set $set, $state) {
+                                            $val = (float) ($state ?? 0);
+                                            $set('total', $val);
+                                            $isReturn = $get('../../entry_type') === 'return';
+                                            if ($isReturn) {
+                                                $set('credit', $val);
+                                                $set('debit', 0);
+                                            } else {
+                                                $set('debit', $val);
+                                                $set('credit', 0);
+                                            }
+                                        })
+                                        ->columnSpan(['default' => 12, 'md' => 2]),
 
-                                            // Hidden accounting columns synced automatically
-                                            Forms\Components\Hidden::make('debit')->default(0),
-                                            Forms\Components\Hidden::make('credit')->default(0),
-                                            Forms\Components\Hidden::make('total')->default(0),
-                                            Forms\Components\Hidden::make('tax_percentage')->default(0),
-                                            Forms\Components\Hidden::make('tax_amount')->default(0),
-                                        ])
-                                        ->columnSpanFull(),
+                                    // Hidden accounting columns synced automatically
+                                    Forms\Components\Hidden::make('debit')->default(0),
+                                    Forms\Components\Hidden::make('credit')->default(0),
+                                    Forms\Components\Hidden::make('total')->default(0),
+                                    Forms\Components\Hidden::make('tax_percentage')->default(0),
+                                    Forms\Components\Hidden::make('tax_amount')->default(0),
                                 ])
                         ])
                         ->itemLabel(fn (array $state): ?string => $state['description'] ?? 'New Line Item')
@@ -946,13 +934,8 @@ class PurchaseEntryResource extends Resource
                         \Filament\Infolists\Components\Grid::make(12)
                             ->extraAttributes(['class' => 'bg-gray-100 dark:bg-gray-800 p-2 border-b border-gray-200 dark:border-gray-700 rounded-t-lg'])
                             ->schema([
-                                \Filament\Infolists\Components\TextEntry::make('hdr_acct')
-                                    ->state('Account (Chart of Accounts)')
-                                    ->hiddenLabel()
-                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                    ->columnSpan(5),
                                 \Filament\Infolists\Components\TextEntry::make('hdr_desc')
-                                    ->state('Description / Item')
+                                    ->state('Item Description')
                                     ->hiddenLabel()
                                     ->weight(\Filament\Support\Enums\FontWeight::Bold)
                                     ->columnSpan(4),
@@ -960,7 +943,12 @@ class PurchaseEntryResource extends Resource
                                     ->state('Branch')
                                     ->hiddenLabel()
                                     ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                    ->columnSpan(1),
+                                    ->columnSpan(2),
+                                \Filament\Infolists\Components\TextEntry::make('hdr_acct')
+                                    ->state('Account Code')
+                                    ->hiddenLabel()
+                                    ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                    ->columnSpan(4),
                                 \Filament\Infolists\Components\TextEntry::make('hdr_amt')
                                     ->state('Amount')
                                     ->hiddenLabel()
@@ -974,14 +962,6 @@ class PurchaseEntryResource extends Resource
                             ->schema([
                                 \Filament\Infolists\Components\Grid::make(12)
                                     ->schema([
-                                        \Filament\Infolists\Components\TextEntry::make('account_display')
-                                            ->label('Account')
-                                            ->hiddenLabel()
-                                            ->state(function ($record) {
-                                                $acct = $record->debitAccount ?? $record->creditAccount;
-                                                return $acct ? "{$acct->code} — {$acct->name}" : '—';
-                                            })
-                                            ->columnSpan(5),
                                         \Filament\Infolists\Components\TextEntry::make('description')
                                             ->label('Description')
                                             ->hiddenLabel()
@@ -991,7 +971,15 @@ class PurchaseEntryResource extends Resource
                                             ->label('Branch')
                                             ->hiddenLabel()
                                             ->placeholder('—')
-                                            ->columnSpan(1),
+                                            ->columnSpan(2),
+                                        \Filament\Infolists\Components\TextEntry::make('account_display')
+                                            ->label('Account')
+                                            ->hiddenLabel()
+                                            ->state(function ($record) {
+                                                $acct = $record->debitAccount ?? $record->creditAccount;
+                                                return $acct ? "{$acct->code} — {$acct->name}" : '—';
+                                            })
+                                            ->columnSpan(4),
                                         \Filament\Infolists\Components\TextEntry::make('line_amount')
                                             ->label('Amount')
                                             ->hiddenLabel()
