@@ -137,4 +137,132 @@ class AccountCode extends Model
                   ->when($branch, fn($query) => $query->where('branch_code', $branch));
             }], 'credit');
     }
+
+    /**
+     * Clean and normalize supplier or company name for matching.
+     */
+    public static function normalizeSupplierName(?string $name): string
+    {
+        if (!$name) return '';
+        $n = mb_strtoupper($name, 'UTF-8');
+        $n = preg_replace('/[\.\,\-\_\/\(\)\'\"]+/', ' ', $n);
+        $suffixes = [
+            'SOLE PROPRIETORSHIP',
+            'L L C',
+            'LLC',
+            'LTD',
+            'LIMITED',
+            'FZE',
+            'FZCO',
+            'F Z E',
+            'ESTABLISHMENT',
+            'EST',
+            'CO',
+            'COMPANY',
+            'TRADING',
+            'TRAD',
+            'TR',
+            'MAT',
+            'MATERIALS',
+        ];
+        foreach ($suffixes as $s) {
+            $n = preg_replace('/\b' . preg_quote($s, '/') . '\b/u', ' ', $n);
+        }
+        return trim(preg_replace('/\s+/', ' ', $n));
+    }
+
+    /**
+     * Smart match a supplier name to its corresponding Chart of Accounts liability/AP code (e.g. 2000-01.xx).
+     */
+    public static function findMatchingSupplierAccount(?string $supplierName): ?self
+    {
+        if (empty($supplierName)) {
+            return null;
+        }
+
+        $apAccounts = static::where('code', 'like', '2000-01.%')
+            ->orWhere('type', 'liability')
+            ->get();
+
+        $cleanSupp = static::normalizeSupplierName($supplierName);
+
+        // 1. Exact match (case-insensitive)
+        foreach ($apAccounts as $acct) {
+            if (strcasecmp(trim($acct->name), trim($supplierName)) === 0) {
+                return $acct;
+            }
+        }
+
+        // 2. Normalized match (without legal suffixes & punctuation)
+        foreach ($apAccounts as $acct) {
+            $cleanAcct = static::normalizeSupplierName($acct->name);
+            if ($cleanAcct !== '' && $cleanSupp !== '' && $cleanAcct === $cleanSupp) {
+                return $acct;
+            }
+        }
+
+        // 3. Substring containment (prioritizing specific 2000-01.xx accounts)
+        $sortedAccts = $apAccounts->sortByDesc(fn($a) => str_starts_with($a->code, '2000-01.') ? 1 : 0);
+
+        foreach ($sortedAccts as $acct) {
+            $cleanAcct = static::normalizeSupplierName($acct->name);
+            if (strlen($cleanAcct) >= 4) {
+                if (str_contains($cleanSupp, $cleanAcct) || str_contains($cleanAcct, $cleanSupp)) {
+                    return $acct;
+                }
+            }
+        }
+
+        // 4. Prefix words matching (at least 2 words of length >= 3)
+        $suppWords = array_values(array_filter(explode(' ', $cleanSupp), fn($w) => strlen($w) >= 3));
+        if (count($suppWords) >= 2) {
+            $prefixTwo = $suppWords[0] . ' ' . $suppWords[1];
+            foreach ($sortedAccts as $acct) {
+                $cleanAcct = static::normalizeSupplierName($acct->name);
+                if (str_starts_with($cleanAcct, $prefixTwo)) {
+                    return $acct;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Smart match an account name to its corresponding TaxRegistration supplier.
+     */
+    public static function findMatchingTaxRegistration(?string $accountName): ?\App\Models\TaxRegistration
+    {
+        if (empty($accountName)) {
+            return null;
+        }
+
+        $taxRegistrations = \App\Models\TaxRegistration::all();
+        $cleanAcct = static::normalizeSupplierName($accountName);
+
+        // 1. Exact match
+        foreach ($taxRegistrations as $tax) {
+            if (strcasecmp(trim($tax->name), trim($accountName)) === 0) {
+                return $tax;
+            }
+        }
+
+        // 2. Normalized match
+        foreach ($taxRegistrations as $tax) {
+            $cleanTax = static::normalizeSupplierName($tax->name);
+            if ($cleanTax !== '' && $cleanAcct !== '' && $cleanTax === $cleanAcct) {
+                return $tax;
+            }
+        }
+
+        // 3. Substring containment
+        foreach ($taxRegistrations as $tax) {
+            $cleanTax = static::normalizeSupplierName($tax->name);
+            if (strlen($cleanAcct) >= 4 && (str_contains($cleanTax, $cleanAcct) || str_contains($cleanAcct, $cleanTax))) {
+                return $tax;
+            }
+        }
+
+        return null;
+    }
 }

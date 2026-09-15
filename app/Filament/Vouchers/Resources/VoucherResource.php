@@ -944,9 +944,36 @@ class VoucherResource extends Resource
                                         ->label('Date')
                                         ->required()
                                         ->native(false),
-                                    Forms\Components\TextInput::make('bank')
+                                    Forms\Components\Select::make('bank')
                                         ->label('Bank / Account')
-                                        ->maxLength(255)
+                                        ->searchable()
+                                        ->allowHtml()
+                                        ->getSearchResultsUsing(function (string $search, ?Voucher $record = null) {
+                                            $templateId = $record?->voucher_template_id;
+                                            return \App\Models\AccountCode::where('is_active', true)
+                                                ->where(function ($query) use ($search) {
+                                                    $query->where('code', 'like', "%{$search}%")
+                                                        ->orWhere('name', 'like', "%{$search}%");
+                                                })
+                                                ->when($templateId, function ($query) use ($templateId) {
+                                                    $query->where(function ($q) use ($templateId) {
+                                                        $q->whereNull('entity')
+                                                            ->orWhereJsonLength('entity', 0)
+                                                            ->orWhereJsonContains('entity', (string) $templateId)
+                                                            ->orWhereJsonContains('entity', (int) $templateId);
+                                                    });
+                                                })
+                                                ->limit(50)
+                                                ->get()
+                                                ->mapWithKeys(fn ($ac) => [$ac->code => "{$ac->code} — {$ac->name}"])
+                                                ->toArray();
+                                        })
+                                        ->getOptionLabelUsing(fn (?string $value) => $value
+                                            ? ($ac = \App\Models\AccountCode::where('code', $value)->first())
+                                                ? "{$ac->code} — {$ac->name}"
+                                                : $value
+                                            : null
+                                        )
                                         ->required(),
                                     Forms\Components\TextInput::make('amount')
                                         ->label('Amount')
