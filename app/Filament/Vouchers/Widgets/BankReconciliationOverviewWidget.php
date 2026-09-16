@@ -3,6 +3,7 @@
 namespace App\Filament\Vouchers\Widgets;
 
 use App\Models\AccountCode;
+use App\Models\BankPaymentLine;
 use App\Models\BankReconciliation;
 use App\Models\Voucher;
 use Filament\Notifications\Notification;
@@ -23,9 +24,8 @@ class BankReconciliationOverviewWidget extends Widget
      */
     public function getBankSummaryData(): array
     {
-        $paid = Voucher::whereIn('type', ['payment', 'bank_encashment'])
-            ->where('status', 'paid')
-            ->get(['id', 'bank', 'multiple_payments', 'amount', 'cheque_no', 'updated_at', 'date']);
+        $lines = BankPaymentLine::where('status', 'paid')
+            ->get(['id', 'bank', 'amount', 'cheque_no', 'updated_at', 'cheque_date']);
 
         $accountNames = AccountCode::pluck('name', 'code')->toArray();
 
@@ -36,31 +36,28 @@ class BankReconciliationOverviewWidget extends Widget
 
         $summary = [];
 
-        foreach ($paid as $v) {
-            $payments = $v->multiple_payments ?? [['bank' => $v->bank, 'amount' => $v->amount]];
-            foreach ($payments as $p) {
-                $bk = trim($p['bank'] ?? '');
-                if (empty($bk)) continue;
+        foreach ($lines as $line) {
+            $bk = trim($line->bank ?? '');
+            if (empty($bk)) continue;
 
-                if (!isset($summary[$bk])) {
-                    $summary[$bk] = [
-                        'bank'           => $bk,
-                        'account_name'   => $accountNames[$bk] ?? null,
-                        'is_valid_code'  => isset($accountNames[$bk]),
-                        'count'          => 0,
-                        'total'          => 0.0,
-                        'recon_sessions' => $reconByAccount[$bk] ?? collect(),
-                        'latest_date'    => null,
-                    ];
-                }
+            if (!isset($summary[$bk])) {
+                $summary[$bk] = [
+                    'bank'           => $bk,
+                    'account_name'   => $accountNames[$bk] ?? null,
+                    'is_valid_code'  => isset($accountNames[$bk]),
+                    'count'          => 0,
+                    'total'          => 0.0,
+                    'recon_sessions' => $reconByAccount[$bk] ?? collect(),
+                    'latest_date'    => null,
+                ];
+            }
 
-                $summary[$bk]['count']++;
-                $summary[$bk]['total'] += (float)($p['amount'] ?? $v->amount);
+            $summary[$bk]['count']++;
+            $summary[$bk]['total'] += (float)$line->amount;
 
-                $vDate = $v->date ? $v->date->format('Y-m-d') : null;
-                if ($vDate && ($summary[$bk]['latest_date'] === null || $vDate > $summary[$bk]['latest_date'])) {
-                    $summary[$bk]['latest_date'] = $vDate;
-                }
+            $vDate = $line->cheque_date ? $line->cheque_date->format('Y-m-d') : null;
+            if ($vDate && ($summary[$bk]['latest_date'] === null || $vDate > $summary[$bk]['latest_date'])) {
+                $summary[$bk]['latest_date'] = $vDate;
             }
         }
 

@@ -5,6 +5,7 @@ namespace App\Filament\Vouchers\Resources\BankReconciliationResource\Pages;
 use App\Filament\Vouchers\Resources\BankReconciliationResource;
 use App\Filament\Vouchers\Widgets\BankReconciliationOverviewWidget;
 use App\Models\AccountCode;
+use App\Models\BankPaymentLine;
 use App\Models\Voucher;
 use Filament\Actions;
 use Filament\Forms;
@@ -58,20 +59,11 @@ class ListBankReconciliations extends ListRecords
             ->pluck('code')
             ->toArray();
 
-        $unlinkedCount = Voucher::whereIn('type', ['payment', 'bank_encashment'])
-            ->where(function ($q) {
-                $q->whereNotNull('bank')->where('bank', '!=', '')
-                    ->orWhereNotNull('multiple_payments');
-            })
-            ->whereNotIn('bank', $validCodes)
-            ->count();
-
-        $linkedCount = Voucher::whereIn('type', ['payment', 'bank_encashment'])
-            ->whereIn('bank', $validCodes)
-            ->count();
+        $unlinkedCount = BankPaymentLine::whereNotIn('bank', $validCodes)->count();
+        $linkedCount = BankPaymentLine::whereIn('bank', $validCodes)->count();
 
         return [
-            'all' => Tab::make('All Bank Vouchers'),
+            'all' => Tab::make('All Bank Payments'),
 
             'linked' => Tab::make('✅ Linked to Bank Account')
                 ->badge($linkedCount)

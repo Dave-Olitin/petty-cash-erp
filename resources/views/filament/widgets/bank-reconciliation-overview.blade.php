@@ -68,7 +68,7 @@
                                 AED {{ number_format($bank['total'], 2) }}
                             </div>
                             <div style="font-size:10px;color:#6b7280;margin-top:2px;">
-                                {{ $bank['count'] }} voucher{{ $bank['count'] !== 1 ? 's' : '' }}
+                                {{ $bank['count'] }} payment{{ $bank['count'] !== 1 ? 's' : '' }}
                             </div>
                         </div>
                         @if ($isSelected)

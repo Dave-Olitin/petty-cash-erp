@@ -5,6 +5,7 @@ namespace App\Filament\Vouchers\Resources;
 use App\Filament\Vouchers\Resources\BankReconciliationResource\Pages;
 use App\Filament\Vouchers\Resources\VoucherResource;
 use App\Models\AccountCode;
+use App\Models\BankPaymentLine;
 use App\Models\Voucher;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -18,7 +19,7 @@ use Illuminate\Support\Str;
 
 class BankReconciliationResource extends Resource
 {
-    protected static ?string $model = Voucher::class;
+    protected static ?string $model = BankPaymentLine::class;
 
     protected static ?string $slug = 'bank-reconciliations';
 
@@ -37,16 +38,15 @@ class BankReconciliationResource extends Resource
         return false;
     }
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('voucher.view') ?? false;
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['floatReplenishment'])
-            ->whereIn('type', ['payment', 'bank_encashment'])
-            ->where(function ($q) {
-                $q->whereNotNull('bank')
-                    ->where('bank', '!=', '')
-                    ->orWhereNotNull('multiple_payments');
-            });
+            ->with(['voucher.floatReplenishment', 'floatReplenishment']);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -66,26 +66,8 @@ class BankReconciliationResource extends Resource
                     ->label('Bank Account / Code')
                     ->searchable()
                     ->sortable()
-                    ->formatStateUsing(function ($state, Voucher $record) use ($validAccountCodes) {
-                        $payments = $record->multiple_payments;
-
-                        // If multiple payments with multiple distinct banks
-                        if (!empty($payments) && is_array($payments) && count($payments) > 1) {
-                            $badges = [];
-                            foreach ($payments as $p) {
-                                $bk = trim($p['bank'] ?? '');
-                                $amt = isset($p['amount']) ? ' (AED ' . number_format((float) $p['amount'], 2) . ')' : '';
-                                if (isset($validAccountCodes[$bk])) {
-                                    $name = Str::limit($validAccountCodes[$bk], 22);
-                                    $badges[] = "<span style='display:inline-block;margin:1px 0;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:600;' title='{$validAccountCodes[$bk]}'>✓ {$bk} — {$name}{$amt}</span>";
-                                } else {
-                                    $badges[] = "<span style='display:inline-block;margin:1px 0;padding:2px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;'>⚠️ {$bk}{$amt}</span>";
-                                }
-                            }
-                            return new HtmlString(implode('<br>', $badges));
-                        }
-
-                        $bk = trim($state ?? ($payments[0]['bank'] ?? ($record->floatReplenishment?->account_code ?? '')));
+                    ->formatStateUsing(function ($state, BankPaymentLine $record) use ($validAccountCodes) {
+                        $bk = trim($state ?? '');
                         if (empty($bk)) {
                             return new HtmlString("<span style='color:#9ca3af;font-style:italic;'>Not Set</span>");
                         }
@@ -117,19 +99,12 @@ class BankReconciliationResource extends Resource
                 Tables\Columns\TextColumn::make('cheque_no')
                     ->label('Bank Ref / Cheque #')
                     ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->where(function ($q) use ($search) {
-                            $q->where('cheque_no', 'like', "%{$search}%")
-                              ->orWhere('multiple_payments', 'like', "%{$search}%")
-                              ->orWhereHas('floatReplenishment', function ($fq) use ($search) {
-                                  $fq->where('bank_reference', 'like', "%{$search}%");
-                              });
-                        });
+                        return $query->where('cheque_no', 'like', "%{$search}%")
+                            ->orWhere('voucher_number', 'like', "%{$search}%")
+                            ->orWhereHas('floatReplenishment', fn($fq) => $fq->where('bank_reference', 'like', "%{$search}%"));
                     })
-                    ->formatStateUsing(function ($state, Voucher $record) {
-                        if (!empty($record->multiple_payments) && is_array($record->multiple_payments) && count($record->multiple_payments) > 1) {
-                            $cheques = array_filter(array_column($record->multiple_payments, 'cheque_no'));
-                            return !empty($cheques) ? implode(', ', $cheques) : '—';
-                        }
+                    ->sortable()
+                    ->formatStateUsing(function ($state, BankPaymentLine $record) {
                         return $state ?: ($record->floatReplenishment?->bank_reference ?: '—');
                     }),
 
@@ -142,29 +117,21 @@ class BankReconciliationResource extends Resource
 
                 Tables\Columns\TextColumn::make('voucher_number')
                     ->label('Voucher #')
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->where(function ($q) use ($search) {
-                            $q->where('voucher_number', 'like', "%{$search}%")
-                              ->orWhereHas('floatReplenishment', function ($fq) use ($search) {
-                                  $fq->where('reference', 'like', "%{$search}%")
-                                     ->orWhere('bank_reference', 'like', "%{$search}%");
-                              });
-                        });
-                    })
+                    ->searchable()
                     ->sortable()
                     ->weight('bold')
                     ->color('primary')
-                    ->url(fn(Voucher $record) => VoucherResource::getUrl('view', ['record' => $record]))
+                    ->url(fn(BankPaymentLine $record) => $record->voucher ? VoucherResource::getUrl('view', ['record' => $record->voucher]) : null)
                     ->openUrlInNewTab()
-                    ->formatStateUsing(function ($state, Voucher $record) {
+                    ->formatStateUsing(function ($state, BankPaymentLine $record) {
                         $badge = '';
-                        if ($repl = $record->floatReplenishment) {
-                            $badge = "<br><span style='display:inline-block;margin-top:2px;padding:1px 6px;border-radius:4px;background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:600;' title='Fund Voucher (Float Replenishment)'>🏦 Fund: {$repl->reference}</span>";
+                        if ($repl = ($record->floatReplenishment ?: $record->voucher?->floatReplenishment)) {
+                            $badge .= "<br><span style='display:inline-block;margin-top:2px;padding:1px 6px;border-radius:4px;background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:600;' title='Fund Voucher (Float Replenishment)'>🏦 Fund: {$repl->reference}</span>";
                         }
                         return new HtmlString("<span style='font-weight:700;color:#2563eb;'>#{$state}</span>{$badge}");
                     }),
 
-                Tables\Columns\TextColumn::make('date')
+                Tables\Columns\TextColumn::make('cheque_date')
                     ->label('Date')
                     ->date('d M Y')
                     ->sortable(),
@@ -175,19 +142,16 @@ class BankReconciliationResource extends Resource
                     ->wrap()
                     ->limit(32),
 
-                Tables\Columns\TextColumn::make('status')
-                    ->label('Status')
+                Tables\Columns\TextColumn::make('split_status')
+                    ->label('Split Status')
                     ->badge()
-                    ->color(fn($state) => match ($state) {
-                        'paid' => 'success',
-                        'approved' => 'info',
-                        'rejected' => 'danger',
-                        'draft' => 'gray',
-                        default => 'warning',
-                    })
-                    ->formatStateUsing(fn($state) => ucfirst($state)),
+                    ->color(fn(BankPaymentLine $record): string => $record->is_split ? 'warning' : 'gray')
+                    ->alignCenter()
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->orderBy('is_split', $direction)->orderBy('payment_index', $direction);
+                    }),
             ])
-            ->defaultSort('date', 'desc')
+            ->defaultSort('cheque_date', 'desc')
             ->filters([
                 Tables\Filters\SelectFilter::make('bank')
                     ->label('Bank Account')
@@ -199,10 +163,9 @@ class BankReconciliationResource extends Resource
                         }
 
                         // Legacy free-text banks in database
-                        $legacy = Voucher::whereIn('type', ['payment', 'bank_encashment'])
+                        $legacy = BankPaymentLine::whereNotIn('bank', array_keys($validAccountCodes))
                             ->whereNotNull('bank')
                             ->where('bank', '!=', '')
-                            ->whereNotIn('bank', array_keys($validAccountCodes))
                             ->distinct()
                             ->pluck('bank')
                             ->toArray();
@@ -217,12 +180,10 @@ class BankReconciliationResource extends Resource
                     })
                     ->query(function (Builder $query, array $data) {
                         $val = $data['value'] ?? null;
-                        if (empty($val))
+                        if (empty($val)) {
                             return $query;
-                        return $query->where(function ($q) use ($val) {
-                            $q->where('bank', $val)
-                                ->orWhereRaw("JSON_SEARCH(multiple_payments, 'one', ?) IS NOT NULL", [$val]);
-                        });
+                        }
+                        return $query->where('bank', $val);
                     }),
 
                 Tables\Filters\SelectFilter::make('link_status')
@@ -233,8 +194,9 @@ class BankReconciliationResource extends Resource
                     ])
                     ->query(function (Builder $query, array $data) use ($validAccountCodes) {
                         $val = $data['value'] ?? null;
-                        if (empty($val))
+                        if (empty($val)) {
                             return $query;
+                        }
                         $validKeys = array_keys($validAccountCodes);
                         if ($val === 'linked') {
                             return $query->whereIn('bank', $validKeys);
@@ -243,6 +205,20 @@ class BankReconciliationResource extends Resource
                             return $query->whereNotIn('bank', $validKeys);
                         }
                         return $query;
+                    }),
+
+                Tables\Filters\SelectFilter::make('is_split')
+                    ->label('Split Status')
+                    ->options([
+                        '1' => 'Split Payments',
+                        '0' => 'Single Payments',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $val = $data['value'] ?? null;
+                        if ($val === null || $val === '') {
+                            return $query;
+                        }
+                        return $query->where('is_split', (bool) $val);
                     }),
 
                 Tables\Filters\SelectFilter::make('status')
@@ -259,27 +235,29 @@ class BankReconciliationResource extends Resource
                     ->label('Edit Bank')
                     ->icon('heroicon-m-pencil-square')
                     ->color('warning')
-                    ->modalHeading(fn(Voucher $record) => "Edit Payment References — Voucher #{$record->voucher_number}")
+                    ->modalHeading(fn(BankPaymentLine $record) => "Edit Payment References — Voucher #{$record->voucher_number}")
                     ->modalDescription('Update the bank accounts, cheque references, dates, and amounts for this voucher. Multiple banks and split payments are supported.')
                     ->modalWidth('4xl')
-                    ->fillForm(function (Voucher $record) {
-                        $payments = $record->multiple_payments;
+                    ->fillForm(function (BankPaymentLine $record) {
+                        $voucher = $record->voucher;
+                        $payments = $voucher?->multiple_payments;
                         if (empty($payments) || !is_array($payments)) {
                             $payments = [
                                 [
                                     'cheque_no'   => $record->cheque_no ?: ($record->floatReplenishment?->bank_reference ?? ''),
-                                    'cheque_date' => $record->cheque_date ? $record->cheque_date->format('Y-m-d') : ($record->date ? $record->date->format('Y-m-d') : now()->format('Y-m-d')),
+                                    'cheque_date' => $record->cheque_date ? $record->cheque_date->format('Y-m-d') : now()->format('Y-m-d'),
                                     'bank'        => $record->bank ?: ($record->floatReplenishment?->account_code ?? ''),
-                                    'amount'      => $record->amount,
+                                    'amount'      => $voucher?->amount ?? $record->amount,
                                 ]
                             ];
                         }
                         return [
-                            'voucher_amount'    => $record->amount,
+                            'voucher_amount'    => $voucher?->amount ?? $record->amount,
                             'multiple_payments' => $payments,
                         ];
                     })
-                    ->form(function (Voucher $record) {
+                    ->form(function (BankPaymentLine $record) {
+                        $voucher = $record->voucher;
                         $bankOptions = AccountCode::where('is_active', true)
                             ->where('code', 'like', '1%')
                             ->get()
@@ -290,7 +268,7 @@ class BankReconciliationResource extends Resource
 
                         return [
                             Forms\Components\Hidden::make('voucher_amount')
-                                ->default($record->amount),
+                                ->default($voucher?->amount ?? $record->amount),
 
                             Forms\Components\Repeater::make('multiple_payments')
                                 ->label('Payment References')
@@ -323,10 +301,10 @@ class BankReconciliationResource extends Resource
                                     ($state['cheque_no'] ?? 'Payment') . 
                                     ($state['amount'] ? ' — AED ' . number_format((float) $state['amount'], 2) : '')
                                 )
-                                ->hint(function (Forms\Get $get) use ($record) {
+                                ->hint(function (Forms\Get $get) use ($voucher, $record) {
                                     $payments = $get('multiple_payments') ?? [];
                                     $total = collect($payments)->sum(fn($p) => (float)($p['amount'] ?? 0));
-                                    $target = (float)($get('voucher_amount') ?: $record->amount);
+                                    $target = (float)($get('voucher_amount') ?: ($voucher?->amount ?? $record->amount));
 
                                     if (abs($total - $target) < 0.01) {
                                         return new HtmlString('<span style="color:#16a34a;font-weight:700;">✅ Total Matches (AED ' . number_format($total, 2) . ')</span>');
@@ -335,7 +313,12 @@ class BankReconciliationResource extends Resource
                                 }),
                         ];
                     })
-                    ->action(function (Voucher $record, array $data) {
+                    ->action(function (BankPaymentLine $record, array $data) {
+                        $voucher = $record->voucher;
+                        if (!$voucher) {
+                            return;
+                        }
+
                         $payments = $data['multiple_payments'] ?? [];
                         if (empty($payments)) {
                             Notification::make()
@@ -346,21 +329,21 @@ class BankReconciliationResource extends Resource
                         }
 
                         $total = collect($payments)->sum(fn($p) => (float)($p['amount'] ?? 0));
-                        if (abs($total - (float)$record->amount) >= 0.01) {
+                        if (abs($total - (float)$voucher->amount) >= 0.01) {
                             Notification::make()
                                 ->title('Amount Mismatch')
-                                ->body('The total of payment references (AED ' . number_format($total, 2) . ') must equal the voucher amount (AED ' . number_format((float)$record->amount, 2) . ').')
+                                ->body('The total of payment references (AED ' . number_format($total, 2) . ') must equal the voucher amount (AED ' . number_format((float)$voucher->amount, 2) . ').')
                                 ->danger()
                                 ->send();
                             return;
                         }
 
                         $firstPayment = $payments[0] ?? [];
-                        $primaryBank = $firstPayment['bank'] ?? $record->bank;
-                        $primaryCheque = $firstPayment['cheque_no'] ?? $record->cheque_no;
-                        $primaryDate = $firstPayment['cheque_date'] ?? $record->cheque_date;
+                        $primaryBank = $firstPayment['bank'] ?? $voucher->bank;
+                        $primaryCheque = $firstPayment['cheque_no'] ?? $voucher->cheque_no;
+                        $primaryDate = $firstPayment['cheque_date'] ?? $voucher->cheque_date;
 
-                        $record->update([
+                        $voucher->update([
                             'bank'              => $primaryBank,
                             'cheque_no'         => $primaryCheque,
                             'cheque_date'       => $primaryDate,
@@ -368,20 +351,20 @@ class BankReconciliationResource extends Resource
                         ]);
 
                         // Also sync to linked float replenishment if present
-                        if ($record->floatReplenishment) {
-                            $record->floatReplenishment->update([
+                        if ($voucher->floatReplenishment) {
+                            $voucher->floatReplenishment->update([
                                 'account_code'   => $primaryBank,
                                 'bank_reference' => $primaryCheque,
                             ]);
                         }
 
                         activity()
-                            ->performedOn($record)
+                            ->performedOn($voucher)
                             ->causedBy(auth()->user())
-                            ->log("Updated payment references / bank accounts for voucher #{$record->voucher_number}");
+                            ->log("Updated payment references / bank accounts for voucher #{$voucher->voucher_number}");
 
                         Notification::make()
-                            ->title("Payment references updated for #{$record->voucher_number}")
+                            ->title("Payment references updated for #{$voucher->voucher_number}")
                             ->success()
                             ->send();
                     }),
@@ -390,7 +373,7 @@ class BankReconciliationResource extends Resource
                     ->label('View')
                     ->icon('heroicon-m-eye')
                     ->color('gray')
-                    ->url(fn(Voucher $record) => VoucherResource::getUrl('view', ['record' => $record]))
+                    ->url(fn(BankPaymentLine $record) => $record->voucher ? VoucherResource::getUrl('view', ['record' => $record->voucher]) : null)
                     ->openUrlInNewTab(),
             ])
             ->bulkActions([
@@ -399,8 +382,8 @@ class BankReconciliationResource extends Resource
                     ->label('Assign Bank Account')
                     ->icon('heroicon-m-building-library')
                     ->color('warning')
-                    ->modalHeading('Assign Bank Account to Selected Vouchers')
-                    ->modalDescription('This will set the chosen Bank Account Code on all selected vouchers.')
+                    ->modalHeading('Assign Bank Account to Selected Payments')
+                    ->modalDescription('This will set the chosen Bank Account Code on all selected voucher payments.')
                     ->modalWidth('md')
                     ->form([
                         Forms\Components\Select::make('bank')
@@ -420,10 +403,11 @@ class BankReconciliationResource extends Resource
                     ])
                     ->action(function (Collection $records, array $data) {
                         $newBank = $data['bank'];
+                        $vouchers = $records->map(fn($r) => $r->voucher)->filter()->unique('id');
                         $count = 0;
 
-                        foreach ($records as $record) {
-                            $payments = $record->multiple_payments;
+                        foreach ($vouchers as $voucher) {
+                            $payments = $voucher->multiple_payments;
                             if (!empty($payments) && is_array($payments)) {
                                 foreach ($payments as &$p) {
                                     $p['bank'] = $newBank;
@@ -431,21 +415,21 @@ class BankReconciliationResource extends Resource
                             } else {
                                 $payments = [
                                     [
-                                        'bank' => $newBank,
-                                        'amount' => $record->amount,
-                                        'cheque_no' => $record->cheque_no,
-                                        'cheque_date' => $record->cheque_date,
+                                        'bank'        => $newBank,
+                                        'amount'      => $voucher->amount,
+                                        'cheque_no'   => $voucher->cheque_no,
+                                        'cheque_date' => $voucher->cheque_date,
                                     ]
                                 ];
                             }
 
-                            $record->update([
-                                'bank' => $newBank,
+                            $voucher->update([
+                                'bank'              => $newBank,
                                 'multiple_payments' => $payments,
                             ]);
 
                             activity()
-                                ->performedOn($record)
+                                ->performedOn($voucher)
                                 ->causedBy(auth()->user())
                                 ->log("Bulk assigned bank link to {$newBank}");
 
