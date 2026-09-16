@@ -66,8 +66,38 @@ class Dashboard extends \Filament\Pages\Dashboard
                         ->relationship('voucher', 'voucher_number', function ($query) {
                             return $query->where('type', 'payment')->where('status', 'paid');
                         })
+                        ->getOptionLabelFromRecordUsing(fn (\App\Models\Voucher $record) => 
+                            "{$record->voucher_number} — AED " . number_format((float) $record->amount, 2) . 
+                            ($record->cheque_no ? " (Cheque: {$record->cheque_no})" : '') .
+                            ($record->bank ? " [{$record->bank}]" : '')
+                        )
                         ->searchable()
                         ->preload()
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                            if (!$state) return;
+                            $voucher = \App\Models\Voucher::find($state);
+                            if (!$voucher) return;
+
+                            $cheque = $voucher->cheque_no;
+                            $bank = $voucher->bank;
+                            if (empty($cheque) && !empty($voucher->multiple_payments)) {
+                                $first = $voucher->multiple_payments[0] ?? [];
+                                $cheque = $first['cheque_no'] ?? null;
+                                if (empty($bank)) {
+                                    $bank = $first['bank'] ?? null;
+                                }
+                            }
+                            if ($cheque && !$get('bank_reference')) {
+                                $set('bank_reference', $cheque);
+                            }
+                            if ($bank && !$get('account_code')) {
+                                $set('account_code', $bank);
+                            }
+                            if (!$get('amount') && $voucher->amount) {
+                                $set('amount', $voucher->amount);
+                            }
+                        })
                         ->nullable(),
                     Forms\Components\TextInput::make('partial_amount')
                         ->label('Partial Amount (if applicable)')
@@ -94,8 +124,12 @@ class Dashboard extends \Filament\Pages\Dashboard
                                 : $value)
                             : null
                         )
-                        ->nullable()
-                        ->columnSpanFull(),
+                        ->nullable(),
+                    Forms\Components\TextInput::make('bank_reference')
+                        ->label('Bank Reference')
+                        ->placeholder('Cheque # / Bank Ref #')
+                        ->maxLength(100)
+                        ->nullable(),
                     Forms\Components\Textarea::make('remarks')
                         ->columnSpanFull(),
                     Forms\Components\Hidden::make('created_by')
@@ -234,6 +268,44 @@ class Dashboard extends \Filament\Pages\Dashboard
                                 'change_given' => 0,
                             ]
                         );
+                    }
+
+                    // Sync bank details to linked voucher or auto-create a bank encashment voucher so it appears in Bank Reconciliation
+                    if ($record->voucher_id) {
+                        $linkedVoucher = \App\Models\Voucher::find($record->voucher_id);
+                        if ($linkedVoucher) {
+                            $updates = [];
+                            if ($record->bank_reference && empty($linkedVoucher->cheque_no)) {
+                                $updates['cheque_no'] = $record->bank_reference;
+                            }
+                            if ($record->account_code && empty($linkedVoucher->bank)) {
+                                $updates['bank'] = $record->account_code;
+                            }
+                            if (!empty($updates)) {
+                                $linkedVoucher->update($updates);
+                            }
+                        }
+                    } elseif ($record->account_code || $record->bank_reference) {
+                        $prefix = 'BE';
+                        $year = date('Y');
+                        $count = \App\Models\Voucher::where('voucher_number', 'like', "{$prefix}-{$year}-%")->count() + 1;
+                        $vNum = sprintf('%s-%s-%04d', $prefix, $year, $count);
+
+                        $newVoucher = \App\Models\Voucher::create([
+                            'voucher_number'       => $vNum,
+                            'type'                 => 'bank_encashment',
+                            'date'                 => $record->date ?? now(),
+                            'amount'               => $record->amount,
+                            'bank'                 => $record->account_code,
+                            'cheque_no'            => $record->bank_reference,
+                            'payee'                => 'Petty Cash Float Replenishment',
+                            'description'          => 'Float Replenishment ' . $record->reference,
+                            'status'               => 'paid',
+                            'user_id'              => auth()->id(),
+                            'current_approval_step'=> 0,
+                        ]);
+
+                        $record->update(['voucher_id' => $newVoucher->id]);
                     }
                 })
                 ->successNotificationTitle('Fund Voucher recorded successfully'),

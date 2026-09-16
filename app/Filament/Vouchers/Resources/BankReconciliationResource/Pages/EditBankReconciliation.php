@@ -400,6 +400,7 @@ class EditBankReconciliation extends EditRecord
 
                             // Get paid payment vouchers for this account in period
                             $vouchers = Voucher::whereIn('type', ['payment', 'bank_encashment'])
+                                ->with(['floatReplenishment'])
                                 ->where('status', 'paid')
                                 ->whereNotIn('id', $matchedVoucherIds)
                                 ->where(function ($q) use ($record) {
@@ -425,13 +426,15 @@ class EditBankReconciliation extends EditRecord
                             $rows = '';
                             foreach ($vouchers as $v) {
                                 $payments = $v->multiple_payments ?? [['cheque_no' => $v->cheque_no, 'amount' => $v->amount, 'bank' => $v->bank]];
+                                $fundBadge = $v->floatReplenishment ? " <span style='font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;font-weight:600;'>Fund: {$v->floatReplenishment->reference}</span>" : '';
                                 foreach ($payments as $p) {
                                     if (($p['bank'] ?? '') !== $record->account_code) continue;
+                                    $ref = $p['cheque_no'] ?: ($v->floatReplenishment?->bank_reference ?: '—');
                                     $rows .= "
                                         <tr style='border-bottom:1px solid #f1f5f9;'>
-                                            <td style='padding:7px 10px;font-size:12px;font-family:monospace;font-weight:700;color:#6366f1;'>#{$v->voucher_number}</td>
+                                            <td style='padding:7px 10px;font-size:12px;font-family:monospace;font-weight:700;color:#6366f1;'>#{$v->voucher_number}{$fundBadge}</td>
                                             <td style='padding:7px 10px;font-size:12px;'>" . e($v->payee) . "</td>
-                                            <td style='padding:7px 10px;font-size:12px;font-family:monospace;'>" . e($p['cheque_no'] ?? '—') . "</td>
+                                            <td style='padding:7px 10px;font-size:12px;font-family:monospace;'>" . e($ref) . "</td>
                                             <td style='padding:7px 10px;font-size:12px;'>" . ($p['cheque_date'] ? \Carbon\Carbon::parse($p['cheque_date'])->format('d M Y') : '—') . "</td>
                                             <td style='padding:7px 10px;font-size:13px;font-weight:700;text-align:right;color:#b91c1c;'>AED " . number_format((float)($p['amount'] ?? $v->amount), 2) . "</td>
                                         </tr>
@@ -446,7 +449,7 @@ class EditBankReconciliation extends EditRecord
                                             <tr>
                                                 <th style='padding:8px 10px;text-align:left;font-size:11px;color:#92400e;text-transform:uppercase;'>Voucher #</th>
                                                 <th style='padding:8px 10px;text-align:left;font-size:11px;color:#92400e;text-transform:uppercase;'>Payee</th>
-                                                <th style='padding:8px 10px;text-align:left;font-size:11px;color:#92400e;text-transform:uppercase;'>Cheque #</th>
+                                                <th style='padding:8px 10px;text-align:left;font-size:11px;color:#92400e;text-transform:uppercase;'>Bank Ref / Cheque #</th>
                                                 <th style='padding:8px 10px;text-align:left;font-size:11px;color:#92400e;text-transform:uppercase;'>Date</th>
                                                 <th style='padding:8px 10px;text-align:right;font-size:11px;color:#92400e;text-transform:uppercase;'>Amount</th>
                                             </tr>

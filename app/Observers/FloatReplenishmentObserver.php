@@ -65,5 +65,64 @@ class FloatReplenishmentObserver
                 'uploaded_by' => auth()->id() ?? $replenishment->created_by,
             ]);
         }
+
+        // Ensure this Fund Voucher (Float Replenishment) is connected to Bank Reconciliation
+        $this->syncWithVouchers($replenishment);
+    }
+
+    /**
+     * Connect the float replenishment to Bank Reconciliation:
+     * 1. If a payment voucher is linked, sync bank & cheque_no.
+     * 2. If no voucher is linked, but a bank account is specified, auto-create a paid bank_encashment voucher.
+     */
+    public function syncWithVouchers(FloatReplenishment $replenishment): void
+    {
+        if ($replenishment->voucher_id) {
+            $voucher = \App\Models\Voucher::find($replenishment->voucher_id);
+            if ($voucher) {
+                $updates = [];
+                if ($replenishment->bank_reference && $voucher->cheque_no !== $replenishment->bank_reference) {
+                    $updates['cheque_no'] = $replenishment->bank_reference;
+                }
+                if ($replenishment->account_code && $voucher->bank !== $replenishment->account_code) {
+                    $updates['bank'] = $replenishment->account_code;
+                }
+                if (!empty($updates)) {
+                    $voucher->update($updates);
+                }
+            }
+        } elseif ($replenishment->account_code || $replenishment->bank_reference) {
+            $voucher = \App\Models\Voucher::where('voucher_number', $replenishment->reference)->first();
+            if (!$voucher) {
+                $voucher = \App\Models\Voucher::create([
+                    'voucher_number'        => $replenishment->reference,
+                    'type'                  => 'bank_encashment',
+                    'date'                  => $replenishment->date ?? now(),
+                    'amount'                => $replenishment->amount,
+                    'bank'                  => $replenishment->account_code,
+                    'cheque_no'             => $replenishment->bank_reference,
+                    'payee'                 => 'Petty Cash Float Replenishment',
+                    'description'           => $replenishment->remarks ?: ('Float Replenishment ' . $replenishment->reference),
+                    'status'                => 'paid',
+                    'user_id'               => $replenishment->created_by ?? 1,
+                    'current_approval_step' => 0,
+                ]);
+            } else {
+                $voucher->update([
+                    'amount'      => $replenishment->amount,
+                    'bank'        => $replenishment->account_code,
+                    'cheque_no'   => $replenishment->bank_reference,
+                    'date'        => $replenishment->date ?? now(),
+                    'description' => $replenishment->remarks ?: ('Float Replenishment ' . $replenishment->reference),
+                ]);
+            }
+
+            if ($replenishment->voucher_id !== $voucher->id) {
+                \Illuminate\Support\Facades\DB::table('float_replenishments')
+                    ->where('id', $replenishment->id)
+                    ->update(['voucher_id' => $voucher->id]);
+                $replenishment->voucher_id = $voucher->id;
+            }
+        }
     }
 }

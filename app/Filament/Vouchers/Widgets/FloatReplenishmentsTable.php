@@ -23,7 +23,7 @@ class FloatReplenishmentsTable extends BaseWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(FloatReplenishment::query()->with('creator'))
+            ->query(FloatReplenishment::query()->with(['creator', 'voucher']))
             ->heading('Head Office Float Replenishments')
             ->description('Manage deposits and transfers into the main petty cash float.')
             ->defaultSort('date', 'desc')
@@ -33,9 +33,18 @@ class FloatReplenishmentsTable extends BaseWidget
                     ->sortable(),
                 Tables\Columns\TextColumn::make('reference')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('bank_reference')
+                    ->label('Bank Ref')
+                    ->searchable()
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('amount')
                     ->money('aed', true)
                     ->sortable(),
+                Tables\Columns\TextColumn::make('voucher.voucher_number')
+                    ->label('Linked Voucher')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('creator.name')
                     ->label('Recorded By')
                     ->sortable(),
@@ -56,7 +65,9 @@ class FloatReplenishmentsTable extends BaseWidget
                             return [
                                 'Date' => \Carbon\Carbon::parse($r->date)->format('Y-m-d'),
                                 'Reference' => $r->reference,
+                                'Bank Reference' => $r->bank_reference,
                                 'Amount (AED)' => $r->amount,
+                                'Linked Voucher' => $r->voucher?->voucher_number,
                                 'Recorded By' => $r->creator?->name,
                                 'Remarks' => $r->remarks,
                                 'Created At' => $r->created_at->format('Y-m-d H:i:s'),
@@ -64,7 +75,7 @@ class FloatReplenishmentsTable extends BaseWidget
                             ];
                         })->toArray();
                         
-                        array_unshift($exportData, ['Date', 'Reference', 'Amount (AED)', 'Recorded By', 'Remarks', 'Created At', 'Attachments']);
+                        array_unshift($exportData, ['Date', 'Reference', 'Bank Reference', 'Amount (AED)', 'Linked Voucher', 'Recorded By', 'Remarks', 'Created At', 'Attachments']);
 
                         return response()->streamDownload(function () use ($exportData) {
                             $handle = fopen('php://output', 'w');
@@ -97,8 +108,35 @@ class FloatReplenishmentsTable extends BaseWidget
                             ->relationship('voucher', 'voucher_number', function ($query) {
                                 return $query->where('type', 'payment')->where('status', 'paid');
                             })
+                            ->getOptionLabelFromRecordUsing(fn (\App\Models\Voucher $record) => 
+                                "{$record->voucher_number} — AED " . number_format((float) $record->amount, 2) . 
+                                ($record->cheque_no ? " (Cheque: {$record->cheque_no})" : '') .
+                                ($record->bank ? " [{$record->bank}]" : '')
+                            )
                             ->searchable()
                             ->preload()
+                            ->live()
+                            ->afterStateUpdated(function ($state, Forms\Set $set, Forms\Get $get) {
+                                if (!$state) return;
+                                $voucher = \App\Models\Voucher::find($state);
+                                if (!$voucher) return;
+
+                                $cheque = $voucher->cheque_no;
+                                $bank = $voucher->bank;
+                                if (empty($cheque) && !empty($voucher->multiple_payments)) {
+                                    $first = $voucher->multiple_payments[0] ?? [];
+                                    $cheque = $first['cheque_no'] ?? null;
+                                    if (empty($bank)) {
+                                        $bank = $first['bank'] ?? null;
+                                    }
+                                }
+                                if ($cheque && !$get('bank_reference')) {
+                                    $set('bank_reference', $cheque);
+                                }
+                                if ($bank && !$get('account_code')) {
+                                    $set('account_code', $bank);
+                                }
+                            })
                             ->nullable(),
                         Forms\Components\TextInput::make('partial_amount')
                             ->label('Partial Amount (if applicable)')
@@ -125,11 +163,32 @@ class FloatReplenishmentsTable extends BaseWidget
                                     : $value)
                                 : null
                             )
-                            ->nullable()
-                            ->columnSpanFull(),
+                            ->nullable(),
+                        Forms\Components\TextInput::make('bank_reference')
+                            ->label('Bank Reference')
+                            ->placeholder('Cheque # / Bank Ref #')
+                            ->maxLength(100)
+                            ->nullable(),
                         Forms\Components\Textarea::make('remarks')
                             ->columnSpanFull(),
                     ])
+                    ->after(function (\App\Models\FloatReplenishment $record) {
+                        if ($record->voucher_id) {
+                            $linkedVoucher = \App\Models\Voucher::find($record->voucher_id);
+                            if ($linkedVoucher) {
+                                $updates = [];
+                                if ($record->bank_reference && $linkedVoucher->cheque_no !== $record->bank_reference) {
+                                    $updates['cheque_no'] = $record->bank_reference;
+                                }
+                                if ($record->account_code && $linkedVoucher->bank !== $record->account_code) {
+                                    $updates['bank'] = $record->account_code;
+                                }
+                                if (!empty($updates)) {
+                                    $linkedVoucher->update($updates);
+                                }
+                            }
+                        }
+                    })
                     ->successNotificationTitle('Replenishment updated successfully'),
                 Tables\Actions\DeleteAction::make(),
                 Tables\Actions\Action::make('update_attachments')

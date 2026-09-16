@@ -24,6 +24,7 @@ class FloatReplenishment extends Model
         'voucher_id',
         'partial_amount',
         'account_code',
+        'bank_reference',
     ];
 
     protected function casts(): array

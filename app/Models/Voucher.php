@@ -126,6 +126,16 @@ class Voucher extends Model implements HasMedia
         return $this->hasMany(Voucher::class, 'parent_voucher_id');
     }
 
+    public function floatReplenishments(): HasMany
+    {
+        return $this->hasMany(FloatReplenishment::class, 'voucher_id');
+    }
+
+    public function floatReplenishment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(FloatReplenishment::class, 'voucher_id')->latestOfMany();
+    }
+
 
     public function getTotalDebitAttribute(): float
     {

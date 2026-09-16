@@ -18,11 +18,11 @@ class ListBankReconciliations extends ListRecords
 {
     protected static string $resource = BankReconciliationResource::class;
 
-    protected static ?string $title = 'Bank Accounts & Voucher Logs';
+    protected static ?string $title = 'Banks Reconciliations';
 
     public function getSubheading(): ?string
     {
-        return 'Review payment vouchers linked to bank accounts, check account codes, and manually edit bank assignments.';
+        return '';
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -31,24 +31,24 @@ class ListBankReconciliations extends ListRecords
     // ──────────────────────────────────────────────────────────────────────
     protected static array $legacyBankMapping = [
         // TRIMMERS / TG → ADCB account 1010-02
-        'trimmers adcb'                    => '1010-02',
-        'tg adcb'                          => '1010-02',
+        'trimmers adcb' => '1010-02',
+        'tg adcb' => '1010-02',
 
         // iCook → ENBD account 100-02
-        'icook enbd'                       => '100-02',
-        'ic enbd'                          => '100-02',
+        'icook enbd' => '100-02',
+        'ic enbd' => '100-02',
 
         // Simply Beauty → FAB account 1010-05
-        'simply beauty fab'                => '1010-05',
-        'sb fab'                           => '1010-05',
-        'fab'                              => '1010-05',
+        'simply beauty fab' => '1010-05',
+        'sb fab' => '1010-05',
+        'fab' => '1010-05',
 
         // Split entry (had two banks in one field) → ambiguous, skip
         'trimmers adcb / simply beauty fab' => null,
 
         // Test/junk data → can't auto-map
-        'aa'                               => null,
-        'aaa'                              => null,
+        'aa' => null,
+        'aaa' => null,
     ];
 
     public function getTabs(): array
@@ -61,7 +61,7 @@ class ListBankReconciliations extends ListRecords
         $unlinkedCount = Voucher::whereIn('type', ['payment', 'bank_encashment'])
             ->where(function ($q) {
                 $q->whereNotNull('bank')->where('bank', '!=', '')
-                  ->orWhereNotNull('multiple_payments');
+                    ->orWhereNotNull('multiple_payments');
             })
             ->whereNotIn('bank', $validCodes)
             ->count();
@@ -76,12 +76,12 @@ class ListBankReconciliations extends ListRecords
             'linked' => Tab::make('✅ Linked to Bank Account')
                 ->badge($linkedCount)
                 ->badgeColor('success')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('bank', $validCodes)),
+                ->modifyQueryUsing(fn(Builder $query) => $query->whereIn('bank', $validCodes)),
 
             'unlinked' => Tab::make('⚠️ Needs Link (Legacy Free Text)')
                 ->badge($unlinkedCount)
                 ->badgeColor('warning')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotIn('bank', $validCodes)),
+                ->modifyQueryUsing(fn(Builder $query) => $query->whereNotIn('bank', $validCodes)),
         ];
     }
 
@@ -90,8 +90,7 @@ class ListBankReconciliations extends ListRecords
         return [
             // ── Batch Fix Legacy Bank Names (Admin only) ───────────────────
             Actions\Action::make('fix_legacy_banks')
-                ->label('Batch Fix Legacy Bank Names')
-                ->icon('heroicon-m-wrench-screwdriver')
+                ->label('Bank Reconcile')
                 ->color('warning')
                 ->modalHeading('Batch Fix Legacy Bank Names in Payment Vouchers')
                 ->modalWidth('4xl')
@@ -109,13 +108,14 @@ class ListBankReconciliations extends ListRecords
                         $payments = $v->multiple_payments ?? [['bank' => $v->bank]];
                         foreach ($payments as $p) {
                             $bk = trim($p['bank'] ?? '');
-                            if (empty($bk) || in_array($bk, $validCodes)) continue;
+                            if (empty($bk) || in_array($bk, $validCodes))
+                                continue;
                             $normalized = strtolower($bk);
                             if (!isset($freeTextGroups[$bk])) {
                                 $suggestedCode = static::$legacyBankMapping[$normalized] ?? null;
                                 $freeTextGroups[$bk] = [
-                                    'count'          => 0,
-                                    'suggested'      => $suggestedCode,
+                                    'count' => 0,
+                                    'suggested' => $suggestedCode,
                                     'suggested_name' => $suggestedCode ? ($accountNames[$suggestedCode] ?? '') : null,
                                 ];
                             }
@@ -141,7 +141,7 @@ class ListBankReconciliations extends ListRecords
                     }
 
                     $mappableCount = count(array_filter($freeTextGroups, fn($g) => $g['suggested'] !== null));
-                    $skipCount     = count(array_filter($freeTextGroups, fn($g) => $g['suggested'] === null));
+                    $skipCount = count(array_filter($freeTextGroups, fn($g) => $g['suggested'] === null));
 
                     return [
                         Forms\Components\Placeholder::make('mapping_table')
@@ -189,7 +189,7 @@ class ListBankReconciliations extends ListRecords
                                 $bk = trim($p['bank'] ?? '');
                                 if (!empty($bk) && !in_array($bk, $validCodes)) {
                                     $normalized = strtolower($bk);
-                                    $corrected  = static::$legacyBankMapping[$normalized] ?? null;
+                                    $corrected = static::$legacyBankMapping[$normalized] ?? null;
                                     if ($corrected) {
                                         $p['bank'] = $corrected;
                                         $changed = true;
@@ -207,14 +207,14 @@ class ListBankReconciliations extends ListRecords
                                     ->where('id', $v->id)
                                     ->update([
                                         'multiple_payments' => json_encode($newPayments),
-                                        'bank'              => $firstBankFixed,
+                                        'bank' => $firstBankFixed,
                                     ]);
                             }
                         } else {
                             $bk = trim($v->bank ?? '');
                             if (!empty($bk) && !in_array($bk, $validCodes)) {
                                 $normalized = strtolower($bk);
-                                $corrected  = static::$legacyBankMapping[$normalized] ?? null;
+                                $corrected = static::$legacyBankMapping[$normalized] ?? null;
                                 if ($corrected) {
                                     \Illuminate\Support\Facades\DB::table('vouchers')
                                         ->where('id', $v->id)
@@ -232,7 +232,7 @@ class ListBankReconciliations extends ListRecords
                         ->success()
                         ->send();
                 })
-                ->visible(fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin'])),
+                ->visible(fn() => auth()->user()->hasAnyRole(['Super Admin', 'Admin'])),
         ];
     }
 

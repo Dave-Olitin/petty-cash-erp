@@ -5,8 +5,9 @@ namespace App\Filament\Vouchers\Widgets;
 use App\Models\AccountCode;
 use App\Models\BankReconciliation;
 use App\Models\Voucher;
+use Filament\Notifications\Notification;
 use Filament\Widgets\Widget;
-use Illuminate\Support\HtmlString;
+use Illuminate\Support\Facades\DB;
 
 class BankReconciliationOverviewWidget extends Widget
 {
@@ -72,6 +73,89 @@ class BankReconciliationOverviewWidget extends Widget
         });
 
         return array_values($summary);
+    }
+
+    /**
+     * Get all active account codes that are bank/cash accounts (code starts with 1)
+     * as an associative array [code => "code — name"] for the dropdown.
+     */
+    public function getValidAccountCodes(): array
+    {
+        return AccountCode::where('is_active', true)
+            ->where('code', 'like', '1%')
+            ->orderBy('code')
+            ->get(['code', 'name'])
+            ->mapWithKeys(fn ($ac) => [$ac->code => $ac->code . ' — ' . $ac->name])
+            ->toArray();
+    }
+
+    /**
+     * Livewire action: assign all vouchers with the given legacy bank name
+     * to the selected account code.
+     */
+    public function assignLegacyBank(string $legacyBank, string $newCode): void
+    {
+        if (empty($newCode) || empty($legacyBank)) {
+            Notification::make()
+                ->title('Please select an account code.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        // Validate the code exists
+        $exists = AccountCode::where('code', $newCode)->exists();
+        if (!$exists) {
+            Notification::make()
+                ->title('Invalid account code selected.')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $paid = Voucher::whereIn('type', ['payment', 'bank_encashment'])
+            ->where('status', 'paid')
+            ->get(['id', 'bank', 'multiple_payments']);
+
+        $fixed = 0;
+
+        foreach ($paid as $v) {
+            $payments = $v->multiple_payments ?? null;
+
+            if ($payments !== null) {
+                $changed = false;
+                $newPayments = [];
+                foreach ($payments as $p) {
+                    $bk = trim($p['bank'] ?? '');
+                    if ($bk === $legacyBank) {
+                        $p['bank'] = $newCode;
+                        $changed = true;
+                        $fixed++;
+                    }
+                    $newPayments[] = $p;
+                }
+                if ($changed) {
+                    DB::table('vouchers')
+                        ->where('id', $v->id)
+                        ->update([
+                            'multiple_payments' => json_encode($newPayments),
+                            'bank'              => $newPayments[0]['bank'] ?? $newCode,
+                        ]);
+                }
+            } else {
+                if (trim($v->bank ?? '') === $legacyBank) {
+                    DB::table('vouchers')
+                        ->where('id', $v->id)
+                        ->update(['bank' => $newCode]);
+                    $fixed++;
+                }
+            }
+        }
+
+        Notification::make()
+            ->title("✅ {$fixed} voucher(s) reassigned to {$newCode}")
+            ->success()
+            ->send();
     }
 
     public function getCreateUrl(string $accountCode): string

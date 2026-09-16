@@ -140,6 +140,12 @@
         <td>{{ $replenishment->account_code }}</td>
     </tr>
     @endif
+    @if($replenishment->bank_reference)
+    <tr>
+        <th>BANK REFERENCE</th>
+        <td>{{ $replenishment->bank_reference }}</td>
+    </tr>
+    @endif
     <tr>
         <th>REMARKS / DESCRIPTION</th>
         <td>{!! nl2br(e($replenishment->remarks ?: 'Head Office Float Funding')) !!}</td>
