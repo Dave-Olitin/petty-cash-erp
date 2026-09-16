@@ -95,9 +95,8 @@ class ListBankReconciliations extends ListRecords
                 ->modalHeading('Batch Fix Legacy Bank Names in Payment Vouchers')
                 ->modalWidth('4xl')
                 ->modalSubmitActionLabel('Apply All Corrections')
-                ->form(function () {
+                ->mountUsing(function (Forms\Form $form) {
                     $validCodes = AccountCode::pluck('code')->toArray();
-                    $accountNames = AccountCode::pluck('name', 'code')->toArray();
 
                     $paid = Voucher::whereIn('type', ['payment', 'bank_encashment'])
                         ->where('status', 'paid')
@@ -108,79 +107,135 @@ class ListBankReconciliations extends ListRecords
                         $payments = $v->multiple_payments ?? [['bank' => $v->bank]];
                         foreach ($payments as $p) {
                             $bk = trim($p['bank'] ?? '');
-                            if (empty($bk) || in_array($bk, $validCodes))
-                                continue;
+                            if (empty($bk) || in_array($bk, $validCodes)) continue;
                             $normalized = strtolower($bk);
                             if (!isset($freeTextGroups[$bk])) {
                                 $suggestedCode = static::$legacyBankMapping[$normalized] ?? null;
                                 $freeTextGroups[$bk] = [
-                                    'count' => 0,
-                                    'suggested' => $suggestedCode,
-                                    'suggested_name' => $suggestedCode ? ($accountNames[$suggestedCode] ?? '') : null,
+                                    'count'   => 0,
+                                    'suggest' => $suggestedCode,
                                 ];
                             }
                             $freeTextGroups[$bk]['count']++;
                         }
                     }
 
-                    $tableRows = '';
-                    foreach ($freeTextGroups as $name => $info) {
-                        $suggested = $info['suggested'];
-                        $rowBg = $suggested ? '#f0fdf4' : '#fef9c3';
-                        $status = $suggested
-                            ? "✅ → <strong>{$suggested}</strong> — " . e($info['suggested_name'])
-                            : '⚠️ Cannot auto-map — will be skipped (can edit manually)';
-
-                        $tableRows .= "
-                            <tr style='background:{$rowBg};border-bottom:1px solid #e2e8f0;'>
-                                <td style='padding:8px 12px;font-family:monospace;font-size:13px;font-weight:600;color:#be185d;'>" . e($name) . "</td>
-                                <td style='padding:8px 12px;font-size:13px;text-align:center;'><strong>{$info['count']}</strong></td>
-                                <td style='padding:8px 12px;font-size:13px;'>{$status}</td>
-                            </tr>
-                        ";
+                    // Pre-fill the repeater rows
+                    $rows = [];
+                    foreach ($freeTextGroups as $legacyName => $info) {
+                        $rows[] = [
+                            'legacy_name'    => $legacyName,
+                            'voucher_count'  => $info['count'],
+                            'assign_to'      => $info['suggest'] ?? '',
+                            'is_auto_mapped' => !empty($info['suggest']) ? '1' : '0',
+                        ];
                     }
 
-                    $mappableCount = count(array_filter($freeTextGroups, fn($g) => $g['suggested'] !== null));
-                    $skipCount = count(array_filter($freeTextGroups, fn($g) => $g['suggested'] === null));
+                    $form->fill(['mappings' => $rows]);
+                })
+                ->form(function () {
+                    $bankOptions = AccountCode::where('is_active', true)
+                        ->orderBy('code')
+                        ->get()
+                        ->mapWithKeys(fn($ac) => [$ac->code => "{$ac->code} — {$ac->name}"])
+                        ->toArray();
 
                     return [
-                        Forms\Components\Placeholder::make('mapping_table')
-                            ->label('')
-                            ->content(new HtmlString("
-                                <div style='margin-bottom:12px;'>
-                                    <span style='font-size:13px;color:#374151;'>
-                                        Found <strong>" . array_sum(array_column($freeTextGroups, 'count')) . " payment entries</strong> with legacy free-text bank names.
-                                        <strong>{$mappableCount}</strong> group(s) will be automatically mapped to their account code.
-                                        <strong>{$skipCount}</strong> group(s) can be updated manually row-by-row.
-                                    </span>
-                                </div>
-                                <div style='overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;'>
-                                    <table style='width:100%;border-collapse:collapse;'>
-                                        <thead style='background:#f1f5f9;'>
-                                            <tr>
-                                                <th style='padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;'>Legacy Bank Name</th>
-                                                <th style='padding:10px 12px;text-align:center;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;'>Vouchers</th>
-                                                <th style='padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;'>Will Be Assigned To</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>{$tableRows}</tbody>
-                                    </table>
-                                </div>
-                            ")),
+                        Forms\Components\Repeater::make('mappings')
+                            ->label('Legacy Bank Names → Assign To')
+                            ->addable(false)
+                            ->deletable(false)
+                            ->reorderable(false)
+                            ->schema([
+                                // Hidden data carriers
+                                Forms\Components\Hidden::make('legacy_name'),
+                                Forms\Components\Hidden::make('voucher_count'),
+                                Forms\Components\Hidden::make('is_auto_mapped'),
+
+                                Forms\Components\Grid::make(12)->schema([
+                                    // Color-coded legacy name badge
+                                    Forms\Components\Placeholder::make('_legacy_label')
+                                        ->label('Legacy Bank Name')
+                                        ->columnSpan(5)
+                                        ->content(function (Forms\Get $get): HtmlString {
+                                            $name        = $get('legacy_name') ?? '—';
+                                            $isAuto      = $get('is_auto_mapped') === '1';
+                                            $bg          = $isAuto ? '#f0fdf4' : '#fef9c3';
+                                            $border      = $isAuto ? '#86efac' : '#fde68a';
+                                            $textColor   = $isAuto ? '#15803d' : '#92400e';
+                                            return new HtmlString(
+                                                "<span style='display:inline-flex;align-items:center;gap:5px;background:{$bg};border:1px solid {$border};padding:3px 10px;border-radius:6px;max-width:100%;overflow:hidden;'>" .
+                                                "<span style='font-family:monospace;font-size:12px;font-weight:700;color:{$textColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>" . e($name) . "</span>" .
+                                                "</span>"
+                                            );
+                                        }),
+
+                                    // Voucher count
+                                    Forms\Components\Placeholder::make('_count_label')
+                                        ->label('Count')
+                                        ->columnSpan(1)
+                                        ->content(fn(Forms\Get $get): HtmlString => new HtmlString(
+                                            "<span style='display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#e0e7ff;color:#3730a3;font-size:12px;font-weight:700;'>" .
+                                            ($get('voucher_count') ?? 0) .
+                                            "</span>"
+                                        )),
+
+                                    // Status badge: ✅ Auto-assigned or ⚠️ Cannot map
+                                    Forms\Components\Placeholder::make('_status_label')
+                                        ->label('Status')
+                                        ->columnSpan(2)
+                                        ->content(function (Forms\Get $get): HtmlString {
+                                            if ($get('is_auto_mapped') === '1') {
+                                                return new HtmlString(
+                                                    "<span style='display:inline-block;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;border:1px solid #86efac;'>✅ Auto</span>"
+                                                );
+                                            }
+                                            return new HtmlString(
+                                                "<span style='display:inline-block;padding:2px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border:1px solid #fde68a;'>⚠️ Manual</span>"
+                                            );
+                                        }),
+
+                                    // Compact select dropdown
+                                    Forms\Components\Select::make('assign_to')
+                                        ->label('Assign To')
+                                        ->columnSpan(4)
+                                        ->options($bankOptions)
+                                        ->searchable()
+                                        ->placeholder('— Skip —')
+                                        ->nullable()
+                                        ->extraAttributes(['style' => 'font-size:12px;']),
+                                ]),
+                            ])
+                            ->itemLabel(function (array $state): string {
+                                $icon = ($state['is_auto_mapped'] ?? '0') === '1' ? '✅' : '⚠️';
+                                return $icon . ' ' . ($state['legacy_name'] ?? '?') .
+                                    '  (' . ($state['voucher_count'] ?? 0) . ' voucher(s))';
+                            })
+                            ->default([]),
                     ];
                 })
-                ->action(function () {
+                ->action(function (array $data) {
                     $validCodes = AccountCode::pluck('code')->toArray();
+
+                    // Build a lookup: legacy_name → chosen account code
+                    $corrections = [];
+                    foreach ($data['mappings'] ?? [] as $row) {
+                        $legacyName = trim($row['legacy_name'] ?? '');
+                        $assignTo   = trim($row['assign_to'] ?? '');
+                        if (!empty($legacyName) && !empty($assignTo)) {
+                            $corrections[$legacyName] = $assignTo;
+                        }
+                    }
 
                     $paid = Voucher::whereIn('type', ['payment', 'bank_encashment'])
                         ->where('status', 'paid')
                         ->get(['id', 'bank', 'multiple_payments']);
 
-                    $fixed = 0;
+                    $fixed   = 0;
                     $skipped = 0;
 
                     foreach ($paid as $v) {
-                        $changed = false;
+                        $changed  = false;
                         $payments = $v->multiple_payments ?? null;
 
                         if ($payments !== null) {
@@ -188,8 +243,7 @@ class ListBankReconciliations extends ListRecords
                             foreach ($payments as $p) {
                                 $bk = trim($p['bank'] ?? '');
                                 if (!empty($bk) && !in_array($bk, $validCodes)) {
-                                    $normalized = strtolower($bk);
-                                    $corrected = static::$legacyBankMapping[$normalized] ?? null;
+                                    $corrected = $corrections[$bk] ?? null;
                                     if ($corrected) {
                                         $p['bank'] = $corrected;
                                         $changed = true;
@@ -207,14 +261,13 @@ class ListBankReconciliations extends ListRecords
                                     ->where('id', $v->id)
                                     ->update([
                                         'multiple_payments' => json_encode($newPayments),
-                                        'bank' => $firstBankFixed,
+                                        'bank'              => $firstBankFixed,
                                     ]);
                             }
                         } else {
                             $bk = trim($v->bank ?? '');
                             if (!empty($bk) && !in_array($bk, $validCodes)) {
-                                $normalized = strtolower($bk);
-                                $corrected = static::$legacyBankMapping[$normalized] ?? null;
+                                $corrected = $corrections[$bk] ?? null;
                                 if ($corrected) {
                                     \Illuminate\Support\Facades\DB::table('vouchers')
                                         ->where('id', $v->id)
@@ -228,7 +281,7 @@ class ListBankReconciliations extends ListRecords
                     }
 
                     Notification::make()
-                        ->title("✅ {$fixed} bank name(s) corrected! {$skipped} skipped (edit manually)")
+                        ->title("✅ {$fixed} bank name(s) corrected! {$skipped} skipped.")
                         ->success()
                         ->send();
                 })
