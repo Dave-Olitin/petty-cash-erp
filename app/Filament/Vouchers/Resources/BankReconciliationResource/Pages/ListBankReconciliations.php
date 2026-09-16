@@ -82,7 +82,7 @@ class ListBankReconciliations extends ListRecords
         return [
             // ── Batch Fix Legacy Bank Names (Admin only) ───────────────────
             Actions\Action::make('fix_legacy_banks')
-                ->label('Bank Reconcile')
+                ->label('Auto Bank Reconcile')
                 ->color('warning')
                 ->modalHeading('Batch Fix Legacy Bank Names in Payment Vouchers')
                 ->modalWidth('4xl')
