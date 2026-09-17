@@ -56,13 +56,14 @@
             background-color: #f8f8f8;
         }
         .ledger-table td { font-size: 10px; }
-        .col-branch { width: 8%; text-align: center; }
-        .col-acct   { width: 10%; text-align: center; }
-        .col-trn    { width: 10%; text-align: center; }
-        .col-inv    { width: 10%; text-align: center; }
-        .col-detail { width: 32%; }
-        .col-dr     { width: 15%; text-align: right; }
-        .col-cr     { width: 15%; text-align: right; }
+        .col-branch { text-align: center; }
+        .col-acct   { white-space: nowrap; text-align: center; }
+        .col-acct-name { text-align: left; }
+        .col-trn    { text-align: center; }
+        .col-inv    { text-align: center; }
+        .col-detail { }
+        .col-dr     { width: 12%; text-align: right; }
+        .col-cr     { width: 12%; text-align: right; }
         
         .total-row th { font-weight: bold; text-align: right; font-size: 11px; padding-top: 8px; padding-bottom: 8px; }
         .total-row .lbl { text-align: right; padding-right: 10px; }
@@ -94,6 +95,15 @@
     $totalDR = $journalEntry->total_debit;
     $totalCR = $journalEntry->total_credit;
     $companyName = 'ERICK TRADING CO. LLC';
+
+    $hasBranch = $journalEntry->lines->contains(fn($line) => !empty(trim($line->branch ?? '')) && trim($line->branch ?? '') !== '—');
+    $hasTrn = $journalEntry->lines->contains(fn($line) => !empty(trim($line->trn ?? '')) && trim($line->trn ?? '') !== '—');
+    $hasInv = $journalEntry->lines->contains(fn($line) => !empty(trim($line->invoice_no ?? '')) && trim($line->invoice_no ?? '') !== '—');
+
+    $colspan = 3; // ACCT, ACCT NAME, DESCRIPTION
+    if ($hasBranch) $colspan++;
+    if ($hasTrn) $colspan++;
+    if ($hasInv) $colspan++;
 @endphp
 
 <table class="header-table">
@@ -134,10 +144,11 @@
 <table class="ledger-table">
     <thead>
         <tr>
-            <th class="col-branch">BRANCH</th>
+            @if($hasBranch) <th class="col-branch">BRANCH</th> @endif
             <th class="col-acct">ACCT</th>
-            <th class="col-trn">TRN</th>
-            <th class="col-inv">INV #</th>
+            <th class="col-acct-name">ACCOUNT NAME</th>
+            @if($hasTrn) <th class="col-trn">TRN</th> @endif
+            @if($hasInv) <th class="col-inv">INV #</th> @endif
             <th class="col-detail">DESCRIPTION</th>
             <th class="col-dr">DEBIT (DR)</th>
             <th class="col-cr">CREDIT (CR)</th>
@@ -146,28 +157,29 @@
     <tbody>
         @forelse($journalEntry->lines as $line)
         <tr>
-            <td class="col-branch">{{ strtoupper($line->branch ?? '—') }}</td>
+            @if($hasBranch) <td class="col-branch">{{ strtoupper($line->branch ?? '—') }}</td> @endif
             <td class="col-acct">{{ $line->accountCode?->code ?? '—' }}</td>
-            <td class="col-trn">{{ $line->trn ?? '—' }}</td>
-            <td class="col-inv">{{ $line->invoice_no ?? '—' }}</td>
+            <td class="col-acct-name">{{ $line->accountCode?->name ?? '—' }}</td>
+            @if($hasTrn) <td class="col-trn">{{ $line->trn ?? '—' }}</td> @endif
+            @if($hasInv) <td class="col-inv">{{ $line->invoice_no ?? '—' }}</td> @endif
             <td class="col-detail">{{ strtoupper($line->remarks ?? '—') }}<br><small style="color: #555;">{{ $line->supplier_name }}</small></td>
             <td class="col-dr">{{ (float) $line->debit > 0 ? number_format($line->debit, 2) : '' }}</td>
             <td class="col-cr">{{ (float) $line->credit > 0 ? number_format($line->credit, 2) : '' }}</td>
         </tr>
         @empty
         <tr>
-            <td colspan="7" style="text-align:center; padding: 10px;">No ledger entries</td>
+            <td colspan="{{ $colspan + 2 }}" style="text-align:center; padding: 10px;">No ledger entries</td>
         </tr>
         @endforelse
         @if($journalEntry->lines->count() < 10)
             @for($i = $journalEntry->lines->count(); $i < 10; $i++)
-                <tr><td colspan="7" style="height: 22px;">&nbsp;</td></tr>
+                <tr><td colspan="{{ $colspan + 2 }}" style="height: 22px;">&nbsp;</td></tr>
             @endfor
         @endif
     </tbody>
     <tfoot>
         <tr class="total-row">
-            <th colspan="5" class="lbl">TOTAL</th>
+            <th colspan="{{ $colspan }}" class="lbl">TOTAL</th>
             <th class="col-dr">{{ number_format($totalDR, 2) }}</th>
             <th class="col-cr">{{ number_format($totalCR, 2) }}</th>
         </tr>
