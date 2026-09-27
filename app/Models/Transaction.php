@@ -15,8 +15,10 @@ class Transaction extends Model
         'branch_id',
         'user_id',
         'type',
+        'fund_type',
         'amount',
         'payee',
+        'supplier_id',
         'supplier',
         'trn',
         'reference_number',
@@ -30,6 +32,18 @@ class Transaction extends Model
         'category_id',
         'vat',
     ];
+
+    protected static function booted()
+    {
+        static::saving(function ($transaction) {
+            if ($transaction->supplier_id && ($transaction->isDirty('supplier_id') || empty($transaction->supplier))) {
+                $supp = Supplier::find($transaction->supplier_id);
+                if ($supp) {
+                    $transaction->supplier = $supp->name;
+                }
+            }
+        });
+    }
 
     protected function casts(): array
     {
@@ -61,6 +75,11 @@ class Transaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function supplierRelation(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
     // Note: categories are per-item, not per-transaction. See TransactionItem::category()

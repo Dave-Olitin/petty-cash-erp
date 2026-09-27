@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\TransactionResource\Pages;
 use App\Filament\Resources\TransactionResource\RelationManagers;
+use App\Models\Entity;
 use App\Models\Transaction;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -58,6 +59,16 @@ public static function form(Form $form): Form
                         })
                         ->native(false),
 
+                    Forms\Components\Select::make('fund_type')
+                        ->label('Fund Identifier (DCF / PCF)')
+                        ->options([
+                            'DCF' => 'DCF (Daily Cash Fund)',
+                            'PCF' => 'PCF (Petty Cash Fund)',
+                        ])
+                        ->placeholder('Select Fund (Optional)')
+                        ->nullable()
+                        ->native(false),
+
                     // Category Select Removed - Moved to Items Repeater
                     
                     // Amount moved to bottom with VAT
@@ -71,10 +82,58 @@ public static function form(Form $form): Form
                         ->label('Paid To')
                         ->maxLength(255)
                         ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
-                    Forms\Components\TextInput::make('supplier')
+                    Forms\Components\Select::make('supplier_id')
                         ->label('Supplier Name')
-                        ->maxLength(255)
+                        ->relationship(
+                            'supplierRelation',
+                            'name',
+                            fn (Builder $query) => $query->where('is_active', true)->orderBy('name')
+                        )
+                        ->searchable(['name', 'trn'])
+                        ->preload()
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            if ($state) {
+                                $supplier = \App\Models\Supplier::find($state);
+                                if ($supplier) {
+                                    $set('supplier', $supplier->name);
+                                    if ($supplier->trn) {
+                                        $set('trn', $supplier->trn);
+                                    }
+                                }
+                            } else {
+                                $set('supplier', null);
+                            }
+                        })
+                        ->createOptionForm([
+                            Forms\Components\TextInput::make('name')
+                                ->label('Supplier Name')
+                                ->required()
+                                ->unique(\App\Models\Supplier::class, 'name')
+                                ->maxLength(255),
+                            Forms\Components\TextInput::make('trn')
+                                ->label('TRN')
+                                ->maxLength(255),
+                            Forms\Components\TextInput::make('phone')
+                                ->label('Phone Number')
+                                ->tel()
+                                ->maxLength(50),
+                        ])
+                        ->createOptionUsing(function (array $data, Forms\Set $set): int {
+                            $supplier = \App\Models\Supplier::create([
+                                'name'      => trim($data['name']),
+                                'trn'       => !empty($data['trn']) ? trim($data['trn']) : null,
+                                'phone'     => !empty($data['phone']) ? trim($data['phone']) : null,
+                                'is_active' => true,
+                            ]);
+                            $set('supplier', $supplier->name);
+                            if ($supplier->trn) {
+                                $set('trn', $supplier->trn);
+                            }
+                            return $supplier->id;
+                        })
                         ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT'),
+                    Forms\Components\Hidden::make('supplier'),
                     Forms\Components\TextInput::make('trn')
                         ->label('TRN')
                         ->maxLength(255)
@@ -275,6 +334,15 @@ public static function form(Form $form): Form
                                     Infolists\Components\Group::make([
                                         Infolists\Components\TextEntry::make('type')
                                             ->badge(),
+                                        Infolists\Components\TextEntry::make('fund_type')
+                                            ->label('Fund')
+                                            ->badge()
+                                            ->color(fn (?string $state): string => match ($state) {
+                                                'DCF' => 'info',
+                                                'PCF' => 'warning',
+                                                default => 'gray',
+                                            })
+                                            ->placeholder('—'),
                                         Infolists\Components\TextEntry::make('vat')
                                             ->money('AED')
                                             ->label('Global VAT')
@@ -400,6 +468,17 @@ public static function table(Table $table): Table
                     'EXPENSE' => 'danger', // Red for money out
                     'REPLENISHMENT' => 'success', // Green for money in
                 }),
+            Tables\Columns\TextColumn::make('fund_type')
+                ->label('Fund')
+                ->badge()
+                ->color(fn (?string $state): string => match ($state) {
+                    'DCF' => 'info',
+                    'PCF' => 'warning',
+                    default => 'gray',
+                })
+                ->placeholder('—')
+                ->sortable()
+                ->toggleable(),
             Tables\Columns\TextColumn::make('amount')
                 ->money('AED')
                 ->extraAttributes(['class' => 'privacy-mask']),
@@ -434,9 +513,21 @@ public static function table(Table $table): Table
                 ->placeholder('Head Office')
                 ->sortable()
                 ->toggleable(),
+            Tables\Columns\TextColumn::make('branch.entity.name')
+                ->label('Entity')
+                ->placeholder('—')
+                ->badge()
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true),
         ])
         ->defaultSort('created_at', 'desc')
         ->filters([
+            Tables\Filters\SelectFilter::make('fund_type')
+                ->label('Fund (DCF / PCF)')
+                ->options([
+                    'DCF' => 'DCF (Daily Cash Fund)',
+                    'PCF' => 'PCF (Petty Cash Fund)',
+                ]),
             Tables\Filters\SelectFilter::make('status')
                 ->options([
                     'pending' => 'Pending',
@@ -444,6 +535,19 @@ public static function table(Table $table): Table
                     'rejected' => 'Rejected',
                 ]),
             // Category Filter Removed
+
+            Tables\Filters\SelectFilter::make('entity_id')
+                ->label('Entity')
+                ->options(fn () => Entity::where('is_active', true)->pluck('name', 'id'))
+                ->query(function (Builder $query, array $data): Builder {
+                    if (!empty($data['value'])) {
+                        $query->whereHas('branch', fn (Builder $q) => $q->where('entity_id', $data['value']));
+                    }
+                    return $query;
+                })
+                ->visible(fn () => auth()->user()->branch_id === null) // Only visible to HQ
+                ->searchable()
+                ->preload(),
             
             Tables\Filters\SelectFilter::make('branch')
                 ->relationship('branch', 'name')
@@ -659,7 +763,7 @@ public static function table(Table $table): Table
                             
                             // 1. Define Headers
                             $headers = [
-                                'ID', 'Date', 'Type', 'Amount', 'Payee', 'Supplier', 'TRN', 
+                                'ID', 'Date', 'Type', 'Fund', 'Amount', 'Payee', 'Supplier', 'TRN', 
                                 'Reference #', 'PCV #', 'Receiver', 'Description', 'Items', 'Branch', 'Category', 
                                 'Status', 'Created By', 'Receipt URL'
                             ];
@@ -676,6 +780,7 @@ public static function table(Table $table): Table
                                     $record->id,
                                     $record->created_at->format('Y-m-d H:i'),
                                     $record->type,
+                                    $record->fund_type ?: '—',
                                     (float) $record->amount,
                                     $record->payee,
                                     $record->supplier,

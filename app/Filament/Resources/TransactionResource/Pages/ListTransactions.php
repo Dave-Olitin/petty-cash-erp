@@ -37,7 +37,7 @@ class ListTransactions extends ListRecords
                         
                         // 1. Define Headers
                         $headers = [
-                            'ID', 'Date', 'Type', 'Amount', 'Total VAT', 'Payee', 'Supplier', 'TRN', 
+                            'ID', 'Date', 'Type', 'Fund', 'Amount', 'Total VAT', 'Payee', 'Supplier', 'TRN', 
                             'Reference #', 'Description', 'Items', 'Branch', 'Category', 
                             'Status', 'Created By', 'Receipt URL'
                         ];
@@ -59,6 +59,7 @@ class ListTransactions extends ListRecords
                                 $record->id,
                                 $record->created_at->format('Y-m-d H:i'),
                                 $record->type,
+                                $record->fund_type ?: '—',
                                 (float) $record->amount,
                                 (float) $totalVat,
                                 $record->payee,

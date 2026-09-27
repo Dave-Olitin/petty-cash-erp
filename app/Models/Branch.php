@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Entity;
 
 class Branch extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['name', 'location', 'max_limit', 'transaction_limit', 'is_active', 'allow_overdraft'];
+    protected $fillable = ['name', 'entity_id', 'location', 'max_limit', 'transaction_limit', 'is_active', 'allow_overdraft'];
     // NOTE: 'current_balance' is intentionally NOT in $fillable.
     // It must only be modified via TransactionObserver's increment()/decrement() calls.
     // This prevents accidental or malicious overwriting via mass-assignment.
@@ -28,5 +29,10 @@ class Branch extends Model
 public function transactions()
 {
     return $this->hasMany(Transaction::class);
+}
+
+public function entity()
+{
+    return $this->belongsTo(Entity::class);
 }
 }

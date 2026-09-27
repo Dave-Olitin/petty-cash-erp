@@ -24,20 +24,27 @@ class StatsOverview extends BaseWidget
         // Filter Logic
         $startDate = $this->filters['startDate'] ?? null;
         $endDate = $this->filters['endDate'] ?? null;
-        $branchId = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id; // Secure filter extraction
+        $branchId = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
+        // When entity is selected but no specific branch, scope to all entity branches
+        $entityBranchIds = null;
+        if ($user->isHeadOffice() && !$branchId && !empty($this->filters['entity_id'])) {
+            $entityBranchIds = \App\Models\Branch::where('entity_id', $this->filters['entity_id'])
+                ->pluck('id')->toArray();
+        }
 
         // Common Query Helper (reused inside and outside cache)
-        $query = function() use ($startDate, $endDate, $branchId) {
+        $query = function() use ($startDate, $endDate, $branchId, $entityBranchIds) {
             return Transaction::query()
                 ->where('status', '!=', 'rejected') // Exclude rejected transactions
                 ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                 ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
-                ->when($branchId, fn($q) => $q->where('branch_id', $branchId));
+                ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+                ->when($entityBranchIds, fn($q) => $q->whereIn('branch_id', $entityBranchIds));
         };
 
         $cachedStats = [
-            'expenseTrend'       => $this->getTrend('EXPENSE', $this->filters['branch_id'] ?? auth()->user()->branch_id),
-            'replenishTrend'     => $this->getTrend('REPLENISHMENT', $this->filters['branch_id'] ?? auth()->user()->branch_id),
+            'expenseTrend'       => $this->getTrend('EXPENSE', $this->filters['branch_id'] ?? auth()->user()->branch_id, $entityBranchIds),
+            'replenishTrend'     => $this->getTrend('REPLENISHMENT', $this->filters['branch_id'] ?? auth()->user()->branch_id, $entityBranchIds),
             'totalExpenses'      => (clone $query())->where('type', 'EXPENSE')->sum('amount'),
             'totalReplenishments'=> (clone $query())->where('type', 'REPLENISHMENT')->sum('amount'),
         ];
@@ -91,7 +98,7 @@ class StatsOverview extends BaseWidget
         }
     }
 
-    protected function getTrend(string $type, ?int $branchId = null): array
+    protected function getTrend(string $type, ?int $branchId = null, ?array $entityBranchIds = null): array
     {
         $startDate = $this->filters['startDate'] ?? null;
         $endDate   = $this->filters['endDate'] ?? null;
@@ -104,6 +111,7 @@ class StatsOverview extends BaseWidget
             ->where('type', $type)
             ->where('status', '!=', 'rejected')
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->when($entityBranchIds, fn($q) => $q->whereIn('branch_id', $entityBranchIds))
             ->whereBetween('created_at', [$from, $to])
             ->selectRaw('DATE(created_at) as date, sum(amount) as total')
             ->groupBy('date')

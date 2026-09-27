@@ -28,6 +28,16 @@ class LatestTransactions extends BaseWidget
                     ->when($this->filters['startDate'] ?? null, fn($q, $d) => $q->whereDate('created_at', '>=', $d))
                     ->when($this->filters['endDate'] ?? null, fn($q, $d) => $q->whereDate('created_at', '<=', $d))
                     ->when($this->filters['branch_id'] ?? null, fn($q, $id) => $q->where('branch_id', $id))
+                    ->when(
+                        // Entity filter: only applied for HQ with no specific branch selected
+                        auth()->user()->branch_id === null
+                            && empty($this->filters['branch_id'])
+                            && !empty($this->filters['entity_id']),
+                        fn($q) => $q->whereIn(
+                            'branch_id',
+                            \App\Models\Branch::where('entity_id', $this->filters['entity_id'])->pluck('id')
+                        )
+                    )
                     ->when(!auth()->user()->isHeadOffice(), function ($query) {
                         return $query->where('branch_id', auth()->user()->branch_id);
                     })
@@ -50,6 +60,16 @@ class LatestTransactions extends BaseWidget
                         'EXPENSE' => 'danger',
                         'REPLENISHMENT' => 'success',
                     }),
+                
+                Tables\Columns\TextColumn::make('fund_type')
+                    ->label('Fund')
+                    ->badge()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'DCF' => 'info',
+                        'PCF' => 'warning',
+                        default => 'gray',
+                    })
+                    ->placeholder('—'),
                 
                 Tables\Columns\TextColumn::make('status')
                     ->badge()

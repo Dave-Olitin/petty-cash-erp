@@ -16,17 +16,18 @@ class ExpensesByBranchChart extends ChartWidget
 
     public static function canView(): bool
     {
-        return auth()->user()->branch_id === null;
+        return false;
     }
 
     protected function getData(): array
     {
         $startDate = $this->filters['startDate'] ?? null;
         $endDate   = $this->filters['endDate'] ?? null;
+        $entityId  = $this->filters['entity_id'] ?? null;
 
         $cacheKey = 'expenses_by_branch_' . md5(json_encode($this->filters));
 
-        $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($startDate, $endDate) {
+        $data = Cache::remember($cacheKey, now()->addMinutes(10), function () use ($startDate, $endDate, $entityId) {
             return \App\Models\Transaction::query()
                 ->where('transactions.type', 'EXPENSE')
                 ->whereNull('transactions.deleted_at')
@@ -34,6 +35,7 @@ class ExpensesByBranchChart extends ChartWidget
                 ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
                 ->when($endDate,   fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
                 ->join('branches', 'transactions.branch_id', '=', 'branches.id')
+                ->when($entityId,  fn($q) => $q->where('branches.entity_id', $entityId))
                 ->selectRaw('branches.name as branch_name, SUM(transactions.amount) as total')
                 ->groupBy('branches.name')
                 ->orderByDesc('total')

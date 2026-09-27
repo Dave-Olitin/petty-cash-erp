@@ -29,6 +29,19 @@ class BranchResource extends Resource
             Forms\Components\TextInput::make('name')
                 ->required()
                 ->maxLength(255),
+            Forms\Components\Select::make('entity_id')
+                ->label('Entity / Company')
+                ->relationship('entity', 'name')
+                ->searchable()
+                ->preload()
+                ->createOptionForm([
+                    Forms\Components\TextInput::make('name')
+                        ->label('Entity Name')
+                        ->required()
+                        ->maxLength(255),
+                ])
+                ->placeholder('Select an entity...')
+                ->helperText('The legal entity this branch belongs to. Use the + button to add a new one.'),
             Forms\Components\TextInput::make('location')
                 ->maxLength(255),
             Forms\Components\TextInput::make('max_limit')
@@ -57,6 +70,12 @@ public static function table(Table $table): Table
     return $table
         ->columns([
             Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
+            Tables\Columns\TextColumn::make('entity.name')
+                ->label('Entity')
+                ->searchable()
+                ->sortable()
+                ->badge()
+                ->placeholder('—'),
             Tables\Columns\TextColumn::make('location'),
             Tables\Columns\TextColumn::make('current_balance')
                 ->money('AED')

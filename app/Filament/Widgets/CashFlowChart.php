@@ -25,10 +25,15 @@ class CashFlowChart extends ChartWidget
         $filterStart = $this->filters['startDate'] ? \Carbon\Carbon::parse($this->filters['startDate']) : now()->subMonths(5)->startOfMonth();
         $filterEnd = $this->filters['endDate'] ? \Carbon\Carbon::parse($this->filters['endDate'])->endOfDay() : now()->endOfMonth();
         $branchId = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
+        $entityBranchIds = null;
+        if ($user->isHeadOffice() && !$branchId && !empty($this->filters['entity_id'])) {
+            $entityBranchIds = \App\Models\Branch::where('entity_id', $this->filters['entity_id'])
+                ->pluck('id')->toArray();
+        }
 
         $cacheKey = 'cash_flow_' . ($user->id) . '_' . md5(json_encode($this->filters));
 
-        return \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () use ($filterStart, $filterEnd, $branchId) {
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addMinutes(10), function () use ($filterStart, $filterEnd, $branchId, $entityBranchIds) {
             // Determine Granularity
             $diffInDays = $filterStart->diffInDays($filterEnd);
             $groupBy = $diffInDays > 60 ? 'Month' : 'Day';
@@ -57,6 +62,7 @@ class CashFlowChart extends ChartWidget
                 ->whereNull('deleted_at')
                 ->where('status', '!=', 'rejected')
                 ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+                ->when($entityBranchIds, fn($q) => $q->whereIn('branch_id', $entityBranchIds))
                 ->select('created_at', 'type', 'amount', 'status')
                 ->get();
 

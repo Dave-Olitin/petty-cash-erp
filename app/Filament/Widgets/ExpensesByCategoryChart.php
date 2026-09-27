@@ -20,6 +20,11 @@ class ExpensesByCategoryChart extends ChartWidget
         $startDate = $this->filters['startDate'] ?? null;
         $endDate   = $this->filters['endDate'] ?? null;
         $branchId  = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
+        $entityBranchIds = null;
+        if ($user->isHeadOffice() && !$branchId && !empty($this->filters['entity_id'])) {
+            $entityBranchIds = \App\Models\Branch::where('entity_id', $this->filters['entity_id'])
+                ->pluck('id')->toArray();
+        }
 
         $total = \App\Models\TransactionItem::query()
             ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
@@ -29,6 +34,7 @@ class ExpensesByCategoryChart extends ChartWidget
             ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
             ->when($endDate,   fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
             ->when($branchId,  fn($q) => $q->where('transactions.branch_id', $branchId))
+            ->when($entityBranchIds, fn($q) => $q->whereIn('transactions.branch_id', $entityBranchIds))
             ->sum('transaction_items.total_price');
 
         return "Total Expenses: AED " . number_format($total, 2);
@@ -40,6 +46,11 @@ class ExpensesByCategoryChart extends ChartWidget
         $startDate = $this->filters['startDate'] ?? null;
         $endDate   = $this->filters['endDate'] ?? null;
         $branchId  = $user->isHeadOffice() ? ($this->filters['branch_id'] ?? null) : $user->branch_id;
+        $entityBranchIds = null;
+        if ($user->isHeadOffice() && !$branchId && !empty($this->filters['entity_id'])) {
+            $entityBranchIds = \App\Models\Branch::where('entity_id', $this->filters['entity_id'])
+                ->pluck('id')->toArray();
+        }
 
         $rawData = \App\Models\TransactionItem::query()
             ->join('transactions', 'transaction_items.transaction_id', '=', 'transactions.id')
@@ -50,6 +61,7 @@ class ExpensesByCategoryChart extends ChartWidget
             ->when($startDate, fn($q) => $q->whereDate('transactions.created_at', '>=', $startDate))
             ->when($endDate,   fn($q) => $q->whereDate('transactions.created_at', '<=', $endDate))
             ->when($branchId,  fn($q) => $q->where('transactions.branch_id', $branchId))
+            ->when($entityBranchIds, fn($q) => $q->whereIn('transactions.branch_id', $entityBranchIds))
             ->selectRaw("COALESCE(account_codes.name, 'Unassigned') as label, SUM(transaction_items.total_price) as total")
 
             ->groupBy('label')

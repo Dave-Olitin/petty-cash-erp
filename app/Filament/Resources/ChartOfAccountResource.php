@@ -9,6 +9,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ChartOfAccountResource extends Resource
 {
@@ -57,11 +58,26 @@ class ChartOfAccountResource extends Resource
                     ->searchable()
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('transaction_items_sum_total_price')
+                    ->label('Total Spend')
+                    ->money('AED')
+                    ->sortable()
+                    ->placeholder('AED 0.00'),
+
+                Tables\Columns\TextColumn::make('transaction_items_count')
+                    ->label('Transactions (Items)')
+                    ->counts('transactionItems')
+                    ->badge()
+                    ->color('success')
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('categories_count')
                     ->label('Linked Categories')
                     ->counts('categories')
                     ->badge()
-                    ->color('info'),
+                    ->color('gray')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
@@ -69,6 +85,11 @@ class ChartOfAccountResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('code', 'asc')
+            ->filters([
+                Tables\Filters\Filter::make('has_transactions')
+                    ->label('With Transactions Only')
+                    ->query(fn (Builder $query) => $query->has('transactionItems')),
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make()
@@ -85,6 +106,40 @@ class ChartOfAccountResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('export_selected')
+                        ->label('Export Selected')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            return response()->streamDownload(function () use ($records) {
+                                $file = fopen('php://output', 'w');
+                                fputs($file, "\xEF\xBB\xBF");
+
+                                fputcsv($file, [
+                                    'Account Code',
+                                    'Account Name',
+                                    'Total Spend (AED)',
+                                    'Usage in Transactions (Items)',
+                                    'Linked Categories',
+                                    'Created At',
+                                ]);
+
+                                $records->load(['categories'])->loadCount('transactionItems');
+
+                                foreach ($records as $account) {
+                                    $totalSpend = $account->transactionItems()->sum('total_price');
+                                    fputcsv($file, [
+                                        $account->code,
+                                        $account->name,
+                                        number_format((float) $totalSpend, 2),
+                                        $account->transaction_items_count ?? 0,
+                                        $account->categories->pluck('name')->join(', ') ?: 'None',
+                                        $account->created_at ? $account->created_at->format('Y-m-d H:i') : '',
+                                    ]);
+                                }
+
+                                fclose($file);
+                            }, 'chart_of_accounts_selected_' . now()->format('Y-m-d_H-i') . '.csv');
+                        }),
                     Tables\Actions\DeleteBulkAction::make()
                         ->before(function (\Illuminate\Database\Eloquent\Collection $records, Tables\Actions\DeleteBulkAction $action) {
                             $inUse = $records->filter(
@@ -101,6 +156,12 @@ class ChartOfAccountResource extends Resource
                         }),
                 ]),
             ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withSum('transactionItems', 'total_price');
     }
 
     public static function getRelations(): array

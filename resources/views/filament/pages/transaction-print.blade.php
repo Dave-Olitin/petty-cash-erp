@@ -188,6 +188,9 @@
             <div style="margin-top: 8px;">
                 <span class="badge {{ $transaction->status }}">{{ ucfirst($transaction->status) }}</span>
                 <span class="badge {{ $transaction->type === 'EXPENSE' ? 'expense' : 'replenish' }}">{{ $transaction->type }}</span>
+                @if($transaction->fund_type)
+                    <span class="badge" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">{{ $transaction->fund_type }}</span>
+                @endif
             </div>
         </div>
     </div>
@@ -203,6 +206,13 @@
             <div class="info-label">Created By</div>
             <div class="info-value">{{ $transaction->user->name ?? '—' }}</div>
         </div>
+
+        @if($transaction->fund_type)
+        <div class="info-box">
+            <div class="info-label">Fund Type</div>
+            <div class="info-value">{{ $transaction->fund_type === 'DCF' ? 'DCF (Daily Cash Fund)' : ($transaction->fund_type === 'PCF' ? 'PCF (Petty Cash Fund)' : $transaction->fund_type) }}</div>
+        </div>
+        @endif
 
         @if($transaction->payee)
         <div class="info-box">
