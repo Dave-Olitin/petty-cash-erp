@@ -33,32 +33,27 @@ class ListItemMasters extends ListRecords
                 ->label('Auto-link Transactions')
                 ->icon('heroicon-o-sparkles')
                 ->color('warning')
+                ->modalWidth(\Filament\Support\Enums\MaxWidth::FiveExtraLarge)
+                ->modalHeading('Auto-link Account Codes to Unassigned Transactions')
+                ->modalDescription('Preview detected matches below before applying. Verified Chart of Accounts will be linked directly to transactions.')
+                ->modalSubmitActionLabel('Auto-link Now')
                 ->form([
-                    \Filament\Forms\Components\Placeholder::make('info')
-                        ->label('Transaction Linker')
-                        ->content(function (\App\Services\ItemMasterLinkerService $linker) {
-                            $preview = $linker->preview(includeSmart: true);
-                            $exact = $preview['exact_count'];
-                            $smart = $preview['smart_count'];
-                            $total = $preview['total_unassigned'];
-                            return new \Illuminate\Support\HtmlString("
-                                <div class='space-y-2 text-sm'>
-                                    <p>Found <strong>{$total}</strong> unassigned expense items in the queue.</p>
-                                    <ul class='list-disc pl-5 space-y-1 text-gray-600 dark:text-gray-300'>
-                                        <li><span class='text-success-600 font-semibold'>{$exact} item(s)</span> match directly to Item Masterfile names.</li>
-                                        <li><span class='text-primary-600 font-semibold'>{$smart} item(s)</span> match smart patterns (taxi routes, fuel receipts, barcodes).</li>
-                                    </ul>
-                                </div>
-                            ");
-                        }),
                     \Filament\Forms\Components\Toggle::make('include_smart')
                         ->label('Include smart pattern matching')
                         ->helperText('Also links slight variations such as taxi routes, fuel receipts, barcodes, and common spelling.')
-                        ->default(true),
+                        ->default(true)
+                        ->live(),
+                    \Filament\Forms\Components\Placeholder::make('preview')
+                        ->hiddenLabel()
+                        ->content(function (\App\Services\ItemMasterLinkerService $linker, callable $get) {
+                            $includeSmart = (bool) ($get('include_smart') ?? true);
+                            $preview = $linker->preview(includeSmart: $includeSmart);
+                            return view('filament.components.item-linker-preview', [
+                                'preview'      => $preview,
+                                'includeSmart' => $includeSmart,
+                            ]);
+                        }),
                 ])
-                ->modalHeading('Auto-link Account Codes to Unassigned Transactions')
-                ->modalDescription('Scan unassigned transaction lines and link account codes based on your Item Masterfile.')
-                ->modalSubmitActionLabel('Auto-link Now')
                 ->action(function (array $data, \App\Services\ItemMasterLinkerService $linker) {
                     $includeSmart = (bool) ($data['include_smart'] ?? true);
                     $result = $linker->link(includeSmart: $includeSmart);
