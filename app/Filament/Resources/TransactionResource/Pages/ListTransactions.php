@@ -94,6 +94,47 @@ class ListTransactions extends ListRecords
                         fclose($file);
                     }, 'transactions_view_' . now()->format('Y-m-d_H-i') . '.csv');
                 }),
+            Actions\Action::make('auto_link_accounts')
+                ->label('Auto-link Accounts')
+                ->icon('heroicon-o-sparkles')
+                ->color('warning')
+                ->visible(fn () => auth()->user()->isHeadOffice())
+                ->form([
+                    \Filament\Forms\Components\Placeholder::make('info')
+                        ->label('Item Masterfile Auto-Linker')
+                        ->content(function (\App\Services\ItemMasterLinkerService $linker) {
+                            $preview = $linker->preview(includeSmart: true);
+                            $exact = $preview['exact_count'];
+                            $smart = $preview['smart_count'];
+                            $total = $preview['total_unassigned'];
+                            return new \Illuminate\Support\HtmlString("
+                                <div class='space-y-2 text-sm'>
+                                    <p>Found <strong>{$total}</strong> unassigned expense items in the queue.</p>
+                                    <ul class='list-disc pl-5 space-y-1 text-gray-600 dark:text-gray-300'>
+                                        <li><span class='text-success-600 font-semibold'>{$exact} item(s)</span> match directly to the Item Masterfile.</li>
+                                        <li><span class='text-primary-600 font-semibold'>{$smart} item(s)</span> match smart patterns (taxi routes, fuel receipts, barcodes).</li>
+                                    </ul>
+                                </div>
+                            ");
+                        }),
+                    \Filament\Forms\Components\Toggle::make('include_smart')
+                        ->label('Include smart pattern matching')
+                        ->helperText('Also links slight variations such as taxi routes, fuel receipts, barcodes, and common spelling.')
+                        ->default(true),
+                ])
+                ->modalHeading('Auto-link Account Codes from Item Masterfile')
+                ->modalDescription('Automatically link Chart of Account codes to existing transactions based on the item text.')
+                ->modalSubmitActionLabel('Auto-link Now')
+                ->action(function (array $data, \App\Services\ItemMasterLinkerService $linker) {
+                    $includeSmart = (bool) ($data['include_smart'] ?? true);
+                    $result = $linker->link(includeSmart: $includeSmart);
+
+                    \Filament\Notifications\Notification::make()
+                        ->title('Account Codes Linked')
+                        ->body("Successfully linked {$result['total_linked']} item(s) across {$result['affected_transactions']} transaction(s).")
+                        ->success()
+                        ->send();
+                }),
         ];
     }
 
@@ -105,8 +146,8 @@ class ListTransactions extends ListRecords
 
         if (auth()->user()->isHeadOffice()) {
             $tabs['unassigned'] = \Filament\Resources\Components\Tab::make('Unassigned')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('items', fn ($q) => $q->whereNull('account_code_id')))
-                ->badge(TransactionResource::getEloquentQuery()->whereHas('items', fn ($q) => $q->whereNull('account_code_id'))->count())
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'EXPENSE')->whereHas('items', fn ($q) => $q->whereNull('account_code_id')))
+                ->badge(TransactionResource::getEloquentQuery()->where('type', 'EXPENSE')->whereHas('items', fn ($q) => $q->whereNull('account_code_id'))->count())
                 ->badgeColor('danger');
         }
 

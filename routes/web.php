@@ -14,7 +14,7 @@ Route::middleware(['auth'])->group(function () {
             abort(403);
         }
 
-        $transaction->load(['branch', 'items.category', 'user']);
+        $transaction->load(['branch', 'items.category', 'items.accountCode', 'items.itemMaster', 'user']);
 
         return view('filament.pages.transaction-print', ['transaction' => $transaction]);
     })->name('transaction.print');

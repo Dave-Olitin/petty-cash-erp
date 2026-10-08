@@ -157,6 +157,66 @@ public static function form(Form $form): Form
                         ->relationship()
                         ->hidden(fn (callable $get) => $get('type') === 'REPLENISHMENT')
                         ->schema([
+                            Forms\Components\Select::make('item_master_id')
+                                ->label('Item Masterfile')
+                                ->relationship('itemMaster', 'name', fn (Builder $query) => $query->where('is_active', true)->orderBy('name'))
+                                ->searchable()
+                                ->preload()
+                                ->live()
+                                ->placeholder('Select master item...')
+                                ->helperText('Auto-links accounting code in the background')
+                                ->visible(fn () => auth()->user()->isHeadOffice())
+                                ->columnSpan(['default' => 12, 'md' => 4])
+                                ->createOptionForm([
+                                    Forms\Components\TextInput::make('name')
+                                        ->label('Item Name')
+                                        ->required()
+                                        ->unique(\App\Models\ItemMaster::class, 'name')
+                                        ->placeholder('e.g. Mounting Tape, Courier, Fuel')
+                                        ->maxLength(255),
+                                    Forms\Components\Select::make('account_code_id')
+                                        ->label('Linked Chart of Account')
+                                        ->relationship('accountCode', 'name', fn (Builder $query) => $query->orderBy('code'))
+                                        ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->code} – {$record->name}")
+                                        ->searchable(['code', 'name'])
+                                        ->preload()
+                                        ->required()
+                                        ->placeholder('Select GL account...'),
+                                ])
+                                ->createOptionUsing(function (array $data, callable $set): int {
+                                    $master = \App\Models\ItemMaster::create([
+                                        'name'            => trim($data['name']),
+                                        'account_code_id' => $data['account_code_id'],
+                                        'is_active'       => true,
+                                    ]);
+                                    $set('name', $master->name);
+                                    $set('account_code_id', $master->account_code_id);
+                                    return $master->id;
+                                })
+                                ->afterStateUpdated(function ($state, callable $set) {
+                                    if ($state) {
+                                        $master = \App\Models\ItemMaster::find($state);
+                                        if ($master) {
+                                            $set('name', $master->name);
+                                            $set('account_code_id', $master->account_code_id);
+                                        }
+                                    }
+                                }),
+                            Forms\Components\TextInput::make('name')
+                                ->label('Item Name')
+                                ->required()
+                                ->placeholder('e.g. Fuel, Stationery, Courier')
+                                ->columnSpan(['default' => 12, 'md' => auth()->user()?->isHeadOffice() ? 4 : 12])
+                                ->live(onBlur: true)
+                                ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                                    if (!empty($state) && empty($get('account_code_id'))) {
+                                        $master = \App\Models\ItemMaster::where('name', trim($state))->first();
+                                        if ($master) {
+                                            $set('item_master_id', $master->id);
+                                            $set('account_code_id', $master->account_code_id);
+                                        }
+                                    }
+                                }),
                             Forms\Components\Select::make('account_code_id')
                                 ->label('Account Code')
                                 ->relationship('accountCode', 'name',
@@ -169,13 +229,35 @@ public static function form(Form $form): Form
                                 ->preload()
                                 ->nullable()
                                 ->placeholder('Select account...')
-                                ->visible(fn () => auth()->user()->isHeadOffice()), // HQ-only
-                            Forms\Components\TextInput::make('name')
-                                ->required(),
+                                ->visible(fn () => auth()->user()->isHeadOffice()) // HQ-only review & override
+                                ->columnSpan(['default' => 12, 'md' => 4])
+                                ->live()
+                                ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                                    if (!empty($state)) {
+                                        $name = trim($get('name') ?? '');
+                                        if (strlen($name) >= 2 && !is_numeric($name)) {
+                                            $master = \App\Models\ItemMaster::firstOrCreate(
+                                                ['name' => $name],
+                                                [
+                                                    'account_code_id' => $state,
+                                                    'is_active'       => true,
+                                                ]
+                                            );
+                                            $set('item_master_id', $master->id);
+
+                                            \Filament\Notifications\Notification::make()
+                                                ->title('Saved to Item Masterfile')
+                                                ->body("'{$master->name}' added to Item Masterfile.")
+                                                ->success()
+                                                ->send();
+                                        }
+                                    }
+                                }),
                             Forms\Components\TextInput::make('quantity')
                                 ->numeric()
                                 ->default(1)
                                 ->required()
+                                ->columnSpan(['default' => 6, 'md' => 3])
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('unit_price')) + (float) $get('vat'))),
                             Forms\Components\TextInput::make('unit_price')
@@ -183,6 +265,7 @@ public static function form(Form $form): Form
                                 ->default(0)
                                 ->required()
                                 ->prefix('AED')
+                                ->columnSpan(['default' => 6, 'md' => 3])
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $state * (float) $get('quantity')) + (float) $get('vat'))),
                             Forms\Components\TextInput::make('vat')
@@ -190,6 +273,7 @@ public static function form(Form $form): Form
                                 ->numeric()
                                 ->default(0)
                                 ->prefix('AED')
+                                ->columnSpan(['default' => 6, 'md' => 3])
                                 ->live(onBlur: true)
                                 ->afterStateUpdated(fn ($state, callable $set, callable $get) => $set('total_price', ((float) $get('quantity') * (float) $get('unit_price')) + (float) $state)),
                             Forms\Components\TextInput::make('total_price')
@@ -197,9 +281,10 @@ public static function form(Form $form): Form
                                 ->readOnly()
                                 ->prefix('AED')
                                 ->default(0)
+                                ->columnSpan(['default' => 6, 'md' => 3])
                                 ->dehydrated(),
                         ])
-                        ->columns(['default' => 1, 'md' => 2, 'lg' => 3]) // 3 columns, 2 rows for better width
+                        ->columns(12)
                         ->columnSpanFull()
                         ->live()
                         ->afterStateUpdated(function (callable $get, callable $set) {
@@ -395,11 +480,12 @@ public static function form(Form $form): Form
                         Infolists\Components\RepeatableEntry::make('items')
                             ->schema([
                                 Infolists\Components\TextEntry::make('accountCode.name')
-                                    ->label('Account Name')
+                                    ->label('Account Code / Name')
                                     ->formatStateUsing(fn ($state, $record) => $record->accountCode
-                                        ? $record->accountCode->name
+                                        ? "{$record->accountCode->code} – {$record->accountCode->name}"
                                         : '—'
-                                    ),
+                                    )
+                                    ->visible(fn () => auth()->user()->isHeadOffice()),
 
 
                                 Infolists\Components\TextEntry::make('name')->label('Item'),
@@ -561,7 +647,7 @@ public static function table(Table $table): Table
                 ->trueLabel('Unassigned Only')
                 ->falseLabel('Fully Assigned')
                 ->queries(
-                    true: fn (Builder $query) => $query->whereHas('items', fn ($q) => $q->whereNull('account_code_id')),
+                    true: fn (Builder $query) => $query->where('type', 'EXPENSE')->whereHas('items', fn ($q) => $q->whereNull('account_code_id')),
                     false: fn (Builder $query) => $query->whereDoesntHave('items', fn ($q) => $q->whereNull('account_code_id')),
                 )
                 ->visible(fn () => auth()->user()->isHeadOffice()),
@@ -832,7 +918,7 @@ public static function table(Table $table): Table
         // Note: 'category' is NOT eager-loaded — Transaction has no direct category relation.
         // Categories live on transaction_items, hence 'items.category'.
         $query = parent::getEloquentQuery()
-            ->with(['branch', 'user', 'items.accountCode']);
+            ->with(['branch', 'user', 'items.accountCode', 'items.itemMaster']);
 
 
         if (auth()->user()->branch_id) {

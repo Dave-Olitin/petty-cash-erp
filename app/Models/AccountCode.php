@@ -27,4 +27,12 @@ class AccountCode extends Model
     {
         return $this->hasMany(TransactionItem::class);
     }
+
+    /**
+     * Master items linked to this account code.
+     */
+    public function itemMasters()
+    {
+        return $this->hasMany(ItemMaster::class);
+    }
 }

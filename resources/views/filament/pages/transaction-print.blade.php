@@ -266,11 +266,11 @@
             <thead>
                 <tr>
                     <th style="width: 5%;">#</th>
-                    <th style="width: 35%;">Description</th>
-                    <th style="width: 20%;">Category</th>
-                    <th class="text-right" style="width: 10%;">Qty</th>
-                    <th class="text-right" style="width: 15%;">Unit Price</th>
-                    <th class="text-right" style="width: 15%;">Total</th>
+                    <th style="width: 30%;">Description</th>
+                    <th style="width: 25%;">Account Code / Category</th>
+                    <th class="text-right" style="width: 8%;">Qty</th>
+                    <th class="text-right" style="width: 16%;">Unit Price</th>
+                    <th class="text-right" style="width: 16%;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -283,7 +283,14 @@
                         <div style="font-size: 8pt; color: #6b7280; margin-top: 2px;">+ VAT: {{ number_format($item->vat, 2) }}</div>
                         @endif
                     </td>
-                    <td>{{ $item->category?->name ?? '—' }}</td>
+                    <td>
+                        @if($item->accountCode)
+                            <div style="font-weight: 600; font-size: 9pt;">{{ $item->accountCode->code }}</div>
+                            <div style="font-size: 8pt; color: #4b5563;">{{ $item->accountCode->name }}</div>
+                        @else
+                            <div style="color: #6b7280;">{{ $item->category?->name ?? '—' }}</div>
+                        @endif
+                    </td>
                     <td class="text-right">{{ $item->quantity }}</td>
                     <td class="text-right">{{ number_format($item->unit_price, 2) }}</td>
                     <td class="text-right font-bold">{{ number_format($item->total_price, 2) }}</td>
