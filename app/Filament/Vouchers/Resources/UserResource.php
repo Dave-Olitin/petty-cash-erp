@@ -64,13 +64,26 @@ class UserResource extends Resource
                                 ->preload(),
                         ]),
 
-                    Forms\Components\Section::make('Voucher System Access')
-                        ->description('Assign roles to grant access to the separate Vouchers software.')
+                    Forms\Components\Section::make('Software Roles & Access')
+                        ->description('Assign roles to grant access to Accounting, Vouchers, and PRO Tracking.')
                         ->schema([
                             Forms\Components\CheckboxList::make('roles')
                                 ->relationship('roles', 'name')
                                 ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->name}" . ($record->description ? " - {$record->description}" : ''))
                                 ->columns(1),
+                        ]),
+
+                    Forms\Components\Section::make('Direct Permissions (Optional Override)')
+                        ->description('Grant custom direct permissions to this user in addition to their role.')
+                        ->collapsible()
+                        ->collapsed()
+                        ->schema([
+                            Forms\Components\CheckboxList::make('permissions')
+                                ->relationship('permissions', 'name', modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'))
+                                ->searchable()
+                                ->bulkToggleable()
+                                ->columns(1)
+                                ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->name}" . ($record->description ? " — {$record->description}" : '')),
                         ]),
                 ])->columnSpan(['lg' => 1]),
             ])->columns(3);
@@ -96,14 +109,16 @@ class UserResource extends Resource
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('roles.name')
-                    ->label('Voucher Roles')
+                    ->label('Roles')
                     ->badge()
                     ->separator(',')
                     ->color(fn (string $state): string => match ($state) {
-                        'Accountant' => 'warning',
-                        'Approver' => 'success',
-                        'Requester' => 'info',
-                        default => 'gray',
+                        'Admin', 'Super Admin'       => 'danger',
+                        'Accountant', 'Accountant 1' => 'warning',
+                        'Approver'                  => 'success',
+                        'PRO Officer'               => 'info',
+                        'Requester'                 => 'gray',
+                        default                     => 'primary',
                     })
                     ->searchable(),
                     

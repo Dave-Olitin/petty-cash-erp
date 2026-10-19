@@ -25,18 +25,31 @@ class RoleResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('name')
-                    ->required()
-                    ->unique(ignoreRecord: true)
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('description')
-                    ->maxLength(255)
-                    ->columnSpanFull(),
-                Forms\Components\Select::make('permissions')
-                    ->multiple()
-                    ->relationship('permissions', 'name')
-                    ->preload()
-                    ->columnSpanFull(),
+                Forms\Components\Section::make('Role Information')
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->label('Role Name')
+                            ->placeholder('e.g. PRO Officer, Senior Accountant')
+                            ->required()
+                            ->unique(ignoreRecord: true)
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('description')
+                            ->label('Role Description')
+                            ->placeholder('Summary of duties and access level')
+                            ->maxLength(255),
+                    ])->columns(2),
+
+                Forms\Components\Section::make('Assigned Permissions')
+                    ->description('Select the permissions granted to this role. You can search by module (e.g. "pro", "voucher") or bulk select.')
+                    ->schema([
+                        Forms\Components\CheckboxList::make('permissions')
+                            ->relationship('permissions', 'name', modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'))
+                            ->searchable()
+                            ->bulkToggleable()
+                            ->columns(['default' => 1, 'sm' => 2, 'lg' => 3])
+                            ->getOptionLabelFromRecordUsing(fn ($record) => "{$record->name}" . ($record->description ? " — {$record->description}" : ''))
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 
@@ -45,14 +58,21 @@ class RoleResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('description')
+                    ->label('Role Name')
                     ->searchable()
-                    ->limit(50),
+                    ->sortable()
+                    ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
+                Tables\Columns\TextColumn::make('description')
+                    ->label('Description')
+                    ->searchable()
+                    ->limit(50)
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('permissions.name')
+                    ->label('Permissions')
                     ->badge()
                     ->separator(',')
-                    ->limitList(3),
+                    ->limitList(5)
+                    ->expandableLimitedList(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

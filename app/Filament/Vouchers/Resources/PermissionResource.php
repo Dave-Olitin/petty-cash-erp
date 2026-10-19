@@ -40,17 +40,70 @@ class PermissionResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('description')
+                    ->label('Permission Name')
                     ->searchable()
-                    ->limit(50),
+                    ->sortable()
+                    ->weight(\Filament\Support\Enums\FontWeight::SemiBold),
+
+                Tables\Columns\TextColumn::make('module')
+                    ->label('Module')
+                    ->state(function (Permission $record): string {
+                        $name = $record->name;
+                        if (str_starts_with($name, 'pro_')) return 'PRO Tracking';
+                        if (str_starts_with($name, 'voucher.')) return 'Vouchers';
+                        if (str_starts_with($name, 'journal_entry.') || str_starts_with($name, 'purchase_entry.') || str_starts_with($name, 'gl_report.')) return 'Accounting';
+                        return 'System & Settings';
+                    })
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'PRO Tracking' => 'info',
+                        'Vouchers' => 'success',
+                        'Accounting' => 'warning',
+                        default => 'gray',
+                    }),
+
+                Tables\Columns\TextColumn::make('description')
+                    ->label('Description')
+                    ->searchable()
+                    ->limit(60)
+                    ->placeholder('—'),
+
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('name', 'asc')
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('module')
+                    ->label('Filter by Module')
+                    ->options([
+                        'pro'        => 'PRO Tracking',
+                        'voucher'    => 'Vouchers',
+                        'accounting' => 'Accounting',
+                        'system'     => 'System & Settings',
+                    ])
+                    ->query(function ($query, array $data) {
+                        $val = $data['value'] ?? null;
+                        if (! $val) return;
+                        match ($val) {
+                            'pro' => $query->where('name', 'like', 'pro_%'),
+                            'voucher' => $query->where('name', 'like', 'voucher.%'),
+                            'accounting' => $query->where(function ($q) {
+                                $q->where('name', 'like', 'journal_entry.%')
+                                  ->orWhere('name', 'like', 'purchase_entry.%')
+                                  ->orWhere('name', 'like', 'gl_report.%');
+                            }),
+                            'system' => $query->where(function ($q) {
+                                $q->where('name', 'not like', 'pro_%')
+                                  ->where('name', 'not like', 'voucher.%')
+                                  ->where('name', 'not like', 'journal_entry.%')
+                                  ->where('name', 'not like', 'purchase_entry.%')
+                                  ->where('name', 'not like', 'gl_report.%');
+                            }),
+                            default => null,
+                        };
+                    }),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
