@@ -41,7 +41,12 @@ class LedgerBranchResource extends Resource
                         ->unique(ignoreRecord: true)
                         ->maxLength(255)
                         ->placeholder('e.g. ETC, TG, SB MAIN'),
-                ]),
+
+                    Forms\Components\DatePicker::make('license_expiry')
+                        ->label('Trade License Expiry')
+                        ->native(false)
+                        ->helperText('Trade license expiration date used across PRO and compliance tracking.'),
+                ])->columns(2),
             ]);
     }
 
@@ -52,6 +57,11 @@ class LedgerBranchResource extends Resource
                 Tables\Columns\TextColumn::make('name')
                     ->searchable()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('license_expiry')
+                    ->label('License Expiry')
+                    ->date('d M Y')
+                    ->sortable()
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('voucher_items_count')
                     ->counts('voucherItems')
                     ->label('Total Vouchers')
