@@ -22,6 +22,16 @@ class DashboardOverviewWidget extends Widget
         return 'full';
     }
 
+    public static function canView(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->can('voucher.view') || $user->hasAnyRole(['Admin', 'Super Admin', 'Accountant', 'Approver']);
+    }
+
     protected static ?int $sort = 0;
 
     protected function getViewData(): array

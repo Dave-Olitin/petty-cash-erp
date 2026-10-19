@@ -17,7 +17,20 @@ class FloatReplenishmentsTable extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user()->isHeadOffice() || auth()->user()->hasRole('Accountant');
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasAnyRole(['Admin', 'Super Admin'])) {
+            return true;
+        }
+
+        if ($user->hasRole('Accountant') || $user->can('voucher.manage_float')) {
+            return true;
+        }
+
+        return false;
     }
 
     public function table(Table $table): Table

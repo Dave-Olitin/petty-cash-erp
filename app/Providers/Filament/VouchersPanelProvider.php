@@ -26,7 +26,7 @@ class VouchersPanelProvider extends PanelProvider
             ->id('vouchers')
             ->path('vouchers')
             ->login(\App\Filament\Vouchers\Pages\Auth\Login::class)
-            ->brandName('PAYMENT VOUCHER')
+            ->brandName('Accounting Software')
             ->favicon(asset('images/icon-192.png'))
             ->maxContentWidth(\Filament\Support\Enums\MaxWidth::Full)
             ->font('Manrope')

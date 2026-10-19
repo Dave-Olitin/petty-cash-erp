@@ -12,9 +12,35 @@ class Dashboard extends \Filament\Pages\Dashboard
     protected static ?string $navigationLabel = 'Overview';
     protected static ?string $title = 'Overview';
 
+    public function mount(): void
+    {
+        $user = auth()->user();
+
+        // If user is a PRO user without voucher/accounting permissions, redirect directly to PRO Tracking
+        if ($user && $user->can('pro_record.view') && !$user->can('voucher.view') && !$user->hasAnyRole(['Admin', 'Super Admin', 'Accountant'])) {
+            $this->redirect(\App\Filament\Vouchers\Resources\ProRecordResource::getUrl('index'));
+            return;
+        }
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        // Hide Financial Overview from navigation for users without financial voucher access
+        if (!$user->can('voucher.view') && !$user->hasAnyRole(['Admin', 'Super Admin', 'Accountant', 'Approver'])) {
+            return false;
+        }
+
+        return true;
+    }
+
     public static function canAccess(): bool
     {
-        return auth()->user()->can('access_vouchers_panel');
+        return auth()->user()?->can('access_vouchers_panel') ?? false;
     }
 
     public function getColumns(): int | string | array
@@ -315,6 +341,13 @@ class Dashboard extends \Filament\Pages\Dashboard
 
     public function getWidgets(): array
     {
+        $user = auth()->user();
+
+        // Return empty widgets if user lacks financial/voucher permissions
+        if (!$user || (!$user->can('voucher.view') && !$user->hasAnyRole(['Admin', 'Super Admin', 'Accountant', 'Approver']))) {
+            return [];
+        }
+
         return [
             \App\Filament\Vouchers\Widgets\DashboardOverviewWidget::class,
             \App\Filament\Vouchers\Widgets\FloatReplenishmentsTable::class,
