@@ -17,3 +17,9 @@ Schedule::command('vouchers:send-escalation-reminders')
 Schedule::command('vouchers:send-escalation-reminders')
     ->dailyAt('16:00')
     ->description('Afternoon escalation reminders for stale pending vouchers');
+
+// Daily PRO overstay fines sync and proactive expiration alerts (08:00 AM)
+Schedule::command('pro:sync-fines-and-alerts')
+    ->dailyAt('08:00')
+    ->description('Daily PRO overstay fines sync and expiry alerts');
+
