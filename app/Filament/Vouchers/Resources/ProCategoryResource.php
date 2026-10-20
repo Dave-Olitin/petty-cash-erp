@@ -34,8 +34,7 @@ class ProCategoryResource extends Resource
             return false;
         }
 
-        return $user->hasAnyRole(['Admin', 'Super Admin'])
-            || $user->can('manage_settings')
+        return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
             || $user->can('pro_category.view')
             || $user->can('pro_category.manage');
     }
@@ -53,7 +52,6 @@ class ProCategoryResource extends Resource
         }
 
         return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
-            || $user->can('manage_settings')
             || $user->can('pro_category.manage');
     }
 
@@ -65,7 +63,6 @@ class ProCategoryResource extends Resource
         }
 
         return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
-            || $user->can('manage_settings')
             || $user->can('pro_category.manage');
     }
 
@@ -77,7 +74,6 @@ class ProCategoryResource extends Resource
         }
 
         return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
-            || $user->can('manage_settings')
             || $user->can('pro_category.manage');
     }
 
