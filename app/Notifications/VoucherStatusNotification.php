@@ -25,11 +25,10 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        $channels = ['database', WebPushChannel::class];
+        $channels = ['database', 'broadcast', WebPushChannel::class];
 
         // Only attempt to send an email if a real SMTP host has been configured
         // AND the user has not opted out of email notifications.
-        // Use filter_var to strictly parse 0, "0", false, or "false" safely as a boolean false.
         $wantsEmail = filter_var(data_get($notifiable, 'receive_email_notifications', true), FILTER_VALIDATE_BOOLEAN);
 
         if ($wantsEmail) {
@@ -84,7 +83,7 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             ]);
     }
 
-    public function toDatabase(object $notifiable): array
+    public function toFilamentNotification(): \Filament\Notifications\Notification
     {
         $title = match ($this->event) {
             'submitted'       => "New Voucher Submitted",
@@ -92,28 +91,29 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             'approved'        => "Voucher Approved",
             'rejected'        => "Voucher Rejected",
             'paid'            => "Voucher Paid",
-            'early_disbursement' => "⚠️ Early Disbursement Alert",
+            'early_disbursement' => "Early Disbursement Alert",
+            'pending_fyi'     => "Voucher in Review Queue",
             'reminder_checker' => "Action Required: Pending Check",
             'reminder_approver' => "Action Required: Pending Approval",
             default           => "Voucher Update",
         };
 
         $icon = match ($this->event) {
-            'approved', 'paid'  => 'heroicon-o-check-circle',
-            'rejected'          => 'heroicon-o-x-circle',
+            'approved', 'paid'   => 'heroicon-o-check-circle',
+            'rejected'           => 'heroicon-o-x-circle',
             'early_disbursement' => 'heroicon-o-exclamation-triangle',
-            'pending_fyi'       => 'heroicon-o-eye',
+            'pending_fyi'        => 'heroicon-o-eye',
             'submitted', 'checked' => 'heroicon-o-clock',
-            default             => 'heroicon-o-information-circle',
+            default              => 'heroicon-o-information-circle',
         };
 
         $color = match ($this->event) {
-            'approved', 'paid' => 'success',
-            'rejected'         => 'danger',
+            'approved', 'paid'   => 'success',
+            'rejected'           => 'danger',
             'early_disbursement' => 'warning',
-            'pending_fyi'      => 'info',
+            'pending_fyi'        => 'info',
             'submitted', 'checked' => 'warning',
-            default            => 'gray',
+            default              => 'gray',
         };
 
         $body = "**{$this->voucher->voucher_number}** - AED " . number_format($this->voucher->amount, 2);
@@ -132,8 +132,19 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
                     ->button()
                     ->url(url("/vouchers/vouchers/{$this->voucher->id}"))
                     ->markAsRead(),
-            ])
-            ->getDatabaseMessage();
+            ]);
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        return $this->toFilamentNotification()->getDatabaseMessage();
+    }
+
+    public function toBroadcast(object $notifiable): \Illuminate\Notifications\Messages\BroadcastMessage
+    {
+        \Filament\Notifications\Events\DatabaseNotificationsSent::dispatch($notifiable);
+
+        return $this->toFilamentNotification()->getBroadcastMessage();
     }
 
     public function toWebPush($notifiable, $notification)
@@ -144,8 +155,8 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
             'approved'        => "Voucher Approved",
             'rejected'        => "Voucher Rejected",
             'paid'            => "Voucher Paid",
-            'early_disbursement' => "⚠️ Early Disbursement Alert",
-            'pending_fyi'     => "👀 Heads Up: Voucher In Your Queue",
+            'early_disbursement' => "Early Disbursement Alert",
+            'pending_fyi'     => "Voucher in Review Queue",
             'reminder_checker' => "Action Required: Pending Check",
             'reminder_approver' => "Action Required: Pending Approval",
             default           => "Voucher Update",
@@ -158,8 +169,11 @@ class VoucherStatusNotification extends Notification implements ShouldQueue
 
         return (new WebPushMessage)
             ->title($title)
-            ->icon('/images/icon-192.png')
+            ->icon('/images/voucher-app-icon.png')
             ->body($body)
+            ->action('View Voucher', url("/vouchers/vouchers/{$this->voucher->id}"))
+            ->tag("voucher-{$this->voucher->id}-" . time())
+            ->vibrate([100, 50, 100])
             ->options(['TTL' => '86400'])
             ->data(['id' => $notification->id, 'url' => url("/vouchers/vouchers/{$this->voucher->id}")]);
     }

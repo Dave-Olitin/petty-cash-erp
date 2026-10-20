@@ -40,15 +40,11 @@ class SendVoucherReminders extends Command
             };
 
             if ($recipients->isNotEmpty()) {
-                Notification::make()
-                    ->title('Reminder: Action Required')
-                    ->body("Voucher {$voucher->voucher_number} has been pending action for over 24 hours. Please review it.")
-                    ->warning() // Yellow alert
-                    ->sendToDatabase($recipients);
-                
-                // Also trigger Email if configured. Filament native `sendToDatabase` 
-                // doesn't force emails unless connected to an Email gateway.
-                // We'll broadcast natively here.
+                $event = $voucher->status === 'pending_checker' ? 'reminder_checker' : 'reminder_approver';
+                \Illuminate\Support\Facades\Notification::send(
+                    $recipients,
+                    new \App\Notifications\VoucherStatusNotification($voucher, $event)
+                );
             }
         }
 

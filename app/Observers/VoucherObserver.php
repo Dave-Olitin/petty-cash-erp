@@ -120,21 +120,6 @@ class VoucherObserver
                     }
 
                     $currentBalance = (float) $totalReplenishing - (float) $totalSpent;
-
-                    // ── 3. Dispatch low-balance notifications to the queue ─────────
-                    if ($currentBalance < 2000) {
-                        try {
-                            $managers = \App\Models\User::permission('voucher.manage_float')->get();
-                            foreach ($managers as $manager) {
-                                $manager->notify(
-                                    (new \App\Notifications\LowBalanceNotification($currentBalance))
-                                        ->onQueue('notifications')
-                                );
-                            }
-                        } catch (\Throwable $e) {
-                            \Illuminate\Support\Facades\Log::error('Low Balance Notification Failed: ' . $e->getMessage());
-                        }
-                    }
                 } // Close petty_cash block
 
                 // ── 2. Auto-trigger liquidation ───────────────────────────────
