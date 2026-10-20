@@ -109,6 +109,72 @@ class DatabaseSeeder extends Seeder
             \App\Models\LedgerBranch::firstOrCreate(['name' => $branchName]);
         }
 
+        // 3.6. Setup Default PRO Categories
+        if (\Illuminate\Support\Facades\Schema::hasTable('pro_categories') && \App\Models\ProCategory::count() === 0) {
+            \App\Models\ProCategory::create([
+                'name' => 'Category 1 (High Skilled)',
+                'code' => 'CAT1',
+                'description' => 'MOHRE Category 1 skilled tier (Bachelor degree and above)',
+                'wp_submission_cost' => 300.00,
+                'renewal_wp_cost' => 300.00,
+                'offer_letter_cost' => 50.00,
+                'dubins_cost' => 120.00,
+                'evisa_cost' => 450.00,
+                'change_status_cost' => 650.00,
+                'iloe_cost' => 63.00,
+                'contract_submission_cost' => 100.00,
+                'emirates_id_cost' => 370.00,
+                'residence_visa_cost' => 450.00,
+                'renewal_dubins_cost' => 120.00,
+                'renewal_iloe_cost' => 63.00,
+                'renewal_contract_cost' => 100.00,
+                'renewal_emirates_id_cost' => 370.00,
+                'renewal_residence_visa_cost' => 450.00,
+            ]);
+
+            \App\Models\ProCategory::create([
+                'name' => 'Category 2 (Standard Commercial)',
+                'code' => 'CAT2',
+                'description' => 'MOHRE Category 2 standard commercial tier',
+                'wp_submission_cost' => 1200.00,
+                'renewal_wp_cost' => 1200.00,
+                'offer_letter_cost' => 50.00,
+                'dubins_cost' => 120.00,
+                'evisa_cost' => 450.00,
+                'change_status_cost' => 650.00,
+                'iloe_cost' => 63.00,
+                'contract_submission_cost' => 100.00,
+                'emirates_id_cost' => 370.00,
+                'residence_visa_cost' => 450.00,
+                'renewal_dubins_cost' => 120.00,
+                'renewal_iloe_cost' => 63.00,
+                'renewal_contract_cost' => 100.00,
+                'renewal_emirates_id_cost' => 370.00,
+                'renewal_residence_visa_cost' => 450.00,
+            ]);
+
+            \App\Models\ProCategory::create([
+                'name' => 'Free Zone Entity',
+                'code' => 'FZ',
+                'description' => 'Free Zone visa and employment authority fees',
+                'wp_submission_cost' => 1500.00,
+                'renewal_wp_cost' => 1500.00,
+                'offer_letter_cost' => 0.00,
+                'dubins_cost' => 120.00,
+                'evisa_cost' => 500.00,
+                'change_status_cost' => 700.00,
+                'iloe_cost' => 63.00,
+                'contract_submission_cost' => 150.00,
+                'emirates_id_cost' => 370.00,
+                'residence_visa_cost' => 500.00,
+                'renewal_dubins_cost' => 120.00,
+                'renewal_iloe_cost' => 63.00,
+                'renewal_contract_cost' => 150.00,
+                'renewal_emirates_id_cost' => 370.00,
+                'renewal_residence_visa_cost' => 500.00,
+            ]);
+        }
+
         // 4. Generate Exactly 10 Vouchers
         $requesters = [$requester1, $requester2];
         $totalVouchersCreated = 0;
