@@ -81,19 +81,31 @@ class ExpiryMonitoringDashboard extends Page
                 $expiry = Carbon::parse($record->residence_visa_expiry);
                 $daysRemaining = (int) $today->diffInDays($expiry, false);
                 $graceDays = (int) ($record->grace_period_days ?: 30);
-                
-                $finesStart = $record->fines_start_date 
-                    ? Carbon::parse($record->fines_start_date) 
-                    : $expiry->copy()->addDays($graceDays);
+                $graceEnd = $expiry->copy()->addDays($graceDays);
+                $finesStart = $graceEnd->copy()->addDay();
 
-                $daysToGraceEnd = (int) $today->diffInDays($finesStart, false);
-                $fines = (float) $record->calculated_total_fines;
-
-                $status = 'on_track';
-                if ($daysRemaining < 0) {
-                    $status = 'action_required';
-                } elseif ($daysRemaining <= 30) {
-                    $status = 'expiring_soon';
+                if ($daysRemaining >= 0) {
+                    // Valid / Active visa: Grace period hasn't ended; no fines accrue
+                    $daysToGraceEnd = (int) $today->diffInDays($graceEnd, false);
+                    $fines = 0.0;
+                    $status = $daysRemaining <= 30 ? 'expiring_soon' : 'on_track';
+                } else {
+                    // Visa has expired
+                    $daysExpired = abs($daysRemaining);
+                    if ($daysExpired <= $graceDays) {
+                        // In grace period: Still 0 fines
+                        $daysToGraceEnd = $graceDays - $daysExpired;
+                        $fines = 0.0;
+                        $status = 'action_required';
+                    } else {
+                        // Past grace period: Fines are active!
+                        $daysToGraceEnd = -1; // Renders as "Ended"
+                        $daysOverdue = $daysExpired - $graceDays;
+                        $fines = $record->manual_fine_override 
+                            ? (float) $record->fine_pr_50 
+                            : (float) ($daysOverdue * 50);
+                        $status = 'action_required';
+                    }
                 }
 
                 $rows->push([
@@ -117,15 +129,31 @@ class ExpiryMonitoringDashboard extends Page
                 $expiry = Carbon::parse($record->emirates_id_expiry);
                 $daysRemaining = (int) $today->diffInDays($expiry, false);
                 $graceDays = 30; // ICP gives 30 days after expiry
-                $finesStart = $expiry->copy()->addDays($graceDays + 1);
-                $daysToGraceEnd = (int) $today->diffInDays($finesStart, false);
-                $fines = (float) $record->calculated_fine_eid_20;
+                $graceEnd = $expiry->copy()->addDays($graceDays);
+                $finesStart = $graceEnd->copy()->addDay();
 
-                $status = 'on_track';
-                if ($daysRemaining < 0) {
-                    $status = 'action_required';
-                } elseif ($daysRemaining <= 30) {
-                    $status = 'expiring_soon';
+                if ($daysRemaining >= 0) {
+                    // Valid / Active EID: No fines
+                    $daysToGraceEnd = (int) $today->diffInDays($graceEnd, false);
+                    $fines = 0.0;
+                    $status = $daysRemaining <= 30 ? 'expiring_soon' : 'on_track';
+                } else {
+                    // EID has expired
+                    $daysExpired = abs($daysRemaining);
+                    if ($daysExpired <= $graceDays) {
+                        // Within ICP grace period
+                        $daysToGraceEnd = $graceDays - $daysExpired;
+                        $fines = 0.0;
+                        $status = 'action_required';
+                    } else {
+                        // Past grace period
+                        $daysToGraceEnd = -1;
+                        $daysOverdue = $daysExpired - $graceDays;
+                        $fines = $record->manual_fine_override 
+                            ? (float) $record->fine_eid_20 
+                            : (float) min(1000, $daysOverdue * 20);
+                        $status = 'action_required';
+                    }
                 }
 
                 $rows->push([
@@ -136,10 +164,10 @@ class ExpiryMonitoringDashboard extends Page
                     'doc_number'           => $record->emirates_id_number ?: '—',
                     'expiry_date'          => $expiry,
                     'days_remaining'       => $daysRemaining,
-                    'grace_period'         => null,
-                    'days_to_grace_end'    => null,
-                    'projected_fine_start' => null,
-                    'estimated_fine'       => $fines > 0 ? $fines : 0,
+                    'grace_period'         => $graceDays,
+                    'days_to_grace_end'    => $daysToGraceEnd,
+                    'projected_fine_start' => $finesStart,
+                    'estimated_fine'       => $fines,
                     'status'               => $status,
                 ]);
             }
@@ -220,21 +248,24 @@ class ExpiryMonitoringDashboard extends Page
                 $expiry = Carbon::parse($branch->license_expiry);
                 $daysRemaining = (int) $today->diffInDays($expiry, false);
                 $graceDays = 30; // standard DED 30-day grace period
-                $finesStart = $expiry->copy()->addDays($graceDays + 1);
-                $daysToGraceEnd = (int) $today->diffInDays($finesStart, false);
-                
-                // Estimated DED penalty
-                $fines = 0;
-                if ($daysRemaining < -30) {
-                    $monthsOverdue = ceil((abs($daysRemaining) - 30) / 30);
-                    $fines = min(5000, $monthsOverdue * 250);
-                }
+                $graceEnd = $expiry->copy()->addDays($graceDays);
+                $finesStart = $graceEnd->copy()->addDay();
 
-                $status = 'on_track';
-                if ($daysRemaining < 0) {
+                if ($daysRemaining >= 0) {
+                    $daysToGraceEnd = (int) $today->diffInDays($graceEnd, false);
+                    $fines = 0.0;
+                    $status = $daysRemaining <= 60 ? 'expiring_soon' : 'on_track';
+                } else {
+                    $daysExpired = abs($daysRemaining);
+                    if ($daysExpired <= $graceDays) {
+                        $daysToGraceEnd = $graceDays - $daysExpired;
+                        $fines = 0.0;
+                    } else {
+                        $daysToGraceEnd = -1;
+                        $monthsOverdue = ceil(($daysExpired - $graceDays) / 30);
+                        $fines = min(5000, $monthsOverdue * 250);
+                    }
                     $status = 'action_required';
-                } elseif ($daysRemaining <= 60) {
-                    $status = 'expiring_soon';
                 }
 
                 $authority = $branch->issuing_authority ?: 'DED';

@@ -33,27 +33,60 @@ class SyncProFinesAndAlerts extends Command
         $this->info("Running PRO Fines and Expiration Check for {$today->toDateString()}...");
 
         // 1. Sync Overdue Fines in Database
-        $overdueRecords = ProRecord::whereNotNull('fines_start_date')
-            ->where('fines_start_date', '<', $today)
-            ->where('manual_fine_override', false)
-            ->get();
-
+        $records = ProRecord::whereNotNull('residence_visa_expiry')->get();
         $totalFinesAccrued = 0;
+        $overdueCount = 0;
 
-        foreach ($overdueRecords as $record) {
-            $days = (int) $record->fines_start_date->diffInDays($today);
-            $pr50 = (float) ($days * 50);
-            $eid20 = (float) min(1000, $days * 20);
+        foreach ($records as $record) {
+            if ($record->manual_fine_override) {
+                if ($record->fine_pr_50 > 0 || $record->fine_eid_20 > 0) {
+                    $totalFinesAccrued += ((float) $record->fine_pr_50 + (float) $record->fine_eid_20);
+                    $overdueCount++;
+                }
+                continue;
+            }
 
-            $record->updateQuietly([
-                'fine_pr_50' => $pr50,
-                'fine_eid_20' => $eid20,
-            ]);
+            $graceDays = (int) ($record->grace_period_days ?: 30);
+            $correctFinesStart = $record->residence_visa_expiry->copy()->addDays($graceDays + 1);
 
-            $totalFinesAccrued += ($pr50 + $eid20);
+            // A: Visa is still active & valid -> ZERO FINES
+            if ($today->lte($record->residence_visa_expiry)) {
+                $record->updateQuietly([
+                    'fines_start_date' => $correctFinesStart,
+                    'fine_pr_50'       => 0,
+                    'fine_eid_20'      => 0,
+                ]);
+                continue;
+            }
+
+            // B: Visa is expired
+            $daysExpired = (int) $record->residence_visa_expiry->diffInDays($today);
+
+            if ($daysExpired <= $graceDays) {
+                // Within Grace Period -> ZERO FINES
+                $record->updateQuietly([
+                    'fines_start_date' => $correctFinesStart,
+                    'fine_pr_50'       => 0,
+                    'fine_eid_20'      => 0,
+                ]);
+            } else {
+                // Past Grace Period -> OVERSTAY PENALTIES ACTIVE
+                $daysOverdue = $daysExpired - $graceDays;
+                $pr50 = (float) ($daysOverdue * 50);
+                $eid20 = (float) min(1000, $daysOverdue * 20);
+
+                $record->updateQuietly([
+                    'fines_start_date' => $correctFinesStart,
+                    'fine_pr_50'       => $pr50,
+                    'fine_eid_20'      => $eid20,
+                ]);
+
+                $totalFinesAccrued += ($pr50 + $eid20);
+                $overdueCount++;
+            }
         }
 
-        $this->info("Updated fines for {$overdueRecords->count()} overdue records. Total Fines: AED {$totalFinesAccrued}");
+        $this->info("Updated fines for {$overdueCount} overdue records. Total Fines: AED {$totalFinesAccrued}");
 
         // 2. Identify Expiring Records
         $visasExpiring30d = ProRecord::whereNotNull('residence_visa_expiry')
@@ -69,10 +102,10 @@ class SyncProFinesAndAlerts extends Command
 
         if ($recipients->isNotEmpty()) {
             // A. Alert for Overstay Fines
-            if ($overdueRecords->isNotEmpty()) {
+            if ($overdueCount > 0) {
                 \Illuminate\Support\Facades\Notification::send($recipients, new \App\Notifications\SystemPushNotification(
                     title: 'Overstay Penalties Alert',
-                    body: "{$overdueRecords->count()} employee(s) past grace period · Total: AED " . number_format($totalFinesAccrued, 2),
+                    body: "{$overdueCount} employee(s) past grace period · Total: AED " . number_format($totalFinesAccrued, 2),
                     actionUrl: '/vouchers/pro-records',
                     tagId: 'pro-overstay-fines'
                 ));

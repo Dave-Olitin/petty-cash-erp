@@ -234,7 +234,7 @@
                                     @if($row['days_to_grace_end'] !== null)
                                         @if($row['days_to_grace_end'] < 0)
                                             <span class="text-danger-600 font-bold dark:text-danger-400">Ended</span>
-                                        @elseif($row['days_to_grace_end'] <= 5)
+                                        @elseif($isOverdue)
                                             <span class="text-amber-600 font-bold dark:text-amber-400">{{ $row['days_to_grace_end'] }}d left</span>
                                         @else
                                             <span class="text-gray-700 dark:text-gray-300">{{ $row['days_to_grace_end'] }}d</span>

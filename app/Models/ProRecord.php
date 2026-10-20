@@ -148,20 +148,47 @@ class ProRecord extends Model
     // ── Dynamic Overstay & Fine Calculations ────────────────────────────────
 
     /**
+     * Compute the authoritative date when overstay penalties begin.
+     * Overstay fines can NEVER start before the residence visa has expired + grace period.
+     */
+    public function getEffectiveFinesStartDateAttribute(): ?Carbon
+    {
+        if (! $this->residence_visa_expiry) {
+            return $this->fines_start_date ? Carbon::parse($this->fines_start_date) : null;
+        }
+
+        $graceDays = (int) ($this->grace_period_days ?: 30);
+        $minFinesStart = Carbon::parse($this->residence_visa_expiry)->addDays($graceDays + 1);
+
+        if ($this->fines_start_date) {
+            $fDate = Carbon::parse($this->fines_start_date);
+            if ($fDate->gte(Carbon::parse($this->residence_visa_expiry))) {
+                return $fDate;
+            }
+        }
+
+        return $minFinesStart;
+    }
+
+    /**
      * Number of days past the fines_start_date.
+     * Returns 0 if the visa is still valid or within grace period.
      */
     public function getDaysOverdueAttribute(): int
     {
-        if (! $this->fines_start_date) {
+        $today = Carbon::today();
+
+        // Rule 1: An active, unexpired visa is NEVER overdue!
+        if ($this->residence_visa_expiry && $today->lte(Carbon::parse($this->residence_visa_expiry))) {
             return 0;
         }
 
-        $today = Carbon::today();
-        if ($today->gt($this->fines_start_date)) {
-            return (int) $this->fines_start_date->diffInDays($today);
+        $finesStart = $this->effective_fines_start_date;
+        if (! $finesStart || $today->lte($finesStart)) {
+            return 0;
         }
 
-        return 0;
+        return (int) $finesStart->diffInDays($today);
     }
 
     /**
@@ -487,15 +514,20 @@ class ProRecord extends Model
             // Automatically keep total_cost synchronized
             $record->total_cost = $record->calculateTotalCost();
 
-            // Auto-calculate fines_start_date from visa expiry + grace period
-            if ($record->residence_visa_expiry && empty($record->fines_start_date)) {
-                $record->fines_start_date = $record->residence_visa_expiry->copy()->addDays($record->grace_period_days ?: 30);
+            $graceDays = (int) ($record->grace_period_days ?: 30);
+
+            // Auto-calculate / sanitize fines_start_date from visa expiry + grace period
+            if ($record->residence_visa_expiry) {
+                $minStart = $record->residence_visa_expiry->copy()->addDays($graceDays + 1);
+                if (empty($record->fines_start_date) || $record->fines_start_date->lt($record->residence_visa_expiry)) {
+                    $record->fines_start_date = $minStart;
+                }
             }
 
             // If residence visa stage was completed and has a date, auto-set visa expiry to +2 years if empty
             if ($record->residence_visa_stage_status === 'Completed' && $record->residence_visa_stage_date && empty($record->residence_visa_expiry)) {
                 $record->residence_visa_expiry = $record->residence_visa_stage_date->copy()->addYears(2);
-                $record->fines_start_date = $record->residence_visa_expiry->copy()->addDays($record->grace_period_days ?: 30);
+                $record->fines_start_date = $record->residence_visa_expiry->copy()->addDays($graceDays + 1);
             }
 
             // Auto-complete application if residence visa and contracts are done

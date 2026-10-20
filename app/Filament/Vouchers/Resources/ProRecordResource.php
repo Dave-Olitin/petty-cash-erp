@@ -354,6 +354,13 @@ class ProRecordResource extends Resource
                                                 Forms\Components\Placeholder::make('live_fines_preview')
                                                     ->label('Live Fines Preview')
                                                     ->content(function (callable $get) {
+                                                        $today = Carbon::today();
+                                                        $visaExp = $get('residence_visa_expiry');
+                                                        if ($visaExp && $today->lte(Carbon::parse($visaExp))) {
+                                                            $days = (int) $today->diffInDays(Carbon::parse($visaExp));
+                                                            return "✅ Valid: Residence visa active ({$days} days remaining until expiry). No fines accruing.";
+                                                        }
+
                                                         $startDate = $get('fines_start_date');
                                                         if (! $startDate) {
                                                             return 'Set "Fines Will Start Date" to calculate live overstay penalties.';
