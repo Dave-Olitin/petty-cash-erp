@@ -16,6 +16,7 @@ class ExpiryMonitoringDashboard extends Page
     protected static ?string $navigationGroup = 'PRO & Government Relations';
     protected static ?string $navigationLabel = 'Expiry Monitoring';
     protected static ?string $title           = 'Expiry Monitoring Dashboard';
+    public ?string $subheading                 = 'Real-time compliance monitoring, document expiry countdowns, and automated UAE fine projections.';
     protected static ?int $navigationSort     = 2;
     protected static string $view             = 'filament.vouchers.pages.expiry-monitoring-dashboard';
 
