@@ -55,6 +55,13 @@ class ExpiryMonitoringDashboard extends Page
         ];
     }
 
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            \App\Filament\Vouchers\Widgets\ExpiryMonitoringStatsWidget::class,
+        ];
+    }
+
     public function setTab(string $tab): void
     {
         $this->activeTab = $tab;
@@ -426,6 +433,26 @@ class ExpiryMonitoringDashboard extends Page
             'expiring_soon'   => $expiringSoon,
             'on_track'        => $onTrack,
             'total_fines'     => $totalFines,
+        ];
+    }
+
+    public static function calculateSummaryMetrics(): array
+    {
+        $instance = new static();
+        $instance->search = '';
+        $instance->statusFilter = 'all';
+        $instance->branchFilter = 'all';
+
+        $all = $instance->employeesData
+            ->concat($instance->tradeLicensesData)
+            ->concat($instance->establishmentCardsData);
+
+        return [
+            'total'           => $all->count(),
+            'action_required' => $all->where('status', 'action_required')->count(),
+            'expiring_soon'   => $all->where('status', 'expiring_soon')->count(),
+            'on_track'        => $all->where('status', 'on_track')->count(),
+            'total_fines'     => $all->sum('estimated_fine'),
         ];
     }
 }
