@@ -64,24 +64,25 @@
         style="display: none; position: fixed; bottom: 1rem; left: 1rem; right: 1rem; z-index: 9999;"
     >
         <div style="
-            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: white;
-            border-radius: 1rem;
-            padding: 1rem 1.25rem;
+            border-radius: 0.875rem;
+            padding: 0.875rem 1.25rem;
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            box-shadow: 0 10px 40px rgba(79, 70, 229, 0.4);
+            gap: 0.875rem;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.12);
         ">
             {{-- App Icon --}}
             <div style="flex-shrink: 0;">
-                <img src="/images/icon-192.png" alt="App Icon" style="width: 40px; height: 40px; border-radius: 0.5rem;" onerror="this.style.display='none'">
+                <img src="/images/voucher-app-icon.png" alt="App Icon" style="width: 40px; height: 40px; border-radius: 0.5rem; object-fit: contain; background: white; padding: 2px;" onerror="this.style.display='none'">
             </div>
 
             {{-- Text --}}
             <div style="flex: 1; min-width: 0;">
-                <p style="font-weight: 700; font-size: 0.875rem; margin: 0 0 0.15rem 0;">Install Petty Cash ERP</p>
-                <p style="font-size: 0.75rem; opacity: 0.85; margin: 0;">Add to your home screen for quick access.</p>
+                <p style="font-weight: 700; font-size: 0.875rem; margin: 0 0 0.15rem 0; letter-spacing: -0.01em;">Install Accounting Software</p>
+                <p style="font-size: 0.75rem; opacity: 0.85; margin: 0;">Add to your home screen or desktop for fast access.</p>
             </div>
 
             {{-- Install Button --}}
@@ -90,10 +91,10 @@
                 style="
                     flex-shrink: 0;
                     background: white;
-                    color: #4f46e5;
+                    color: #0f172a;
                     border: none;
                     border-radius: 0.5rem;
-                    padding: 0.4rem 0.9rem;
+                    padding: 0.45rem 1rem;
                     font-weight: 700;
                     font-size: 0.8rem;
                     cursor: pointer;
