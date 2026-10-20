@@ -49,7 +49,7 @@ class PermissionResource extends Resource
                     ->label('Module')
                     ->state(function (Permission $record): string {
                         $name = $record->name;
-                        if (str_starts_with($name, 'pro_')) return 'PRO Tracking';
+                        if (str_starts_with($name, 'pro_') || str_starts_with($name, 'ledger_branch.')) return 'PRO Tracking';
                         if (str_starts_with($name, 'voucher.')) return 'Vouchers';
                         if (str_starts_with($name, 'journal_entry.') || str_starts_with($name, 'purchase_entry.') || str_starts_with($name, 'gl_report.')) return 'Accounting';
                         return 'System & Settings';
@@ -87,7 +87,10 @@ class PermissionResource extends Resource
                         $val = $data['value'] ?? null;
                         if (! $val) return;
                         match ($val) {
-                            'pro' => $query->where('name', 'like', 'pro_%'),
+                            'pro' => $query->where(function ($q) {
+                                $q->where('name', 'like', 'pro_%')
+                                  ->orWhere('name', 'like', 'ledger_branch.%');
+                            }),
                             'voucher' => $query->where('name', 'like', 'voucher.%'),
                             'accounting' => $query->where(function ($q) {
                                 $q->where('name', 'like', 'journal_entry.%')
@@ -96,6 +99,7 @@ class PermissionResource extends Resource
                             }),
                             'system' => $query->where(function ($q) {
                                 $q->where('name', 'not like', 'pro_%')
+                                  ->where('name', 'not like', 'ledger_branch.%')
                                   ->where('name', 'not like', 'voucher.%')
                                   ->where('name', 'not like', 'journal_entry.%')
                                   ->where('name', 'not like', 'purchase_entry.%')

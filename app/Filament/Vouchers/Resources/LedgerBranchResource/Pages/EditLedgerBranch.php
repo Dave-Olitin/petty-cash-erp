@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Filament\Vouchers\Clusters\Settings\Resources\LedgerBranchResource\Pages;
+namespace App\Filament\Vouchers\Resources\LedgerBranchResource\Pages;
 
-use App\Filament\Vouchers\Clusters\Settings\Resources\LedgerBranchResource;
+use App\Filament\Vouchers\Resources\LedgerBranchResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 

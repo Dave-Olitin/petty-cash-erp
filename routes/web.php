@@ -102,5 +102,5 @@ Route::middleware(['auth:web'])->group(function () {
     Route::post('/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe']);
 });
 
-
-
+// Redirect old settings cluster URL to the new PRO section resource URL
+Route::redirect('/vouchers/settings/ledger-branches', '/vouchers/ledger-branches');

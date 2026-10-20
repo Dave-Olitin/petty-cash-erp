@@ -1,10 +1,8 @@
 <?php
 
-namespace App\Filament\Vouchers\Clusters\Settings\Resources;
+namespace App\Filament\Vouchers\Resources;
 
-use App\Filament\Vouchers\Clusters\Settings;
-use App\Filament\Vouchers\Clusters\Settings\Resources\LedgerBranchResource\Pages;
-use App\Filament\Vouchers\Clusters\Settings\Resources\LedgerBranchResource\RelationManagers;
+use App\Filament\Vouchers\Resources\LedgerBranchResource\Pages;
 use App\Models\LedgerBranch;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -12,23 +10,71 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class LedgerBranchResource extends Resource
 {
     protected static ?string $model = LedgerBranch::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-building-office-2';
 
-    protected static ?string $cluster = Settings::class;
+    protected static ?string $navigationGroup = 'PRO & Government Relations';
 
-    protected static ?string $navigationLabel = 'Ledger Branches';
+    protected static ?string $navigationLabel = 'Branch Ledgers';
 
-    protected static ?int $navigationSort = 11;
+    protected static ?string $modelLabel = 'Branch Ledger';
+
+    protected static ?string $pluralModelLabel = 'Branch Ledgers';
+
+    protected static ?int $navigationSort = 4;
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->can('manage_settings') ?? false;
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
+            || $user->can('ledger_branch.view')
+            || $user->can('ledger_branch.manage');
+    }
+
+    public static function canViewAny(): bool
+    {
+        return static::canAccess();
+    }
+
+    public static function canCreate(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
+            || $user->can('ledger_branch.manage');
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
+            || $user->can('ledger_branch.manage');
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
+            || $user->can('ledger_branch.manage');
     }
 
     public static function form(Form $form): Form
@@ -103,6 +149,10 @@ class LedgerBranchResource extends Resource
                     ->label('Branch / Entity')
                     ->searchable()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('license_number')
+                    ->label('Trade License #')
+                    ->searchable()
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('issuing_authority')
                     ->label('Authority')
                     ->searchable()
