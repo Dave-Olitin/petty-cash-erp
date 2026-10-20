@@ -16,6 +16,12 @@ class ProRecordsOverviewWidget extends BaseWidget
     // Only render on the PRO Records List page, not the main Dashboard
     protected static bool $isDiscovered = false;
 
+    protected int | string | array $columns = [
+        'default' => 1,
+        'sm' => 2,
+        'xl' => 4,
+    ];
+
     protected function getStats(): array
     {
         $today = Carbon::today();
@@ -51,57 +57,50 @@ class ProRecordsOverviewWidget extends BaseWidget
         return [
             // KPI 1: Active Overstay Fines
             Stat::make(
-                'Live Overstay Penalties',
-                new HtmlString('<span class="font-bold text-3xl ' . ($overdueCount > 0 ? 'text-rose-600' : 'text-emerald-600') . '">AED ' . number_format($totalFines, 2) . '</span>')
+                'Overstay Penalties',
+                'AED ' . number_format($totalFines, 2)
             )
-                ->description(new HtmlString(
+                ->description(
                     $overdueCount > 0
-                        ? '<span class="font-medium text-rose-600">⚠️ ' . $overdueCount . ' employee(s) incurring fines</span>'
-                        : '<span class="font-medium text-emerald-600">✅ 100% Compliant — No penalties</span>'
-                ))
-                ->descriptionIcon($overdueCount > 0 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-shield-check')
-                ->color($overdueCount > 0 ? 'danger' : 'success')
+                        ? "{$overdueCount} employees with active fines"
+                        : 'No active fines'
+                )
+                ->color($overdueCount > 0 ? 'danger' : 'gray')
                 ->url(url('/vouchers/pro-records?activeTab=overdue_fines')),
 
             // KPI 2: Critical Expiry Timeline
             Stat::make(
-                'Visas Expiring (< 30 Days)',
-                new HtmlString('<span class="font-bold text-3xl ' . ($visasExpiring30d > 0 ? 'text-amber-600' : 'text-emerald-600') . '">' . $visasExpiring30d . '</span>')
+                'Expiring Visas',
+                (string) $visasExpiring30d
             )
-                ->description(new HtmlString(
-                    '<span class="font-medium text-gray-500">' .
-                    ($visasExpiring30d > 0 ? 'Requires immediate renewal submission' : 'All visas in safe validity') .
-                    ($passportsExpiring6mo > 0 ? " • {$passportsExpiring6mo} passport(s) < 6mo" : '') .
-                    '</span>'
-                ))
-                ->descriptionIcon($visasExpiring30d > 0 ? 'heroicon-m-bell-alert' : 'heroicon-m-check-circle')
-                ->color($visasExpiring30d > 0 ? 'warning' : 'success')
+                ->description(
+                    $visasExpiring30d > 0
+                        ? "{$visasExpiring30d} expiring within 30 days"
+                        : 'All visas up to date'
+                )
+                ->color($visasExpiring30d > 0 ? 'warning' : 'gray')
                 ->url(url('/vouchers/pro-records?activeTab=expiring_soon')),
 
             // KPI 3: In-Progress Pipeline
             Stat::make(
-                'Active Visa Pipeline',
-                new HtmlString('<span class="font-bold text-3xl text-primary-600">' . $inProgress . '</span>')
+                'Active Pipeline',
+                (string) $inProgress
             )
-                ->description(new HtmlString(
-                    '<span class="font-medium text-gray-500">' .
-                    "{$newJoiners} New Joiner(s) • {$renewals} Renewal(s)" .
-                    '</span>'
-                ))
-                ->descriptionIcon('heroicon-m-arrow-path')
-                ->color('primary')
+                ->description(
+                    $inProgress > 0
+                        ? "{$newJoiners} new joiners · {$renewals} renewals"
+                        : 'No active cases'
+                )
+                ->color('gray')
                 ->url(url('/vouchers/pro-records?activeTab=all')),
 
             // KPI 4: Total Active Processing Budget
             Stat::make(
-                'Active Pipeline Budget',
-                new HtmlString('<span class="font-bold text-3xl text-emerald-600">AED ' . number_format($totalPipelineCost, 2) . '</span>')
+                'Pipeline Budget',
+                'AED ' . number_format($totalPipelineCost, 2)
             )
-                ->description(new HtmlString(
-                    '<span class="font-medium text-gray-500">Completed visas: AED ' . number_format($completedTotal, 2) . '</span>'
-                ))
-                ->descriptionIcon('heroicon-m-banknotes')
-                ->color('success'),
+                ->description('AED ' . number_format($completedTotal, 2) . ' settled')
+                ->color('gray'),
         ];
     }
 }

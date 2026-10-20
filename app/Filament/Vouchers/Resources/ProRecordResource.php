@@ -482,7 +482,7 @@ class ProRecordResource extends Resource
                                             ->label('Settings')
                                             ->icon('heroicon-m-cog-6-tooth')
                                             ->tooltip('Manage category fees in Settings')
-                                            ->url(url('/vouchers/settings/pro-categories'))
+                                            ->url(fn () => \App\Filament\Vouchers\Resources\ProCategoryResource::getUrl('index'))
                                             ->openUrlInNewTab(),
                                     ])
                                     ->createOptionForm([
@@ -529,58 +529,68 @@ class ProRecordResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('action_priority', 'asc')
+            ->modifyQueryUsing(function (\Illuminate\Database\Eloquent\Builder $query) {
+                if (! request()->has('tableSortColumn')) {
+                    $query->orderByRaw("COALESCE(fines_start_date, residence_visa_expiry, '2099-12-31') ASC");
+                }
+            })
+            ->recordUrl(fn (ProRecord $record): string => Pages\ViewProRecord::getUrl([$record]))
             ->columns([
-                // 1. Employee Name & Designation
+                // 1. Employee Name (Clean single line)
                 Tables\Columns\TextColumn::make('employee_name')
-                    ->label('EMPLOYEE')
+                    ->label('Employee')
                     ->searchable(['employee_name', 'nationality', 'job_description'])
                     ->sortable()
-                    ->weight(FontWeight::SemiBold)
-                    ->description(function (ProRecord $record): string {
-                        $parts = [];
-                        if ($record->nationality) {
-                            $parts[] = $record->nationality;
-                        }
-                        if ($record->job_description) {
-                            $parts[] = $record->job_description;
-                        }
-                        return implode(' • ', $parts) ?: 'No Job Title';
-                    }),
+                    ->weight(FontWeight::SemiBold),
 
-                // 2. Sponsoring Branch
+                // 2. Sponsoring Branch (Clean single line)
                 Tables\Columns\TextColumn::make('ledgerBranch.name')
-                    ->label('SPONSORING BRANCH')
-                    ->badge()
+                    ->label('Branch')
                     ->placeholder('—')
+                    ->weight(FontWeight::Medium)
                     ->color('gray')
+                    ->limit(20)
+                    ->tooltip(fn (ProRecord $record): ?string => $record->ledgerBranch?->name)
                     ->sortable()
                     ->searchable(),
 
-                // 3. Process Type & Category Tier
+                // 3. Category Tier Column (Unique name prevents toggle override)
+                Tables\Columns\TextColumn::make('category_tier')
+                    ->label('Category Tier')
+                    ->state(fn (ProRecord $record): ?string => $record->proCategory?->name)
+                    ->placeholder('—')
+                    ->color('gray')
+                    ->weight(FontWeight::Medium)
+                    ->limit(24)
+                    ->tooltip(fn (ProRecord $record): ?string => $record->proCategory?->name)
+                    ->sortable(query: fn ($query, $direction) => $query->orderBy(
+                        \App\Models\ProCategory::select('name')->whereColumn('pro_categories.id', 'pro_records.pro_category_id'),
+                        $direction
+                    )),
+
+                // 4. Process Type (Clean plain text to avoid rainbow colored badges)
                 Tables\Columns\TextColumn::make('process_type')
-                    ->label('PROCESS & TIER')
-                    ->badge()
+                    ->label('Process')
                     ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'new_inside'   => 'New Joiner (Inside)',
-                        'new_outside'  => 'New Joiner (Outside)',
+                        'new_inside'   => 'New (Inside)',
+                        'new_outside'  => 'New (Outside)',
                         'renewal'      => 'Renewal',
                         'cancellation' => 'Cancellation',
                         default        => ucfirst(str_replace('_', ' ', $state)),
                     })
-                    ->color(fn (string $state): string => match ($state) {
-                        'new_inside'   => 'primary',
-                        'new_outside'  => 'info',
-                        'renewal'      => 'success',
-                        'cancellation' => 'danger',
-                        default        => 'gray',
-                    })
-                    ->description(fn (ProRecord $record): ?string => $record->proCategory?->name)
+                    ->color('gray')
+                    ->weight(FontWeight::Medium)
                     ->sortable(),
 
-                // 4. Status
+                // 5. Visual Milestone Gantt Chart Column
+                Tables\Columns\ViewColumn::make('pipeline_gantt')
+                    ->label('Progress')
+                    ->view('filament.tables.columns.pipeline-gantt'),
+
+                // 6. Status (Subtle clean badge)
                 Tables\Columns\TextColumn::make('status')
-                    ->label('STATUS')
+                    ->label('Status')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'draft'       => 'Draft',
@@ -597,167 +607,153 @@ class ProRecordResource extends Resource
                         'cancelled'   => 'gray',
                         default        => 'gray',
                     })
-                    ->icon(fn (string $state): string => match ($state) {
-                        'completed'   => 'heroicon-m-check-circle',
-                        'in_progress' => 'heroicon-m-arrow-path',
-                        'on_hold'     => 'heroicon-m-pause-circle',
-                        'cancelled'   => 'heroicon-m-x-circle',
-                        default       => 'heroicon-m-document',
-                    })
                     ->sortable(),
 
-                // 5. Intelligent Consolidated Visa, Grace Period & Fines Status
+                // 7. Intelligent Consolidated Visa & Fines Status (High-signal color coding)
                 Tables\Columns\TextColumn::make('compliance_badge')
-                    ->label('VISA & COMPLIANCE')
+                    ->label('Compliance')
                     ->badge()
-                    ->color(fn (ProRecord $record): string => $record->compliance_color)
-                    ->description(fn (ProRecord $record): ?string => $record->compliance_description),
+                    ->color(fn (ProRecord $record): string => $record->compliance_color),
 
-                // 6. Total Processing Cost
+                // 8. Total Processing Cost (Right aligned, single line)
                 Tables\Columns\TextColumn::make('total_cost')
-                    ->label('TOTAL')
+                    ->label('Total Fee')
                     ->money('AED')
+                    ->alignEnd()
                     ->sortable()
-                    ->weight(FontWeight::Bold),
+                    ->weight(FontWeight::SemiBold),
 
-                // ── Toggleable Detail Columns (Off by default for easy viewing, toggle on when needed) ──
-                Tables\Columns\TextColumn::make('proCategory.name')
-                    ->label('CATEGORY (STANDALONE)')
-                    ->badge()
-                    ->color('info')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-
+                // ── Toggleable Detail Columns (Off by default, clean title casing) ──
                 Tables\Columns\TextColumn::make('passport_expiry')
-                    ->label('PASSPORT EXPIRY')
+                    ->label('Passport Expiry')
                     ->date('d M Y')
                     ->sortable()
                     ->description(fn (ProRecord $record): ?string => $record->passport_status['label'] ?? null)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('residence_visa_expiry')
-                    ->label('RESIDENCE VISA EXPIRY')
+                    ->label('Residence Visa Expiry')
                     ->date('d M Y')
                     ->sortable()
                     ->description(fn (ProRecord $record): ?string => $record->visa_status['label'] ?? null)
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('grace_period_days')
-                    ->label('GRACE PERIOD')
+                    ->label('Grace Period')
                     ->suffix(' days')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('fines_start_date')
-                    ->label('FINES WILL START DATE')
+                    ->label('Fines Start Date')
                     ->date('d M Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('fine_pr_50')
-                    ->label('FINE (PR-50)')
+                    ->label('Fine (PR-50)')
                     ->money('AED')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('fine_eid_20')
-                    ->label('FINE (EID-20)')
+                    ->label('Fine (EID-20)')
                     ->money('AED')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('license_expiry')
-                    ->label('LICENSE EXPIRY')
+                    ->label('License Expiry')
                     ->date('d M Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('labour_contract_expiry')
-                    ->label('LABOUR CONTRACT EXPIRY')
+                    ->label('Labour Contract Expiry')
                     ->date('d M Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('labour_card_number')
-                    ->label('LABOUR CARD #')
+                    ->label('Labour Card #')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('labour_card_expiry')
-                    ->label('LABOUR CARD EXPIRY')
+                    ->label('Labour Card Expiry')
                     ->date('d M Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('emirates_id_number')
-                    ->label('EMIRATES ID #')
+                    ->label('Emirates ID #')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('emirates_id_expiry')
-                    ->label('EMIRATES ID EXPIRY')
+                    ->label('Emirates ID Expiry')
                     ->date('d M Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('passport_number')
-                    ->label('PASSPORT #')
+                    ->label('Passport #')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('unified_id')
-                    ->label('UNIFIED ID #')
+                    ->label('Unified ID #')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('person_code')
-                    ->label('PERSON CODE #')
+                    ->label('Person Code #')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 // 9 Stage Pipeline Costs (Toggleable)
                 Tables\Columns\TextColumn::make('offer_letter_cost')
-                    ->label('OFFER LETTER')
+                    ->label('Offer Letter')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('dubins_cost')
-                    ->label('DUBINS')
+                    ->label('Dubins Insurance')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('wp_submission_cost')
-                    ->label('WP SUBMISSION')
+                    ->label('Work Permit')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('evisa_cost')
-                    ->label('EVISA')
+                    ->label('eVisa')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('change_status_cost')
-                    ->label('CHANGE STATUS')
+                    ->label('Change Status')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('iloe_cost')
-                    ->label('ILOE')
+                    ->label('ILOE Insurance')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('contract_submission_cost')
-                    ->label('CONTRACT SUBMISSION')
+                    ->label('Contract Submission')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('emirates_id_stage_cost')
-                    ->label('EMIRATES ID')
+                    ->label('Emirates ID Stage')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('residence_visa_stage_cost')
-                    ->label('RESIDENCE VISA')
+                    ->label('Residence Visa Stage')
                     ->money('AED')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -796,9 +792,13 @@ class ProRecordResource extends Resource
                     ->query(fn ($query) => $query->whereNotNull('residence_visa_expiry')->whereBetween('residence_visa_expiry', [Carbon::today(), Carbon::today()->addDays(30)])),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\ViewAction::make(),
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ])
+                ->icon('heroicon-m-ellipsis-horizontal')
+                ->tooltip('Actions'),
             ])
             ->headerActions([
                 ExportAction::make()
@@ -860,14 +860,56 @@ class ProRecordResource extends Resource
 
     public static function infolist(Infolist $infolist): Infolist
     {
+        $getDateColor = function (?Carbon $date, int $warningDays = 90, int $criticalDays = 30): string {
+            if (! $date) return 'gray';
+            $today = Carbon::today();
+            if ($today->gt($date)) return 'danger';
+            $days = (int) $today->diffInDays($date);
+            if ($days <= $criticalDays) return 'danger';
+            if ($days <= $warningDays) return 'warning';
+            return 'success';
+        };
+
+        $formatDateStatus = function (?Carbon $date, int $warningDays = 90, int $criticalDays = 30, string $warningPrefix = 'Expiring in'): string {
+            if (! $date) return 'Not Set';
+            $today = Carbon::today();
+            $formatted = $date->format('d M Y');
+            if ($today->gt($date)) {
+                $days = (int) $date->diffInDays($today);
+                return "{$formatted} (Expired {$days}d ago)";
+            }
+            $days = (int) $today->diffInDays($date);
+            if ($days === 0) return "{$formatted} (Expires Today)";
+            if ($days <= $warningDays) return "{$formatted} ({$warningPrefix} {$days}d)";
+            return "{$formatted} (Valid · {$days}d left)";
+        };
+
         return $infolist
             ->schema([
-                Infolists\Components\Section::make('Sponsoring Branch & License')
+                // ── 1. Hero Overview Card (Clean typography, no decorative icon clutter) ──
+                Infolists\Components\Section::make('Overview & Application Status')
+                    ->icon('heroicon-m-identification')
                     ->schema([
-                        Infolists\Components\TextEntry::make('ledgerBranch.name')->label('SPONSORING BRANCH')->badge()->placeholder('—')->color('gray'),
-                        Infolists\Components\TextEntry::make('license_expiry')->label('LICENSE EXPIRY')->date('d M Y')->placeholder('—'),
+                        Infolists\Components\TextEntry::make('employee_name')
+                            ->label('Employee Name')
+                            ->weight(FontWeight::Bold)
+                            ->size(Infolists\Components\TextEntry\TextEntrySize::Large),
+
+                        Infolists\Components\TextEntry::make('job_description')
+                            ->label('Designation / Job Title')
+                            ->placeholder('No Job Title Recorded'),
+
+                        Infolists\Components\TextEntry::make('nationality')
+                            ->label('Nationality')
+                            ->placeholder('—'),
+
+                        Infolists\Components\TextEntry::make('ledgerBranch.name')
+                            ->label('Sponsoring Branch')
+                            ->placeholder('—')
+                            ->weight(FontWeight::SemiBold),
+
                         Infolists\Components\TextEntry::make('process_type')
-                            ->label('PROCESS TYPE')
+                            ->label('Process Type')
                             ->badge()
                             ->formatStateUsing(fn ($state) => match ($state) {
                                 'new_inside'   => 'New Joiner (Inside UAE)',
@@ -876,16 +918,16 @@ class ProRecordResource extends Resource
                                 'cancellation' => 'Visa Cancellation',
                                 default        => ucfirst(str_replace('_', ' ', (string) $state)),
                             })
-                            ->color(fn ($state) => match ($state) {
-                                'new_inside'   => 'primary',
-                                'new_outside'  => 'info',
-                                'renewal'      => 'success',
-                                'cancellation' => 'danger',
-                                default        => 'gray',
-                            }),
-                        Infolists\Components\TextEntry::make('proCategory.name')->label('CATEGORY')->badge()->placeholder('—')->color('info'),
+                            ->color('gray'),
+
+                        Infolists\Components\TextEntry::make('proCategory.name')
+                            ->label('Category Tier')
+                            ->badge()
+                            ->placeholder('—')
+                            ->color('gray'),
+
                         Infolists\Components\TextEntry::make('status')
-                            ->label('APPLICATION STATUS')
+                            ->label('Application Status')
                             ->badge()
                             ->formatStateUsing(fn ($state) => match ($state) {
                                 'draft'       => 'Draft',
@@ -902,61 +944,169 @@ class ProRecordResource extends Resource
                                 'cancelled'   => 'gray',
                                 default        => 'gray',
                             }),
-                    ])->columns(5),
 
-                Infolists\Components\Section::make('Employee Identity & Government Identifiers')
-                    ->schema([
-                        Infolists\Components\TextEntry::make('employee_name')->label('EMPLOYEE NAME')->weight(FontWeight::Bold),
-                        Infolists\Components\TextEntry::make('nationality')->label('NATIONALITY')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('job_description')->label('JOB DESCRIPTION')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('person_code')->label('PERSON CODE #')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('unified_id')->label('UNIFIED ID #')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('passport_number')->label('PASSPORT #')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('passport_expiry')->label('PASSPORT EXPIRY')->date('d M Y')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('emirates_id_number')->label('EMIRATES ID #')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('emirates_id_expiry')->label('EMIRATES ID EXPIRY')->date('d M Y')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('labour_card_number')->label('LABOUR CARD #')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('labour_card_expiry')->label('LABOUR CARD EXPIRY')->date('d M Y')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('labour_contract_expiry')->label('LABOUR CONTRACT EXPIRY')->date('d M Y')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('residence_visa_number')->label('RESIDENCE VISA #')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('residence_visa_expiry')->label('RESIDENCE VISA EXPIRY')->date('d M Y')->placeholder('—'),
-                    ])->columns(4),
-
-                Infolists\Components\Section::make('Grace Period & Overstay Penalties')
-                    ->schema([
-                        Infolists\Components\TextEntry::make('grace_period_days')->label('GRACE PERIOD')->suffix(' days'),
-                        Infolists\Components\TextEntry::make('fines_start_date')->label('FINES WILL START DATE')->date('d M Y')->placeholder('—'),
-                        Infolists\Components\TextEntry::make('fine_eid_20')->label('FINE (EID-20)')->money('AED'),
-                        Infolists\Components\TextEntry::make('fine_pr_50')->label('FINE (PR-50)')->money('AED'),
-                        Infolists\Components\TextEntry::make('compliance_badge')
-                            ->label('COMPLIANCE / OVERSTAY STATUS')
-                            ->badge()
-                            ->color(fn (ProRecord $record) => $record->compliance_color),
-                    ])->columns(5),
-
-                Infolists\Components\Section::make('9-Stage Pipeline Fees & Totals')
-                    ->schema([
-                        Infolists\Components\TextEntry::make('offer_letter_cost')->label('OFFER LETTER')->money('AED'),
-                        Infolists\Components\TextEntry::make('dubins_cost')->label('DUBINS')->money('AED'),
-                        Infolists\Components\TextEntry::make('wp_submission_cost')->label('WP SUBMISSION')->money('AED'),
-                        Infolists\Components\TextEntry::make('evisa_cost')->label('EVISA')->money('AED'),
-                        Infolists\Components\TextEntry::make('change_status_cost')->label('CHANGE STATUS')->money('AED'),
-                        Infolists\Components\TextEntry::make('iloe_cost')->label('ILOE')->money('AED'),
-                        Infolists\Components\TextEntry::make('contract_submission_cost')->label('CONTRACT SUBMISSION')->money('AED'),
-                        Infolists\Components\TextEntry::make('emirates_id_stage_cost')->label('EMIRATES ID')->money('AED'),
-                        Infolists\Components\TextEntry::make('residence_visa_stage_cost')->label('RESIDENCE VISA')->money('AED'),
                         Infolists\Components\TextEntry::make('total_cost')
-                            ->label('TOTAL PROCESSING COST')
+                            ->label('Total Processing Cost')
                             ->money('AED')
                             ->weight(FontWeight::Bold)
                             ->size(Infolists\Components\TextEntry\TextEntrySize::Large)
                             ->color('success'),
-                    ])->columns(5),
+                    ])->columns(4),
 
-                Infolists\Components\Section::make('Remarks & Documents')
+                // ── 2. Progress Bar UI: 9-Stage Visa Pipeline Tracker ─────────
+                Infolists\Components\Section::make('Visa Processing Pipeline Progress')
+                    ->icon('heroicon-m-chart-bar')
                     ->schema([
-                        Infolists\Components\TextEntry::make('remarks')->label('REMARKS')->placeholder('No remarks recorded.')->columnSpanFull(),
+                        Infolists\Components\ViewEntry::make('pipeline_progress')
+                            ->view('filament.infolists.pipeline-progress')
+                            ->columnSpanFull(),
                     ]),
+
+                // ── 3. Color-Coded Expirations & UAE Compliance ───────────────
+                Infolists\Components\Section::make('Document Expirations & UAE Compliance Status')
+                    ->description('Real-time validity indicators with dynamic color codes (Red: Expired / Critical, Amber: Expiring Soon, Green: Valid).')
+                    ->icon('heroicon-m-shield-check')
+                    ->schema([
+                        // Residence Visa Expiry
+                        Infolists\Components\TextEntry::make('residence_visa_expiry')
+                            ->label('Residence Visa Expiry')
+                            ->badge()
+                            ->color(fn (?Carbon $state) => $getDateColor($state, warningDays: 90, criticalDays: 30))
+                            ->formatStateUsing(fn (?Carbon $state) => $formatDateStatus($state, warningDays: 90, criticalDays: 30, warningPrefix: 'Expiring in')),
+
+                        // Passport Expiry (UAE 6-Month Rule)
+                        Infolists\Components\TextEntry::make('passport_expiry')
+                            ->label('Passport Expiry (6-Mo Rule)')
+                            ->badge()
+                            ->color(fn (?Carbon $state) => $getDateColor($state, warningDays: 180, criticalDays: 30))
+                            ->formatStateUsing(fn (?Carbon $state) => $formatDateStatus($state, warningDays: 180, criticalDays: 30, warningPrefix: 'Critical < 6 Mo:')),
+
+                        // Emirates ID Expiry
+                        Infolists\Components\TextEntry::make('emirates_id_expiry')
+                            ->label('Emirates ID Expiry')
+                            ->badge()
+                            ->color(fn (?Carbon $state) => $getDateColor($state, warningDays: 90, criticalDays: 30))
+                            ->formatStateUsing(fn (?Carbon $state) => $formatDateStatus($state, warningDays: 90, criticalDays: 30, warningPrefix: 'Expiring in')),
+
+                        // Labour Card Expiry
+                        Infolists\Components\TextEntry::make('labour_card_expiry')
+                            ->label('Labour Card Expiry')
+                            ->badge()
+                            ->color(fn (?Carbon $state) => $getDateColor($state, warningDays: 90, criticalDays: 30))
+                            ->formatStateUsing(fn (?Carbon $state) => $formatDateStatus($state, warningDays: 90, criticalDays: 30, warningPrefix: 'Expiring in')),
+
+                        // Labour Contract Expiry
+                        Infolists\Components\TextEntry::make('labour_contract_expiry')
+                            ->label('Labour Contract Expiry')
+                            ->badge()
+                            ->color(fn (?Carbon $state) => $getDateColor($state, warningDays: 90, criticalDays: 30))
+                            ->formatStateUsing(fn (?Carbon $state) => $formatDateStatus($state, warningDays: 90, criticalDays: 30, warningPrefix: 'Expiring in')),
+
+                        // Company Trade License Expiry
+                        Infolists\Components\TextEntry::make('license_expiry')
+                            ->label('Branch Trade License Expiry')
+                            ->badge()
+                            ->color(fn (?Carbon $state) => $getDateColor($state, warningDays: 60, criticalDays: 15))
+                            ->formatStateUsing(fn (?Carbon $state) => $formatDateStatus($state, warningDays: 60, criticalDays: 15, warningPrefix: 'Expiring in')),
+
+                        // Overall Compliance Badge
+                        Infolists\Components\TextEntry::make('compliance_badge')
+                            ->label('Consolidated Overstay Status')
+                            ->badge()
+                            ->color(fn (ProRecord $record) => $record->compliance_color)
+                            ->helperText(fn (ProRecord $record) => $record->compliance_description ?: 'Compliant with UAE immigration rules'),
+
+                        // Grace Period Days
+                        Infolists\Components\TextEntry::make('grace_period_days')
+                            ->label('Grace Period Allowance')
+                            ->suffix(' days')
+                            ->weight(FontWeight::Medium),
+
+                        // Fines Start Date
+                        Infolists\Components\TextEntry::make('fines_start_date')
+                            ->label('Fines Trigger Date')
+                            ->date('d M Y')
+                            ->placeholder('No Fine Date Set'),
+
+                        // Fine PR-50
+                        Infolists\Components\TextEntry::make('fine_pr_50')
+                            ->label('PR-50 Overstay Fine')
+                            ->money('AED')
+                            ->color(fn ($state) => (float) $state > 0 ? 'danger' : 'gray')
+                            ->weight(FontWeight::SemiBold),
+
+                        // Fine EID-20
+                        Infolists\Components\TextEntry::make('fine_eid_20')
+                            ->label('EID-20 Delay Fine')
+                            ->money('AED')
+                            ->color(fn ($state) => (float) $state > 0 ? 'danger' : 'gray')
+                            ->weight(FontWeight::SemiBold),
+
+                        // Combined Fines
+                        Infolists\Components\TextEntry::make('calculated_total_fines')
+                            ->label('Total Accumulated Fines')
+                            ->money('AED')
+                            ->color(fn ($state) => (float) $state > 0 ? 'danger' : 'success')
+                            ->weight(FontWeight::Bold),
+                    ])->columns(3),
+
+                // ── 4. Government & Identity Numbers ─────────────────────────
+                Infolists\Components\Section::make('Official Government Identifiers')
+                    ->description('Click any identifier to copy.')
+                    ->icon('heroicon-m-identification')
+                    ->schema([
+                        Infolists\Components\TextEntry::make('residence_visa_number')
+                            ->label('Residence Visa #')
+                            ->placeholder('Not Recorded')
+                            ->copyable(),
+
+                        Infolists\Components\TextEntry::make('passport_number')
+                            ->label('Passport #')
+                            ->placeholder('Not Recorded')
+                            ->copyable(),
+
+                        Infolists\Components\TextEntry::make('emirates_id_number')
+                            ->label('Emirates ID #')
+                            ->placeholder('784-XXXX-XXXXXXX-X')
+                            ->copyable(),
+
+                        Infolists\Components\TextEntry::make('labour_card_number')
+                            ->label('Labour Card #')
+                            ->placeholder('Not Recorded')
+                            ->copyable(),
+
+                        Infolists\Components\TextEntry::make('unified_id')
+                            ->label('Unified ID (UID) #')
+                            ->placeholder('Not Recorded')
+                            ->copyable(),
+
+                        Infolists\Components\TextEntry::make('person_code')
+                            ->label('MOHRE Person Code #')
+                            ->placeholder('Not Recorded')
+                            ->copyable(),
+                    ])->columns(3),
+
+                // ── 5. Remarks & System History ──────────────────────────────
+                Infolists\Components\Section::make('Remarks & Audit Information')
+                    ->icon('heroicon-m-chat-bubble-left-ellipsis')
+                    ->schema([
+                        Infolists\Components\TextEntry::make('remarks')
+                            ->label('Administrative Notes / Remarks')
+                            ->placeholder('No remarks recorded.')
+                            ->columnSpanFull(),
+
+                        Infolists\Components\TextEntry::make('user.name')
+                            ->label('Recorded By')
+                            ->placeholder('System'),
+
+                        Infolists\Components\TextEntry::make('created_at')
+                            ->label('Created Date')
+                            ->dateTime('d M Y, h:i A'),
+
+                        Infolists\Components\TextEntry::make('updated_at')
+                            ->label('Last Synchronized')
+                            ->dateTime('d M Y, h:i A'),
+                    ])->columns(3),
             ]);
     }
 
@@ -967,8 +1117,33 @@ class ProRecordResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
+        $today = Carbon::today()->toDateString();
+        $in30Days = Carbon::today()->addDays(30)->toDateString();
+        $in180Days = Carbon::today()->addDays(180)->toDateString();
+
         return parent::getEloquentQuery()
-            ->with(['ledgerBranch', 'proCategory', 'user']);
+            ->with(['ledgerBranch', 'proCategory', 'user'])
+            ->select('pro_records.*')
+            ->selectRaw("
+                CASE
+                    -- 1. Active overstay fines past fines_start_date (Critical action)
+                    WHEN fines_start_date IS NOT NULL AND fines_start_date < '{$today}' THEN 1
+                    -- 2. Within grace period (visa expired, fine start date imminent)
+                    WHEN fines_start_date IS NOT NULL AND fines_start_date >= '{$today}' AND residence_visa_expiry IS NOT NULL AND residence_visa_expiry < '{$today}' THEN 2
+                    -- 3. Visa expiring within 30 days
+                    WHEN residence_visa_expiry IS NOT NULL AND residence_visa_expiry BETWEEN '{$today}' AND '{$in30Days}' THEN 3
+                    -- 4. Passport expiring within 180 days (< 6 months)
+                    WHEN passport_expiry IS NOT NULL AND passport_expiry BETWEEN '{$today}' AND '{$in180Days}' THEN 4
+                    -- 5. In-progress active pipeline
+                    WHEN status = 'in_progress' THEN 5
+                    -- 6. Draft records
+                    WHEN status = 'draft' THEN 6
+                    -- 7. On hold
+                    WHEN status = 'on_hold' THEN 7
+                    -- 8. Cancelled / Completed
+                    ELSE 8
+                END as action_priority
+            ");
     }
 
     public static function getPages(): array
@@ -1031,6 +1206,16 @@ class ProRecordResource extends Resource
             $set('offer_letter_cost', 0.00);
             $set('evisa_cost', 0.00);
             $set('change_status_cost', 0.00);
+        } elseif ($processType === 'cancellation') {
+            $set('offer_letter_cost', 0.00);
+            $set('dubins_cost', 0.00);
+            $set('wp_submission_cost', 0.00);
+            $set('evisa_cost', 0.00);
+            $set('change_status_cost', 0.00);
+            $set('iloe_cost', 0.00);
+            $set('contract_submission_cost', 0.00);
+            $set('emirates_id_stage_cost', 0.00);
+            $set('residence_visa_stage_cost', 0.00);
         } else {
             $set('offer_letter_cost', (float) $category->offer_letter_cost);
             $set('dubins_cost', (float) $category->dubins_cost);
