@@ -39,40 +39,38 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ── Push Notification Handler ───────────────────────────────────────────
-// CRITICAL: We MUST call event.waitUntil(showNotification(...)) in every
-// code-path, otherwise Chrome shows "This site has been updated in the
-// background" instead of the actual notification.
 self.addEventListener('push', function (event) {
-    var title = 'Petty Cash ERP';
-    var options = {
-        body: 'You have a new notification.',
-        icon: '/images/icon-192.png',
-        badge: '/images/icon-192.png',
-        tag: 'petty-cash-notification',
-        data: { url: '/' }
-    };
+    var title = 'Accounting Software';
+    var payload = {};
 
     if (event.data) {
         try {
-            var payload = event.data.json();
-            title = payload.title || title;
-            options.body = payload.body || options.body;
-            options.icon = payload.icon || options.icon;
-            options.badge = payload.badge || options.badge;
-            options.tag = payload.tag || options.tag;
-            if (payload.data) {
-                options.data = payload.data;
-            }
+            payload = event.data.json();
         } catch (e) {
-            // Payload wasn't JSON — use the raw text as body
             var text = event.data.text();
             if (text) {
-                options.body = text;
+                payload = { body: text };
             }
         }
     }
 
-    // Always show a notification — this is the critical line
+    title = payload.title || title;
+    var uniqueTag = payload.tag || ('notif-' + Date.now() + '-' + Math.floor(Math.random() * 100000));
+
+    var options = {
+        body: payload.body || 'You have a new notification.',
+        icon: payload.icon || '/images/voucher-app-icon.png',
+        badge: payload.badge || '/images/voucher-app-icon.png',
+        tag: uniqueTag,
+        timestamp: payload.timestamp || Date.now(),
+        data: {
+            url: payload.action || (payload.data && payload.data.url) || (payload.data && payload.data.action) || '/'
+        },
+        vibrate: payload.vibrate || [100, 50, 100],
+        requireInteraction: true
+    };
+
+    // Always show a notification
     event.waitUntil(
         self.registration.showNotification(title, options)
     );

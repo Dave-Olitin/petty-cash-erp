@@ -1,6 +1,6 @@
 {
-    "name": "Petty Cash ERP",
-    "short_name": "PettyCash",
+    "name": "Accounting Software",
+    "short_name": "Accounting",
     "start_url": "/admin",
     "display": "standalone",
     "background_color": "#ffffff",
