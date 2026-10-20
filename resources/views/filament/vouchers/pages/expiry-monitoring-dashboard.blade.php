@@ -14,9 +14,8 @@
     @endphp
 
     <div class="space-y-4">
-        {{-- ── 1. Tab Navigation & Filter Bar (100% Native Filament Components) ── --}}
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            {{-- Native Filament Tabs --}}
+        {{-- ── 1. Full-Width Navigation Tabs ──────────────────────────────── --}}
+        <div class="border-b border-gray-200 dark:border-gray-800">
             <x-filament::tabs>
                 <x-filament::tabs.item
                     :active="$activeTab === 'employees'"
@@ -45,19 +44,23 @@
                     Establishment Cards
                 </x-filament::tabs.item>
             </x-filament::tabs>
+        </div>
 
-            {{-- Native Filament Input Wrappers for Filters --}}
+        {{-- ── 2. Unified Search & Filters Toolbar (Single Clean Row) ────── --}}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {{-- Search Input on the Left --}}
+            <div class="w-full sm:w-80">
+                <x-filament::input.wrapper prefix-icon="heroicon-m-magnifying-glass">
+                    <x-filament::input
+                        type="search"
+                        wire:model.live.debounce.300ms="search"
+                        placeholder="Search name, doc #, branch..."
+                    />
+                </x-filament::input.wrapper>
+            </div>
+
+            {{-- Dropdown Filters Side-by-Side on the Right --}}
             <div class="flex flex-wrap items-center gap-2">
-                <div class="w-full sm:w-64">
-                    <x-filament::input.wrapper prefix-icon="heroicon-m-magnifying-glass">
-                        <x-filament::input
-                            type="search"
-                            wire:model.live.debounce.300ms="search"
-                            placeholder="Search name, doc #..."
-                        />
-                    </x-filament::input.wrapper>
-                </div>
-
                 <div class="w-auto">
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model.live="statusFilter">
@@ -92,37 +95,37 @@
             </div>
         </div>
 
-        {{-- ── 2. Main Data Table (100% Native Filament Badges & Containers) ── --}}
-        <div class="fi-ta-ctn divide-y divide-gray-200 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:divide-white/10 dark:bg-gray-900 dark:ring-white/10">
-            <div class="fi-ta-content relative divide-y divide-gray-200 overflow-x-auto dark:divide-white/10">
-                <table class="fi-ta-table w-full table-auto divide-y divide-gray-200 text-start dark:divide-white/5">
-                    <thead class="divide-y divide-gray-200 dark:divide-white/5">
-                        <tr class="bg-gray-50 dark:bg-white/5">
-                            <th class="fi-ta-header-cell px-4 py-3 sm:first-of-type:ps-6 text-start text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+        {{-- ── 3. Main Data Table (Enclosed in Filament Card Container) ───── --}}
+        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div class="overflow-x-auto">
+                <table class="w-full text-start text-xs divide-y divide-gray-200 dark:divide-white/5">
+                    <thead>
+                        <tr class="bg-gray-50/80 dark:bg-white/5">
+                            <th class="px-4 py-3.5 text-start font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Name & Identifier
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 text-start text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-start font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Document Type
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 text-start text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-start font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Expiry Date
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-center font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Days Remaining
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-center font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Grace Period
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-center font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Days to Grace End
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 text-start text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-start font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Projected Fine Start
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 text-end text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-end font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Estimated Fine (AED)
                             </th>
-                            <th class="fi-ta-header-cell px-4 py-3 sm:last-of-type:pe-6 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                            <th class="px-4 py-3.5 text-center font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Status
                             </th>
                         </tr>
@@ -134,53 +137,57 @@
                                 $isOverdue = $daysRem < 0;
                                 $status    = $row['status'];
                             @endphp
-                            <tr class="fi-ta-row hover:bg-gray-50/50 dark:hover:bg-white/5 transition duration-75">
+                            <tr class="hover:bg-gray-50/60 dark:hover:bg-white/5 transition duration-75">
                                 {{-- Name & Branch --}}
-                                <td class="fi-ta-cell px-4 py-3 sm:first-of-type:ps-6">
+                                <td class="px-4 py-3.5">
                                     <div class="flex flex-col">
                                         <span class="font-semibold text-gray-950 dark:text-white">{{ $row['name'] }}</span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="text-[11px] text-gray-500 dark:text-gray-400">
                                             {{ $row['branch'] }} &bull; {{ $row['doc_number'] }}
                                         </span>
                                     </div>
                                 </td>
 
                                 {{-- Document Type --}}
-                                <td class="fi-ta-cell px-4 py-3">
+                                <td class="px-4 py-3.5">
                                     <x-filament::badge color="gray">
                                         {{ $row['document_type'] }}
                                     </x-filament::badge>
                                 </td>
 
                                 {{-- Expiry Date --}}
-                                <td class="fi-ta-cell px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">
+                                <td class="px-4 py-3.5 font-mono text-xs text-gray-700 dark:text-gray-300">
                                     {{ $row['expiry_date'] ? $row['expiry_date']->format('d M Y') : '—' }}
                                 </td>
 
                                 {{-- Days Remaining --}}
-                                <td class="fi-ta-cell px-4 py-3 text-center">
+                                <td class="px-4 py-3.5 text-center">
                                     @if($isOverdue)
                                         <x-filament::badge color="danger">
-                                            -{{ abs($daysRem) }}d
+                                            -{{ abs($daysRem) }}d Overdue
+                                        </x-filament::badge>
+                                    @elseif($daysRem === 0)
+                                        <x-filament::badge color="danger">
+                                            Expires Today
                                         </x-filament::badge>
                                     @elseif($daysRem <= 30)
                                         <x-filament::badge color="warning">
-                                            {{ $daysRem }}d
+                                            {{ $daysRem }}d left
                                         </x-filament::badge>
                                     @else
-                                        <x-filament::badge color="success">
+                                        <span class="font-mono text-xs text-gray-700 dark:text-gray-300">
                                             {{ $daysRem }}d
-                                        </x-filament::badge>
+                                        </span>
                                     @endif
                                 </td>
 
                                 {{-- Grace Period (Days) --}}
-                                <td class="fi-ta-cell px-4 py-3 text-center font-mono text-xs text-gray-600 dark:text-gray-400">
+                                <td class="px-4 py-3.5 text-center font-mono text-xs text-gray-600 dark:text-gray-400">
                                     {{ $row['grace_period'] !== null ? $row['grace_period'] . 'd' : '—' }}
                                 </td>
 
                                 {{-- Days to Grace Period End --}}
-                                <td class="fi-ta-cell px-4 py-3 text-center">
+                                <td class="px-4 py-3.5 text-center">
                                     @if($row['days_to_grace_end'] !== null)
                                         @if($row['days_to_grace_end'] < 0)
                                             <x-filament::badge color="danger">Ended</x-filament::badge>
@@ -195,12 +202,12 @@
                                 </td>
 
                                 {{-- Projected Fine Start --}}
-                                <td class="fi-ta-cell px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">
+                                <td class="px-4 py-3.5 font-mono text-xs text-gray-700 dark:text-gray-300">
                                     {{ $row['projected_fine_start'] ? $row['projected_fine_start']->format('d M Y') : '—' }}
                                 </td>
 
                                 {{-- Estimated Fine (AED) --}}
-                                <td class="fi-ta-cell px-4 py-3 text-end font-mono">
+                                <td class="px-4 py-3.5 text-end font-mono">
                                     @if($row['estimated_fine'] > 0)
                                         <x-filament::badge color="danger">
                                             AED {{ number_format($row['estimated_fine'], 2) }}
@@ -211,7 +218,7 @@
                                 </td>
 
                                 {{-- Status Badge --}}
-                                <td class="fi-ta-cell px-4 py-3 sm:last-of-type:pe-6 text-center">
+                                <td class="px-4 py-3.5 text-center">
                                     @if($status === 'action_required')
                                         <x-filament::badge color="danger" icon="heroicon-m-exclamation-triangle">
                                             Action Required

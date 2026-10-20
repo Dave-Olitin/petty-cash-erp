@@ -10,12 +10,7 @@ class ExpiryMonitoringStatsWidget extends BaseWidget
 {
     protected static bool $isDiscovered = false;
 
-    protected int | string | array $columns = [
-        'default' => 1,
-        'sm' => 2,
-        'md' => 3,
-        'xl' => 5,
-    ];
+    protected int | string | array $columns = 4;
 
     protected function getStats(): array
     {
@@ -23,7 +18,9 @@ class ExpiryMonitoringStatsWidget extends BaseWidget
 
         return [
             Stat::make('Total Tracked', (string) $metrics['total'])
-                ->description('Documents & credentials')
+                ->description("{$metrics['on_track']} compliant & on track")
+                ->descriptionIcon('heroicon-m-check-circle')
+                ->color('success')
                 ->icon('heroicon-m-document-text'),
 
             Stat::make('Action Required', (string) $metrics['action_required'])
@@ -35,11 +32,6 @@ class ExpiryMonitoringStatsWidget extends BaseWidget
                 ->description('Due within 30 days')
                 ->descriptionIcon('heroicon-m-clock')
                 ->color('warning'),
-
-            Stat::make('On Track', (string) $metrics['on_track'])
-                ->description('Compliant & healthy')
-                ->descriptionIcon('heroicon-m-check-circle')
-                ->color('success'),
 
             Stat::make('Estimated Fines', 'AED ' . number_format($metrics['total_fines'], 2))
                 ->description('PR-50 & EID-20 penalties')
