@@ -801,58 +801,151 @@ class ProRecordResource extends Resource
                 ->tooltip('Actions'),
             ])
             ->headerActions([
+                Tables\Actions\ImportAction::make()
+                    ->label('Import Records')
+                    ->importer(\App\Filament\Imports\ProRecordImporter::class)
+                    ->color('gray')
+                    ->icon('heroicon-m-arrow-up-tray'),
+
                 ExportAction::make()
                     ->label('Export to Excel')
-                    ->visible(fn () => auth()->user()?->hasAnyRole(['Admin', 'Super Admin']) || (bool) auth()->user()?->can('pro_record.export'))
                     ->exports([
                         ExcelExport::make('PRO_Records_Report')
                             ->withFilename('PRO_Tracking_Sheet_' . date('Y-m-d'))
                             ->modifyQueryUsing(fn ($query) => $query->with(['ledgerBranch', 'proCategory', 'user']))
                             ->withColumns([
-                                Column::make('ledgerBranch.name')->heading('SPONSORING BRANCH'),
-                                Column::make('license_expiry')->heading('LICENSE EXPIRY'),
+                                // ── Employee & Company Overview ─────────────────────────
                                 Column::make('employee_name')->heading('EMPLOYEE NAME'),
-                                Column::make('process_type')->heading('PROCESS TYPE')->formatStateUsing(fn ($state) => match ($state) {
-                                    'new_inside'   => 'New Joiner (Inside UAE)',
-                                    'new_outside'  => 'New Joiner (Outside UAE)',
-                                    'renewal'      => 'Visa Renewal',
-                                    'cancellation' => 'Visa Cancellation',
-                                    default        => ucfirst((string) $state),
-                                }),
-                                Column::make('proCategory.name')->heading('CATEGORY'),
-                                Column::make('status')->heading('STATUS')->formatStateUsing(fn ($state) => match ($state) {
-                                    'completed'   => 'Completed',
-                                    'in_progress' => 'In Progress',
-                                    'on_hold'     => 'On Hold',
-                                    'draft'       => 'Draft',
-                                    'cancelled'   => 'Cancelled',
-                                    default        => ucfirst((string) $state),
-                                }),
-                                Column::make('labour_contract_expiry')->heading('LABOUR CONTRACT EXPIRY'),
                                 Column::make('nationality')->heading('NATIONALITY'),
-                                Column::make('job_description')->heading('JOB DESCRIPTION'),
-                                Column::make('labour_card_number')->heading('LABOUR CARD #'),
-                                Column::make('labour_card_expiry')->heading('LABOUR CARD EXPIRY'),
-                                Column::make('emirates_id_expiry')->heading('EMIRATES ID EXPIRY'),
-                                Column::make('grace_period_days')->heading('GRACE PERIOD'),
-                                Column::make('fine_eid_20')->heading('FINE (EID-20)'),
-                                Column::make('fine_pr_50')->heading('FINE (PR-50)'),
-                                Column::make('offer_letter_cost')->heading('OFFER LETTER'),
-                                Column::make('dubins_cost')->heading('DUBINS'),
-                                Column::make('wp_submission_cost')->heading('WP SUBMISSION'),
-                                Column::make('evisa_cost')->heading('EVISA'),
-                                Column::make('change_status_cost')->heading('CHANGE STATUS'),
-                                Column::make('iloe_cost')->heading('ILOE'),
-                                Column::make('contract_submission_cost')->heading('CONTRACT SUBMISSION'),
-                                Column::make('emirates_id_stage_cost')->heading('EMIRATES ID'),
-                                Column::make('residence_visa_stage_cost')->heading('RESIDENCE VISA'),
-                                Column::make('total_cost')->heading('TOTAL'),
-                                Column::make('fines_start_date')->heading('FINES WILL START DATE'),
-                                Column::make('unified_id')->heading('UNIFIED ID #'),
-                                Column::make('emirates_id_number')->heading('EMIRATES ID #'),
+                                Column::make('job_description')->heading('DESIGNATION / JOB TITLE'),
+                                Column::make('ledgerBranch.name')->heading('SPONSORING BRANCH'),
+                                Column::make('proCategory.name')->heading('CATEGORY TIER'),
+                                Column::make('process_type')
+                                    ->heading('PROCESS TYPE')
+                                    ->formatStateUsing(fn ($state) => match ($state) {
+                                        'new_inside'   => 'New Joiner (Inside UAE)',
+                                        'new_outside'  => 'New Joiner (Outside UAE)',
+                                        'renewal'      => 'Visa Renewal',
+                                        'cancellation' => 'Visa Cancellation',
+                                        default        => ucfirst((string) $state),
+                                    }),
+                                Column::make('status')
+                                    ->heading('APPLICATION STATUS')
+                                    ->formatStateUsing(fn ($state) => match ($state) {
+                                        'completed'   => 'Completed',
+                                        'in_progress' => 'In Progress',
+                                        'on_hold'     => 'On Hold',
+                                        'draft'       => 'Draft',
+                                        'cancelled'   => 'Cancelled',
+                                        default        => ucfirst((string) $state),
+                                    }),
+
+                                // ── Compliance, Grace & Overstay Penalties ───────────────
+                                Column::make('compliance_badge')->heading('COMPLIANCE & FINES STATUS'),
+                                Column::make('calculated_total_fines')
+                                    ->heading('ACCRUED FINES (AED)')
+                                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2)),
+                                Column::make('days_overdue')->heading('OVERSTAY DAYS'),
+                                Column::make('fines_start_date')
+                                    ->heading('FINES START DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+                                Column::make('grace_period_days')->heading('GRACE PERIOD (DAYS)'),
+                                Column::make('fine_pr_50')->heading('DAILY FINE PR-50 (AED)'),
+                                Column::make('fine_eid_20')->heading('DAILY FINE EID-20 (AED)'),
+
+                                // ── Government Identifiers & Expirations ────────────────
                                 Column::make('passport_number')->heading('PASSPORT #'),
-                                Column::make('passport_expiry')->heading('PASSPORT EXPIRY'),
+                                Column::make('passport_expiry')
+                                    ->heading('PASSPORT EXPIRY')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+                                Column::make('residence_visa_number')->heading('RESIDENCE VISA #'),
+                                Column::make('residence_visa_expiry')
+                                    ->heading('RESIDENCE VISA EXPIRY')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+                                Column::make('unified_id')->heading('UNIFIED ID #'),
                                 Column::make('person_code')->heading('PERSON CODE #'),
+                                Column::make('emirates_id_number')->heading('EMIRATES ID #'),
+                                Column::make('emirates_id_expiry')
+                                    ->heading('EMIRATES ID EXPIRY')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+                                Column::make('labour_card_number')->heading('LABOUR CARD #'),
+                                Column::make('labour_card_expiry')
+                                    ->heading('LABOUR CARD EXPIRY')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+                                Column::make('labour_contract_expiry')
+                                    ->heading('LABOUR CONTRACT EXPIRY')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+                                Column::make('license_expiry')
+                                    ->heading('BRANCH LICENSE EXPIRY')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                // ── Pipeline Progress & 9 Stages ────────────────────────
+                                Column::make('pipeline_stages')
+                                    ->heading('PIPELINE PROGRESS (%)')
+                                    ->formatStateUsing(fn ($state) => is_array($state) ? ($state['percentage'] ?? 0) . '%' : '0%'),
+
+                                Column::make('offer_letter_status')->heading('OFFER LETTER STATUS'),
+                                Column::make('offer_letter_cost')->heading('OFFER LETTER COST (AED)'),
+                                Column::make('offer_letter_date')
+                                    ->heading('OFFER LETTER DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('dubins_status')->heading('DUBINS STATUS'),
+                                Column::make('dubins_cost')->heading('DUBINS COST (AED)'),
+                                Column::make('dubins_date')
+                                    ->heading('DUBINS DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('wp_submission_status')->heading('WORK PERMIT STATUS'),
+                                Column::make('wp_submission_cost')->heading('WORK PERMIT COST (AED)'),
+                                Column::make('wp_submission_date')
+                                    ->heading('WORK PERMIT DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('evisa_status')->heading('EVISA STATUS'),
+                                Column::make('evisa_cost')->heading('EVISA COST (AED)'),
+                                Column::make('evisa_date')
+                                    ->heading('EVISA DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('change_status_status')->heading('CHANGE STATUS STATUS'),
+                                Column::make('change_status_cost')->heading('CHANGE STATUS COST (AED)'),
+                                Column::make('change_status_date')
+                                    ->heading('CHANGE STATUS DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('iloe_status')->heading('ILOE STATUS'),
+                                Column::make('iloe_cost')->heading('ILOE COST (AED)'),
+                                Column::make('iloe_date')
+                                    ->heading('ILOE DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('contract_submission_status')->heading('LABOUR CONTRACT STATUS'),
+                                Column::make('contract_submission_cost')->heading('LABOUR CONTRACT COST (AED)'),
+                                Column::make('contract_submission_date')
+                                    ->heading('LABOUR CONTRACT DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('emirates_id_stage_status')->heading('EMIRATES ID STAGE STATUS'),
+                                Column::make('emirates_id_stage_cost')->heading('EMIRATES ID STAGE COST (AED)'),
+                                Column::make('emirates_id_stage_date')
+                                    ->heading('EMIRATES ID STAGE DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                Column::make('residence_visa_stage_status')->heading('RESIDENCE VISA STAGE STATUS'),
+                                Column::make('residence_visa_stage_cost')->heading('RESIDENCE VISA STAGE COST (AED)'),
+                                Column::make('residence_visa_stage_date')
+                                    ->heading('RESIDENCE VISA STAGE DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+
+                                // ── Financial Totals, Remarks & Created Date ────────────
+                                Column::make('total_cost')
+                                    ->heading('TOTAL PROCESSING COST (AED)')
+                                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2)),
+                                Column::make('remarks')->heading('REMARKS / NOTES'),
+                                Column::make('created_at')
+                                    ->heading('RECORD CREATED DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y H:i') : ''),
                             ]),
                     ]),
             ]);

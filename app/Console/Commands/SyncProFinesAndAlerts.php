@@ -64,35 +64,38 @@ class SyncProFinesAndAlerts extends Command
             ->whereBetween('passport_expiry', [$today, $today->copy()->addMonths(6)])
             ->get();
 
-        // 3. Notify Admins and Authorized Panel Users
-        $recipients = User::all()->filter(fn ($u) => $u->hasAnyRole(['Admin', 'Super Admin']) || $u->can('access_vouchers_panel'));
+        // 3. Notify Admins and Authorized PRO Users only
+        $recipients = User::all()->filter(fn ($u) => $u->hasAnyRole(['PRO Officer', 'Admin', 'Super Admin']) || $u->can('pro_record.view'));
 
         if ($recipients->isNotEmpty()) {
             // A. Alert for Overstay Fines
             if ($overdueRecords->isNotEmpty()) {
-                Notification::make()
-                    ->title('🚨 PRO Alert: Active Overstay Fines Accruing')
-                    ->body("{$overdueRecords->count()} employee(s) have exceeded their grace period. Total accrued fines: AED " . number_format($totalFinesAccrued, 2))
-                    ->danger()
-                    ->sendToDatabase($recipients);
+                \Illuminate\Support\Facades\Notification::send($recipients, new \App\Notifications\SystemPushNotification(
+                    title: 'Overstay Penalties Alert',
+                    body: "{$overdueRecords->count()} employee(s) past grace period · Total: AED " . number_format($totalFinesAccrued, 2),
+                    actionUrl: '/vouchers/pro-records',
+                    tagId: 'pro-overstay-fines'
+                ));
             }
 
             // B. Alert for Visas Expiring in <= 30 Days
             if ($visasExpiring30d->isNotEmpty()) {
-                Notification::make()
-                    ->title('⚠️ PRO Alert: Visas Expiring in 30 Days')
-                    ->body("{$visasExpiring30d->count()} employee visa(s) are due for renewal within 30 days. Please initiate the renewal process.")
-                    ->warning()
-                    ->sendToDatabase($recipients);
+                \Illuminate\Support\Facades\Notification::send($recipients, new \App\Notifications\SystemPushNotification(
+                    title: 'Visa Expiry Notice',
+                    body: "{$visasExpiring30d->count()} employee visa(s) expiring within 30 days.",
+                    actionUrl: '/vouchers/pro-records',
+                    tagId: 'pro-visas-expiring'
+                ));
             }
 
             // C. Alert for Passports Expiring in <= 6 Months
             if ($passportsExpiring6mo->isNotEmpty()) {
-                Notification::make()
-                    ->title('🛂 PRO Alert: Passports Expiring (< 6 Months)')
-                    ->body("{$passportsExpiring6mo->count()} employee passport(s) have under 6 months validity. Renewals cannot be processed without passport renewal.")
-                    ->warning()
-                    ->sendToDatabase($recipients);
+                \Illuminate\Support\Facades\Notification::send($recipients, new \App\Notifications\SystemPushNotification(
+                    title: 'Passport Expiry Notice',
+                    body: "{$passportsExpiring6mo->count()} employee passport(s) expiring within 6 months.",
+                    actionUrl: '/vouchers/pro-records',
+                    tagId: 'pro-passports-expiring'
+                ));
             }
         }
 
