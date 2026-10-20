@@ -83,4 +83,9 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasMany(VoucherView::class);
     }
+
+    public function receivesBroadcastNotificationsOn(): string
+    {
+        return 'App.Models.User.' . $this->id;
+    }
 }

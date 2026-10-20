@@ -29,6 +29,31 @@ class AppServiceProvider extends ServiceProvider
     {
         @ini_set('memory_limit', '512M');
 
+        // Ensure OpenSSL config is available on Windows for WebPush key generation
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN' && !getenv('OPENSSL_CONF')) {
+            $phpIni = php_ini_loaded_file();
+            $candidates = [
+                $phpIni ? dirname($phpIni) . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . 'openssl.cnf' : null,
+                'C:\Program Files\php\extras\ssl\openssl.cnf',
+                'C:\xampp\php\extras\ssl\openssl.cnf',
+            ];
+            foreach ($candidates as $cand) {
+                if ($cand && file_exists($cand)) {
+                    putenv("OPENSSL_CONF={$cand}");
+                    $_ENV['OPENSSL_CONF'] = $cand;
+                    $_SERVER['OPENSSL_CONF'] = $cand;
+                    break;
+                }
+            }
+        }
+
+        // Ensure CA bundle is configured for outbound cURL/SSL verification
+        $caCert = storage_path('certs/cacert.pem');
+        if (file_exists($caCert)) {
+            @ini_set('curl.cainfo', $caCert);
+            @ini_set('openssl.cafile', $caCert);
+        }
+
         \Illuminate\Database\Eloquent\Model::shouldBeStrict(!app()->isProduction());
 
         Transaction::observe(TransactionObserver::class);
