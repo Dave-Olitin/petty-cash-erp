@@ -224,6 +224,13 @@ class ProRecord extends Model
     }
 
     /**
+     * Combined total of pipeline processing fee + active overstay fines.
+     */
+    public function getGrandTotalWithFinesAttribute(): float
+    {
+        return (float) ($this->total_cost + $this->calculated_total_fines);
+    }
+
     /**
      * Accurate UAE visa status, grace period, and fines summary.
      */

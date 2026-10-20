@@ -104,3 +104,7 @@ Route::middleware(['auth:web'])->group(function () {
 
 // Redirect old settings cluster URL to the new PRO section resource URL
 Route::redirect('/vouchers/settings/ledger-branches', '/vouchers/ledger-branches');
+
+// Redirect Expiry Monitoring Dashboard to PRO Records
+Route::redirect('/vouchers/expiry-monitoring', '/vouchers/pro-records');
+Route::redirect('/vouchers/expiry-monitoring-dashboard', '/vouchers/pro-records');

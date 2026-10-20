@@ -27,6 +27,7 @@ class ExpiryMonitoringDashboard extends Page implements HasTable
     protected static ?string $title           = 'Expiry Monitoring Dashboard';
     public ?string $subheading                 = 'Real-time compliance tracking, document expiry countdowns, and automated UAE fine projections.';
     protected static ?int $navigationSort     = 2;
+    protected static bool $shouldRegisterNavigation = false;
     protected static string $view             = 'filament.vouchers.pages.expiry-monitoring-dashboard';
 
     public static function canAccess(): bool

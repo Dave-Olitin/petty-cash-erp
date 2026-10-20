@@ -24,7 +24,7 @@ class ProRecordResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-identification';
     protected static ?string $navigationGroup = 'PRO & Government Relations';
-    protected static ?string $navigationLabel = 'PRO Tracking';
+    protected static ?string $navigationLabel = 'PRO Records';
     protected static ?string $modelLabel = 'PRO Record';
     protected static ?string $pluralModelLabel = 'PRO Records';
     protected static ?int $navigationSort = 1;
@@ -544,41 +544,17 @@ class ProRecordResource extends Resource
             })
             ->recordUrl(fn (ProRecord $record): string => Pages\ViewProRecord::getUrl([$record]))
             ->columns([
-                // 1. Employee Name (Clean single line)
+                // 1. Employee & Branch (Combined single column)
                 Tables\Columns\TextColumn::make('employee_name')
-                    ->label('Employee')
+                    ->label('Employee & Branch')
+                    ->description(fn (ProRecord $record): string => ($record->ledgerBranch?->name ?? 'Head Office') . ($record->job_description ? ' • ' . $record->job_description : ''))
                     ->searchable(['employee_name', 'nationality', 'job_description'])
                     ->sortable()
                     ->weight(FontWeight::SemiBold),
 
-                // 2. Sponsoring Branch (Clean single line)
-                Tables\Columns\TextColumn::make('ledgerBranch.name')
-                    ->label('Branch')
-                    ->placeholder('—')
-                    ->weight(FontWeight::Medium)
-                    ->color('gray')
-                    ->limit(20)
-                    ->tooltip(fn (ProRecord $record): ?string => $record->ledgerBranch?->name)
-                    ->sortable()
-                    ->searchable(),
-
-                // 3. Category Tier Column (Unique name prevents toggle override)
-                Tables\Columns\TextColumn::make('category_tier')
-                    ->label('Category Tier')
-                    ->state(fn (ProRecord $record): ?string => $record->proCategory?->name)
-                    ->placeholder('—')
-                    ->color('gray')
-                    ->weight(FontWeight::Medium)
-                    ->limit(24)
-                    ->tooltip(fn (ProRecord $record): ?string => $record->proCategory?->name)
-                    ->sortable(query: fn ($query, $direction) => $query->orderBy(
-                        \App\Models\ProCategory::select('name')->whereColumn('pro_categories.id', 'pro_records.pro_category_id'),
-                        $direction
-                    )),
-
-                // 4. Process Type (Clean plain text to avoid rainbow colored badges)
+                // 2. Category & Process (Combined clean column)
                 Tables\Columns\TextColumn::make('process_type')
-                    ->label('Process')
+                    ->label('Category & Process')
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'new_inside'   => 'New (Inside)',
                         'new_outside'  => 'New (Outside)',
@@ -586,16 +562,16 @@ class ProRecordResource extends Resource
                         'cancellation' => 'Cancellation',
                         default        => ucfirst(str_replace('_', ' ', $state)),
                     })
-                    ->color('gray')
+                    ->description(fn (ProRecord $record): ?string => $record->proCategory?->name)
                     ->weight(FontWeight::Medium)
                     ->sortable(),
 
-                // 5. Visual Milestone Gantt Chart Column
+                // 3. Visual Milestone Gantt Chart Column
                 Tables\Columns\ViewColumn::make('pipeline_gantt')
                     ->label('Progress')
                     ->view('filament.tables.columns.pipeline-gantt'),
 
-                // 6. Status (Subtle clean badge)
+                // 4. Status (Subtle clean badge)
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
@@ -616,21 +592,75 @@ class ProRecordResource extends Resource
                     })
                     ->sortable(),
 
-                // 7. Intelligent Consolidated Visa & Fines Status (High-signal color coding)
-                Tables\Columns\TextColumn::make('compliance_badge')
-                    ->label('Compliance')
-                    ->badge()
-                    ->color(fn (ProRecord $record): string => $record->compliance_color),
+                // 7. Fine Start Date (When penalties start)
+                Tables\Columns\TextColumn::make('effective_fines_start_date')
+                    ->label('Fine Start Date')
+                    ->date('d M Y')
+                    ->placeholder('—')
+                    ->description(function (ProRecord $record): ?string {
+                        if (! $record->effective_fines_start_date) return null;
+                        $today = Carbon::today();
+                        $start = Carbon::parse($record->effective_fines_start_date);
+                        if ($today->gt($start)) {
+                            $days = (int) $start->diffInDays($today);
+                            return "Active ({$days}d ago)";
+                        }
+                        $days = (int) $today->diffInDays($start);
+                        return $days === 0 ? 'Starts today' : "Starts in {$days}d";
+                    })
+                    ->sortable(query: fn ($query, $direction) => $query->orderByRaw("COALESCE(fines_start_date, '2099-12-31') {$direction}")),
 
-                // 8. Total Processing Cost (Right aligned, single line)
-                Tables\Columns\TextColumn::make('total_cost')
-                    ->label('Total Fee')
+                // 8. Fines Accrued (AED 50/day PR-50 + AED 20/day EID-20)
+                Tables\Columns\TextColumn::make('calculated_total_fines')
+                    ->label('Accrued Fines')
                     ->money('AED')
                     ->alignEnd()
-                    ->sortable()
-                    ->weight(FontWeight::SemiBold),
+                    ->badge(fn ($state) => $state > 0)
+                    ->color(fn ($state) => $state > 0 ? 'danger' : 'gray')
+                    ->description(function (ProRecord $record): ?string {
+                        if ($record->calculated_total_fines > 0) {
+                            return 'PR-50: ' . number_format($record->calculated_fine_pr_50, 0) . ' • EID: ' . number_format($record->calculated_fine_eid_20, 0);
+                        }
+                        return null;
+                    })
+                    ->sortable(query: fn ($query, $direction) => $query->orderByRaw('(COALESCE(fine_pr_50, 0) + COALESCE(fine_eid_20, 0)) ' . $direction)),
+
+                // 9. Processing Fee (Stage Fees)
+                Tables\Columns\TextColumn::make('total_cost')
+                    ->label('Processing Fee')
+                    ->money('AED')
+                    ->alignEnd()
+                    ->color('gray')
+                    ->sortable(),
+
+                // 10. Total with Fee & Fines Combined
+                Tables\Columns\TextColumn::make('grand_total_with_fines')
+                    ->label('Total (Fee + Fines)')
+                    ->money('AED')
+                    ->alignEnd()
+                    ->weight(FontWeight::Bold)
+                    ->description(function (ProRecord $record): string {
+                        if ($record->calculated_total_fines > 0) {
+                            return 'Fee: ' . number_format($record->total_cost, 0) . ' + Fine: ' . number_format($record->calculated_total_fines, 0);
+                        }
+                        return 'Govt Fees Only';
+                    })
+                    ->sortable(query: fn ($query, $direction) => $query->orderByRaw('(COALESCE(total_cost, 0) + COALESCE(fine_pr_50, 0) + COALESCE(fine_eid_20, 0)) ' . $direction)),
 
                 // ── Toggleable Detail Columns (Off by default, clean title casing) ──
+                Tables\Columns\TextColumn::make('compliance_badge')
+                    ->label('Compliance Status')
+                    ->badge()
+                    ->color(fn (ProRecord $record): string => $record->compliance_color)
+                    ->description(fn (ProRecord $record): ?string => $record->compliance_description)
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                Tables\Columns\TextColumn::make('category_tier')
+                    ->label('Category Tier')
+                    ->state(fn (ProRecord $record): ?string => $record->proCategory?->name)
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 Tables\Columns\TextColumn::make('passport_expiry')
                     ->label('Passport Expiry')
                     ->date('d M Y')
