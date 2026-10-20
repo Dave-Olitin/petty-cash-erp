@@ -197,50 +197,185 @@ class ProRecord extends Model
     }
 
     /**
-     * Grace period countdown or fines status array.
+    /**
+     * Accurate UAE visa status, grace period, and fines summary.
      */
     public function getFinesStatusSummaryAttribute(): array
     {
         $today = Carbon::today();
 
-        if (! $this->fines_start_date) {
-            if ($this->residence_visa_expiry && $today->gt($this->residence_visa_expiry)) {
-                $days = (int) $this->residence_visa_expiry->diffInDays($today);
+        // 1. If residence visa expiry exists
+        if ($this->residence_visa_expiry) {
+            // Case A: Visa is still active / valid
+            if ($today->lt($this->residence_visa_expiry)) {
+                $daysLeft = (int) $today->diffInDays($this->residence_visa_expiry);
+
+                if ($daysLeft <= 30) {
+                    return [
+                        'status'      => 'expiring_soon',
+                        'label'       => "Expiring ({$daysLeft}d)",
+                        'color'       => 'warning',
+                        'description' => 'Visa expires ' . $this->residence_visa_expiry->format('d M Y'),
+                    ];
+                }
+
                 return [
-                    'status' => 'expired',
-                    'label'  => "Visa Expired ({$days}d ago)",
-                    'color'  => 'danger',
+                    'status'      => 'valid',
+                    'label'       => 'Valid',
+                    'color'       => 'success',
+                    'description' => 'Exp: ' . $this->residence_visa_expiry->format('d M Y'),
+                ];
+            }
+
+            // Case B: Visa has expired
+            // B1: Within the Grace Period (between visa expiry and fines_start_date)
+            if ($this->fines_start_date && $today->lte($this->fines_start_date)) {
+                $graceDays = (int) $today->diffInDays($this->fines_start_date);
+                return [
+                    'status'      => 'grace',
+                    'label'       => $graceDays === 0 ? 'Grace Ends Today' : "Grace: {$graceDays}d left",
+                    'color'       => $graceDays <= 5 ? 'danger' : 'warning',
+                    'description' => 'Grace ends ' . $this->fines_start_date->format('d M Y'),
+                ];
+            }
+
+            // B2: Overstay fines are actively accruing (past fines_start_date)
+            if ($this->fines_start_date && $today->gt($this->fines_start_date)) {
+                $overdue = $this->days_overdue;
+                $fines = number_format($this->calculated_total_fines, 2);
+                return [
+                    'status'      => 'fining',
+                    'label'       => "Overdue {$overdue}d (AED {$fines})",
+                    'color'       => 'danger',
+                    'description' => 'Fines started ' . $this->fines_start_date->format('d M Y'),
+                ];
+            }
+
+            // B3: Expired with no grace date set
+            $expiredDays = (int) $this->residence_visa_expiry->diffInDays($today);
+            return [
+                'status'      => 'expired',
+                'label'       => "Expired ({$expiredDays}d ago)",
+                'color'       => 'danger',
+                'description' => 'Visa expired ' . $this->residence_visa_expiry->format('d M Y'),
+            ];
+        }
+
+        // 2. Cancellation Process
+        if ($this->process_type === 'cancellation') {
+            if ($this->fines_start_date && $today->lte($this->fines_start_date)) {
+                $exitDays = (int) $today->diffInDays($this->fines_start_date);
+                return [
+                    'status'      => 'grace',
+                    'label'       => "Exit Grace: {$exitDays}d",
+                    'color'       => 'info',
+                    'description' => 'Exit by ' . $this->fines_start_date->format('d M Y'),
+                ];
+            }
+
+            if ($this->fines_start_date && $today->gt($this->fines_start_date)) {
+                $overdue = $this->days_overdue;
+                $fines = number_format($this->calculated_total_fines, 2);
+                return [
+                    'status'      => 'fining',
+                    'label'       => "Overstay {$overdue}d (AED {$fines})",
+                    'color'       => 'danger',
+                    'description' => 'Cancelled visa overstay',
                 ];
             }
 
             return [
-                'status' => 'no_date',
-                'label'  => 'No Fines',
-                'color'  => 'gray',
+                'status'      => 'cancelled',
+                'label'       => 'Cancelled',
+                'color'       => 'gray',
+                'description' => null,
             ];
         }
 
-        if ($today->lte($this->fines_start_date)) {
-            $daysLeft = (int) $today->diffInDays($this->fines_start_date);
+        // 3. New Joiner / Application without Visa Expiry yet
+        if ($this->status === 'completed') {
             return [
-                'status' => 'grace',
-                'label'  => $daysLeft === 0 ? 'Last Day of Grace' : "Grace: {$daysLeft}d left",
-                'color'  => $daysLeft <= 5 ? 'warning' : 'info',
+                'status'      => 'completed',
+                'label'       => 'Completed',
+                'color'       => 'success',
+                'description' => null,
             ];
         }
 
-        $overdue = $this->days_overdue;
-        $totalFines = number_format($this->calculated_total_fines, 2);
+        if ($this->status === 'draft') {
+            return [
+                'status'      => 'draft',
+                'label'       => 'Draft',
+                'color'       => 'gray',
+                'description' => null,
+            ];
+        }
 
         return [
-            'status' => 'fining',
-            'label'  => "Overdue {$overdue}d (AED {$totalFines})",
-            'color'  => 'danger',
+            'status'      => 'in_pipeline',
+            'label'       => 'In Pipeline',
+            'color'       => 'gray',
+            'description' => null,
         ];
     }
 
     /**
-     * Single string label for table badge display (prevents duplicate array badge pills).
+     * Breakdown of stages and overall pipeline completion progress.
+     */
+    public function getPipelineStagesAttribute(): array
+    {
+        $allStages = [
+            ['key' => 'offer_letter', 'label' => 'Offer Letter', 'status' => $this->offer_letter_status, 'cost' => $this->offer_letter_cost, 'date' => $this->offer_letter_date],
+            ['key' => 'dubins', 'label' => 'Dubins Insurance', 'status' => $this->dubins_status, 'cost' => $this->dubins_cost, 'date' => $this->dubins_date],
+            ['key' => 'wp_submission', 'label' => 'Work Permit', 'status' => $this->wp_submission_status, 'cost' => $this->wp_submission_cost, 'date' => $this->wp_submission_date],
+            ['key' => 'evisa', 'label' => 'Entry Visa (eVisa)', 'status' => $this->evisa_status, 'cost' => $this->evisa_cost, 'date' => $this->evisa_date],
+            ['key' => 'change_status', 'label' => 'Change Status', 'status' => $this->change_status_status, 'cost' => $this->change_status_cost, 'date' => $this->change_status_date],
+            ['key' => 'iloe', 'label' => 'ILOE Insurance', 'status' => $this->iloe_status, 'cost' => $this->iloe_cost, 'date' => $this->iloe_date],
+            ['key' => 'contract_submission', 'label' => 'Labour Contract', 'status' => $this->contract_submission_status, 'cost' => $this->contract_submission_cost, 'date' => $this->contract_submission_date],
+            ['key' => 'emirates_id', 'label' => 'Emirates ID', 'status' => $this->emirates_id_stage_status, 'cost' => $this->emirates_id_stage_cost, 'date' => $this->emirates_id_stage_date],
+            ['key' => 'residence_visa', 'label' => 'Residence Visa', 'status' => $this->residence_visa_stage_status, 'cost' => $this->residence_visa_stage_cost, 'date' => $this->residence_visa_stage_date],
+        ];
+
+        if ($this->process_type === 'renewal') {
+            $applicable = ['dubins', 'wp_submission', 'iloe', 'contract_submission', 'emirates_id', 'residence_visa'];
+            $stages = array_values(array_filter($allStages, fn ($s) => in_array($s['key'], $applicable)));
+        } elseif ($this->process_type === 'new_outside') {
+            $applicable = ['offer_letter', 'dubins', 'wp_submission', 'evisa', 'iloe', 'contract_submission', 'emirates_id', 'residence_visa'];
+            $stages = array_values(array_filter($allStages, fn ($s) => in_array($s['key'], $applicable)));
+        } elseif ($this->process_type === 'cancellation') {
+            $stages = [
+                ['key' => 'cancellation', 'label' => 'Visa Cancellation', 'status' => $this->status === 'completed' ? 'Completed' : 'In Progress', 'cost' => $this->total_cost, 'date' => null],
+            ];
+        } else {
+            $stages = $allStages;
+        }
+
+        $completed = 0;
+        foreach ($stages as &$stg) {
+            $s = strtolower(str_replace([' ', '-'], '_', (string) ($stg['status'] ?? 'pending')));
+            if (in_array($s, ['completed', 'done', 'approved'])) {
+                $stg['state'] = 'completed';
+                $completed++;
+            } elseif (in_array($s, ['in_progress', 'processing', 'submitted'])) {
+                $stg['state'] = 'in_progress';
+            } else {
+                $stg['state'] = 'pending';
+            }
+        }
+
+        $total = count($stages);
+        $percent = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+
+        return [
+            'stages'     => $stages,
+            'completed'  => $completed,
+            'total'      => $total,
+            'percentage' => $percent,
+        ];
+    }
+
+    /**
+     * Single string label for table badge display.
      */
     public function getComplianceBadgeAttribute(): string
     {
@@ -260,30 +395,20 @@ class ProRecord extends Model
      */
     public function getComplianceDescriptionAttribute(): ?string
     {
-        $parts = [];
+        $desc = $this->fines_status_summary['description'] ?? null;
 
-        if ($this->fines_start_date) {
-            $today = Carbon::today();
-            if ($today->gt($this->fines_start_date)) {
-                $parts[] = 'Fines started: ' . $this->fines_start_date->format('d M Y');
-            } else {
-                $parts[] = 'Grace until: ' . $this->fines_start_date->format('d M Y');
-            }
-        } elseif ($this->residence_visa_expiry) {
-            $parts[] = 'Visa exp: ' . $this->residence_visa_expiry->format('d M Y');
-        }
-
+        // Only append passport warning if it's genuinely critical (< 6 months or expired)
         if ($this->passport_expiry) {
             $today = Carbon::today();
             if ($today->gt($this->passport_expiry)) {
-                $parts[] = '⚠️ Passport Expired';
+                $desc = ($desc ? $desc . ' • ' : '') . '⚠️ Passport Expired';
             } elseif ($today->diffInDays($this->passport_expiry) <= 180) {
                 $days = (int) $today->diffInDays($this->passport_expiry);
-                $parts[] = "⚠️ Passport < 6mo ({$days}d)";
+                $desc = ($desc ? $desc . ' • ' : '') . "⚠️ Passport < 6mo ({$days}d)";
             }
         }
 
-        return ! empty($parts) ? implode(' • ', $parts) : null;
+        return $desc;
     }
 
     // ── Dynamic Expiry Statuses ─────────────────────────────────────────────
