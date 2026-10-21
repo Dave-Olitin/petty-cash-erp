@@ -445,6 +445,100 @@ class ProRecord extends Model
         return $desc;
     }
 
+    /**
+     * Dynamic Operational Action & Urgency Status.
+     * Computes whether the record "Needs Action" and its urgency level, badge tag, color, and description.
+     */
+    public function getActionUrgencyAttribute(): array
+    {
+        $today = Carbon::today();
+        $overdue = $this->days_overdue;
+        $totalFines = $this->calculated_total_fines;
+
+        // 1. CRITICAL: Fines actively accruing (overstay penalties)
+        if ($overdue > 0 || $totalFines > 0) {
+            $fineFormatted = number_format($totalFines, 0);
+            return [
+                'level'       => 'critical',
+                'tag'         => 'Needs Action',
+                'color'       => 'danger',
+                'description' => "Overdue ({$overdue}d) • AED {$fineFormatted}",
+            ];
+        }
+
+        // 2. HIGH URGENCY: Expired visa within grace period
+        if ($this->residence_visa_expiry && $today->gte($this->residence_visa_expiry)) {
+            if ($this->fines_start_date && $today->lte($this->fines_start_date)) {
+                $graceDays = (int) $today->diffInDays($this->fines_start_date);
+                return [
+                    'level'       => $graceDays <= 7 ? 'critical' : 'urgent',
+                    'tag'         => 'Needs Action',
+                    'color'       => $graceDays <= 7 ? 'danger' : 'warning',
+                    'description' => $graceDays === 0 ? 'Grace Ends Today!' : "Grace: {$graceDays}d left",
+                ];
+            }
+        }
+
+        // 3. URGENT: Active visa expiring within 30 days
+        if ($this->residence_visa_expiry && $today->lt($this->residence_visa_expiry)) {
+            $daysToExpiry = (int) $today->diffInDays($this->residence_visa_expiry);
+            if ($daysToExpiry <= 30 && $this->status !== 'completed') {
+                return [
+                    'level'       => 'urgent',
+                    'tag'         => 'Needs Action',
+                    'color'       => 'warning',
+                    'description' => "Visa expires in {$daysToExpiry}d",
+                ];
+            }
+        }
+
+        // 4. On Hold / Cancelled
+        if ($this->status === 'on_hold') {
+            return [
+                'level'       => 'on_hold',
+                'tag'         => 'On Hold',
+                'color'       => 'danger',
+                'description' => 'Action Paused',
+            ];
+        }
+
+        if ($this->status === 'cancelled') {
+            return [
+                'level'       => 'cancelled',
+                'tag'         => 'Cancelled',
+                'color'       => 'gray',
+                'description' => null,
+            ];
+        }
+
+        // 5. Completed (Residency valid, no fines)
+        if ($this->status === 'completed' && $overdue === 0 && $totalFines == 0) {
+            return [
+                'level'       => 'completed',
+                'tag'         => 'Completed',
+                'color'       => 'success',
+                'description' => null,
+            ];
+        }
+
+        if ($this->status === 'draft') {
+            return [
+                'level'       => 'draft',
+                'tag'         => 'Draft',
+                'color'       => 'gray',
+                'description' => null,
+            ];
+        }
+
+        // 6. Normal In-Progress Pipeline
+        return [
+            'level'       => 'normal',
+            'tag'         => 'In Progress',
+            'color'       => 'warning',
+            'description' => null,
+        ];
+    }
+
     // ── Dynamic Expiry Statuses ─────────────────────────────────────────────
 
     public function getPassportStatusAttribute(): array

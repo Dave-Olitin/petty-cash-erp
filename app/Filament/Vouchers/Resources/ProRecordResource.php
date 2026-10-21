@@ -536,7 +536,6 @@ class ProRecordResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('action_priority', 'asc')
             ->modifyQueryUsing(function (\Illuminate\Database\Eloquent\Builder $query) {
                 if (! request()->has('tableSortColumn')) {
                     $query->orderByRaw("COALESCE(fines_start_date, residence_visa_expiry, '2099-12-31') ASC");
@@ -571,28 +570,7 @@ class ProRecordResource extends Resource
                     ->label('Progress')
                     ->view('filament.tables.columns.pipeline-gantt'),
 
-                // 4. Status (Subtle clean badge)
-                Tables\Columns\TextColumn::make('status')
-                    ->label('Status')
-                    ->badge()
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'draft'       => 'Draft',
-                        'in_progress' => 'In Progress',
-                        'completed'   => 'Completed',
-                        'on_hold'     => 'On Hold',
-                        'cancelled'   => 'Cancelled',
-                        default        => ucfirst(str_replace('_', ' ', $state)),
-                    })
-                    ->color(fn (string $state): string => match ($state) {
-                        'completed'   => 'success',
-                        'in_progress' => 'warning',
-                        'on_hold'     => 'danger',
-                        'cancelled'   => 'gray',
-                        default        => 'gray',
-                    })
-                    ->sortable(),
-
-                // 7. Fine Start Date (When penalties start)
+                // 4. Fine Start Date (When penalties start)
                 Tables\Columns\TextColumn::make('effective_fines_start_date')
                     ->label('Fine Start Date')
                     ->date('d M Y')
@@ -610,7 +588,7 @@ class ProRecordResource extends Resource
                     })
                     ->sortable(query: fn ($query, $direction) => $query->orderByRaw("COALESCE(fines_start_date, '2099-12-31') {$direction}")),
 
-                // 8. Fines Accrued (AED 50/day PR-50 + AED 20/day EID-20)
+                // 5. Fines Accrued (AED 50/day PR-50 + AED 20/day EID-20)
                 Tables\Columns\TextColumn::make('calculated_total_fines')
                     ->label('Accrued Fines')
                     ->money('AED')
@@ -625,7 +603,7 @@ class ProRecordResource extends Resource
                     })
                     ->sortable(query: fn ($query, $direction) => $query->orderByRaw('(COALESCE(fine_pr_50, 0) + COALESCE(fine_eid_20, 0)) ' . $direction)),
 
-                // 9. Processing Fee (Stage Fees)
+                // 6. Processing Fee (Stage Fees)
                 Tables\Columns\TextColumn::make('total_cost')
                     ->label('Processing Fee')
                     ->money('AED')
@@ -633,7 +611,7 @@ class ProRecordResource extends Resource
                     ->color('gray')
                     ->sortable(),
 
-                // 10. Total with Fee & Fines Combined
+                // 7. Total with Fee & Fines Combined
                 Tables\Columns\TextColumn::make('grand_total_with_fines')
                     ->label('Total (Fee + Fines)')
                     ->money('AED')
@@ -646,6 +624,26 @@ class ProRecordResource extends Resource
                         return 'Govt Fees Only';
                     })
                     ->sortable(query: fn ($query, $direction) => $query->orderByRaw('(COALESCE(total_cost, 0) + COALESCE(fine_pr_50, 0) + COALESCE(fine_eid_20, 0)) ' . $direction)),
+
+                // 8. Status (Action-oriented badge tag as last column)
+                Tables\Columns\TextColumn::make('action_status')
+                    ->label('Status')
+                    ->state(fn (ProRecord $record): string => $record->action_urgency['tag'])
+                    ->badge()
+                    ->color(fn (ProRecord $record): string => $record->action_urgency['color'])
+                    ->description(fn (ProRecord $record): ?string => $record->action_urgency['description'])
+                    ->sortable(query: function (\Illuminate\Database\Eloquent\Builder $query, string $direction) {
+                        $sql = "CASE 
+                            WHEN (fines_start_date IS NOT NULL AND fines_start_date < CURRENT_DATE) THEN 1
+                            WHEN (residence_visa_expiry IS NOT NULL AND residence_visa_expiry <= CURRENT_DATE) THEN 2
+                            WHEN (residence_visa_expiry IS NOT NULL AND residence_visa_expiry <= DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)) THEN 3
+                            WHEN status = 'in_progress' THEN 4
+                            WHEN status = 'on_hold' THEN 5
+                            WHEN status = 'draft' THEN 6
+                            WHEN status = 'completed' THEN 7
+                            ELSE 8 END";
+                        return $query->orderByRaw("{$sql} {$direction}");
+                    }),
 
                 // ── Toggleable Detail Columns (Off by default, clean title casing) ──
                 Tables\Columns\TextColumn::make('compliance_badge')
@@ -815,6 +813,19 @@ class ProRecordResource extends Resource
                         'renewal'      => 'Visa Renewal',
                         'cancellation' => 'Cancellation',
                     ]),
+
+                Tables\Filters\Filter::make('needs_action')
+                    ->label('⚡ Needs Action Only')
+                    ->query(fn ($query) => $query->where(function ($q) {
+                        $today = Carbon::today();
+                        $q->where(function ($sub) use ($today) {
+                            $sub->whereNotNull('fines_start_date')->where('fines_start_date', '<', $today);
+                        })->orWhere(function ($sub) use ($today) {
+                            $sub->whereNotNull('residence_visa_expiry')->whereBetween('residence_visa_expiry', [$today, $today->copy()->addDays(30)]);
+                        })->orWhere(function ($sub) use ($today) {
+                            $sub->whereNotNull('passport_expiry')->where('passport_expiry', '<=', $today->copy()->addMonths(6));
+                        });
+                    })),
 
                 Tables\Filters\Filter::make('overstay_fines')
                     ->label('🔴 Active Overstay Fines')
