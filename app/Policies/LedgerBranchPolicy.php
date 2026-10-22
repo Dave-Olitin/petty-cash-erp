@@ -12,6 +12,10 @@ class LedgerBranchPolicy
      */
     public function before(User $user, string $ability): ?bool
     {
+        if ($ability === 'delete') {
+            return false;
+        }
+
         if ($user->hasAnyRole(['Admin', 'Super Admin'])) {
             return true;
         }
@@ -62,7 +66,6 @@ class LedgerBranchPolicy
      */
     public function delete(User $user, LedgerBranch $ledgerBranch): bool
     {
-        return $user->hasRole('PRO Officer')
-            || $user->can('ledger_branch.manage');
+        return false;
     }
 }

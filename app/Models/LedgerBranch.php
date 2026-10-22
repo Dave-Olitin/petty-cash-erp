@@ -8,6 +8,7 @@ class LedgerBranch extends Model
 {
     protected $fillable = [
         'name',
+        'is_active',
         'license_number',
         'issuing_authority',
         'license_expiry',
@@ -20,6 +21,7 @@ class LedgerBranch extends Model
     protected function casts(): array
     {
         return [
+            'is_active'                   => 'boolean',
             'license_expiry'              => 'date',
             'mohre_est_card_expiry'       => 'date',
             'immigration_est_card_expiry' => 'date',

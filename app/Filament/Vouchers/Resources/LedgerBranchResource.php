@@ -68,13 +68,7 @@ class LedgerBranchResource extends Resource
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        $user = auth()->user();
-        if (! $user) {
-            return false;
-        }
-
-        return $user->hasAnyRole(['Admin', 'Super Admin', 'PRO Officer'])
-            || $user->can('ledger_branch.manage');
+        return false;
     }
 
     public static function form(Form $form): Form
@@ -84,6 +78,12 @@ class LedgerBranchResource extends Resource
                 Forms\Components\Section::make('Branch & Trade License Details')
                     ->description('Company registration, trade license and issuing authority')
                     ->schema([
+                        Forms\Components\Toggle::make('is_active')
+                            ->label('Active Status')
+                            ->helperText('Active branches are available across vouchers and PRO records.')
+                            ->default(true)
+                            ->columnSpanFull(),
+
                         Forms\Components\TextInput::make('name')
                             ->label('Branch / Entity Name')
                             ->required()
@@ -145,6 +145,9 @@ class LedgerBranchResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\ToggleColumn::make('is_active')
+                    ->label('Active')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('name')
                     ->label('Branch / Entity')
                     ->searchable()
@@ -185,16 +188,17 @@ class LedgerBranchResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\TernaryFilter::make('is_active')
+                    ->label('Status')
+                    ->placeholder('All Branches')
+                    ->trueLabel('Active Only')
+                    ->falseLabel('Inactive Only'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                // Delete actions disabled
             ]);
     }
 
