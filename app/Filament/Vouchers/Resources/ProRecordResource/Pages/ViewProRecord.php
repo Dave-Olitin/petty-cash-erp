@@ -36,19 +36,51 @@ class ViewProRecord extends ViewRecord
                 ->modalHeading(fn (): string => "Settle Overstay Fines — {$this->record->employee_name}")
                 ->modalDescription('Record fine payment or official GDRFA waiver to clear active overstay penalties.')
                 ->modalIcon('heroicon-o-banknotes')
-                ->modalWidth('lg')
+                ->modalWidth('2xl')
                 ->form([
                     Forms\Components\Grid::make(2)->schema([
                         Forms\Components\Placeholder::make('active_fines_info')
-                            ->label('Active Overstay Fines')
-                            ->content(fn (): string => 'AED ' . number_format($this->record->calculated_total_fines, 2) . ($this->record->days_overdue > 0 ? " ({$this->record->days_overdue} days overdue)" : ''))
+                            ->hiddenLabel()
+                            ->content(function () {
+                                $record = $this->record;
+                                $fines = number_format($record->calculated_total_fines, 2);
+                                $overdue = $record->days_overdue;
+                                $pr50 = number_format($record->calculated_fine_pr_50, 0);
+                                $eid20 = number_format($record->calculated_fine_eid_20, 0);
+                                $startDate = $record->effective_fines_start_date ? $record->effective_fines_start_date->format('d M Y') : 'N/A';
+
+                                return new \Illuminate\Support\HtmlString("
+                                    <div style='background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 0.75rem; padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between;'>
+                                        <div style='display: flex; align-items: center; gap: 0.75rem;'>
+                                            <div style='padding: 0.5rem; background-color: #fee2e2; border-radius: 0.5rem; color: #dc2626; display: flex; align-items: center; justify-content: center;'>
+                                                <svg style='width: 1.5rem; height: 1.5rem;' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                                                    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'></path>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <div style='font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #991b1b;'>Active Accrued Fine</div>
+                                                <div style='font-size: 1.35rem; font-weight: 800; color: #b91c1c; line-height: 1.2;'>AED {$fines}</div>
+                                            </div>
+                                        </div>
+                                        <div style='text-align: right;'>
+                                            <span style='display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; background-color: #fee2e2; color: #991b1b;'>
+                                                {$overdue} days overdue
+                                            </span>
+                                            <div style='font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;'>
+                                                PR-50: AED {$pr50} • EID: AED {$eid20} (Since {$startDate})
+                                            </div>
+                                        </div>
+                                    </div>
+                                ");
+                            })
                             ->columnSpanFull(),
 
-                        Forms\Components\Select::make('fine_settlement_type')
-                            ->label('Settlement Type')
+                        Forms\Components\Radio::make('fine_settlement_type')
+                            ->label('Settlement Action')
+                            ->inline()
                             ->options([
-                                'paid'   => 'Paid (Full / Discounted Settlement)',
-                                'waived' => 'Waived / Exempted by GDRFA',
+                                'paid'   => 'Record Payment (Full / Partial)',
+                                'waived' => 'Waived / Discounted by GDRFA',
                             ])
                             ->default('paid')
                             ->required()
@@ -59,7 +91,8 @@ class ViewProRecord extends ViewRecord
                                 } else {
                                     $set('fine_amount_paid', $this->record->calculated_total_fines);
                                 }
-                            }),
+                            })
+                            ->columnSpanFull(),
 
                         Forms\Components\TextInput::make('fine_amount_paid')
                             ->label('Amount Paid (AED)')
@@ -71,15 +104,16 @@ class ViewProRecord extends ViewRecord
 
                         Forms\Components\TextInput::make('fine_receipt_number')
                             ->label('Receipt / Ref #')
-                            ->placeholder('e.g. GDRFA-2026-98124 or Amer Receipt #')
+                            ->placeholder('e.g. GDRFA-2026-98124')
                             ->required(fn (callable $get) => $get('fine_settlement_type') === 'paid')
-                            ->helperText('Government receipt or MB transaction number.'),
+                            ->helperText('Government receipt or MB transaction ID.'),
 
                         Forms\Components\DatePicker::make('fines_settled_at')
                             ->label('Settlement Date')
                             ->default(Carbon::today())
                             ->native(false)
-                            ->required(),
+                            ->required()
+                            ->columnSpanFull(),
 
                         Forms\Components\FileUpload::make('fine_receipt_attachment')
                             ->label('Receipt Document / Payment Proof (PDF or Image)')
