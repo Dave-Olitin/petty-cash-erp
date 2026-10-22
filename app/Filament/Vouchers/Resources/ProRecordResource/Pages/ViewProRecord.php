@@ -35,7 +35,6 @@ class ViewProRecord extends ViewRecord
                 ->visible(fn (): bool => ! $this->record->fines_settled_at && ($this->record->calculated_total_fines > 0 || ($this->record->fines_start_date && Carbon::today()->gt($this->record->fines_start_date))))
                 ->modalHeading(fn (): string => "Settle Overstay Fines — {$this->record->employee_name}")
                 ->modalDescription('Record fine payment or official GDRFA waiver to clear active overstay penalties.')
-                ->modalIcon('heroicon-o-banknotes')
                 ->modalWidth('2xl')
                 ->form([
                     Forms\Components\Grid::make(2)->schema([

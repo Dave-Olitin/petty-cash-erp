@@ -1552,7 +1552,6 @@ class ProRecordResource extends Resource
             ->visible(fn (ProRecord $record): bool => ! $record->fines_settled_at && ($record->calculated_total_fines > 0 || ($record->fines_start_date && Carbon::today()->gt($record->fines_start_date))))
             ->modalHeading(fn (ProRecord $record) => "Settle Overstay Fines — {$record->employee_name}")
             ->modalDescription('Record fine payment or official GDRFA waiver to clear active overstay penalties and update status.')
-            ->modalIcon('heroicon-o-banknotes')
             ->modalWidth('2xl')
             ->form([
                 Forms\Components\Grid::make(2)->schema([
@@ -1673,7 +1672,6 @@ class ProRecordResource extends Resource
             ->color('success')
             ->visible(fn (ProRecord $record): bool => (bool) $record->fines_settled_at)
             ->modalHeading(fn (ProRecord $record) => "Fine Settlement Details — {$record->employee_name}")
-            ->modalIcon('heroicon-o-check-badge')
             ->modalWidth('md')
             ->infolist([
                 Infolists\Components\TextEntry::make('fine_settlement_type')
