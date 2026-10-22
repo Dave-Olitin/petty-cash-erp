@@ -75,14 +75,14 @@ class ViewProRecord extends ViewRecord
                             })
                             ->columnSpanFull(),
 
-                        Forms\Components\Radio::make('fine_settlement_type')
-                            ->label('Settlement Action')
-                            ->inline()
+                        Forms\Components\Select::make('fine_settlement_type')
+                            ->label('Settlement Type')
                             ->options([
-                                'paid'   => 'Record Payment (Full / Partial)',
+                                'paid'   => 'Paid (Full / Partial Payment)',
                                 'waived' => 'Waived / Discounted by GDRFA',
                             ])
                             ->default('paid')
+                            ->native(false)
                             ->required()
                             ->reactive()
                             ->afterStateUpdated(function (callable $set, $state) {
@@ -102,17 +102,17 @@ class ViewProRecord extends ViewRecord
                             ->required()
                             ->helperText('Actual amount paid at GDRFA / Amer center.'),
 
-                        Forms\Components\TextInput::make('fine_receipt_number')
-                            ->label('Receipt / Ref #')
-                            ->placeholder('e.g. GDRFA-2026-98124')
-                            ->required(fn (callable $get) => $get('fine_settlement_type') === 'paid')
-                            ->helperText('Government receipt or MB transaction ID.'),
-
                         Forms\Components\DatePicker::make('fines_settled_at')
                             ->label('Settlement Date')
                             ->default(Carbon::today())
                             ->native(false)
-                            ->required()
+                            ->required(),
+
+                        Forms\Components\TextInput::make('fine_receipt_number')
+                            ->label('Receipt / Ref #')
+                            ->placeholder('e.g. GDRFA-2026-98124 or Amer Receipt #')
+                            ->required(fn (callable $get) => $get('fine_settlement_type') === 'paid')
+                            ->helperText('Government receipt or MB transaction ID.')
                             ->columnSpanFull(),
 
                         Forms\Components\FileUpload::make('fine_receipt_attachment')
