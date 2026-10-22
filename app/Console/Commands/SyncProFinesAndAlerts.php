@@ -38,7 +38,7 @@ class SyncProFinesAndAlerts extends Command
         $overdueCount = 0;
 
         foreach ($records as $record) {
-            if ($record->manual_fine_override) {
+            if ($record->fines_settled_at || $record->manual_fine_override) {
                 if ($record->fine_pr_50 > 0 || $record->fine_eid_20 > 0) {
                     $totalFinesAccrued += ((float) $record->fine_pr_50 + (float) $record->fine_eid_20);
                     $overdueCount++;

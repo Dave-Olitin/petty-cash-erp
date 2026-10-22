@@ -43,9 +43,14 @@ class ProRecord extends Model
         'residence_visa_expiry',
         'grace_period_days',
         'fines_start_date',
-        'fine_eid_20',
-        'fine_pr_50',
         'manual_fine_override',
+        'fines_settled_at',
+        'fine_settlement_type',
+        'fine_amount_paid',
+        'fine_receipt_number',
+        'fine_receipt_attachment',
+        'fine_settlement_notes',
+        'fine_settled_by',
         'offer_letter_status',
         'offer_letter_date',
         'offer_letter_cost',
@@ -99,6 +104,8 @@ class ProRecord extends Model
             'residence_visa_stage_date'  => 'date',
             'grace_period_days'          => 'integer',
             'manual_fine_override'       => 'boolean',
+            'fines_settled_at'           => 'datetime',
+            'fine_amount_paid'           => 'decimal:2',
             'fine_eid_20'                => 'decimal:2',
             'fine_pr_50'                 => 'decimal:2',
             'offer_letter_cost'          => 'decimal:2',
@@ -145,6 +152,11 @@ class ProRecord extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function fineSettledByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'fine_settled_by');
+    }
+
     // ── Dynamic Overstay & Fine Calculations ────────────────────────────────
 
     /**
@@ -176,6 +188,11 @@ class ProRecord extends Model
      */
     public function getDaysOverdueAttribute(): int
     {
+        // Settled fines have no active overdue days
+        if ($this->fines_settled_at) {
+            return 0;
+        }
+
         $today = Carbon::today();
 
         // Rule 1: An active, unexpired visa is NEVER overdue!
@@ -196,6 +213,10 @@ class ProRecord extends Model
      */
     public function getCalculatedFinePr50Attribute(): float
     {
+        if ($this->fines_settled_at) {
+            return 0.0;
+        }
+
         if ($this->manual_fine_override) {
             return (float) $this->fine_pr_50;
         }
@@ -208,6 +229,10 @@ class ProRecord extends Model
      */
     public function getCalculatedFineEid20Attribute(): float
     {
+        if ($this->fines_settled_at) {
+            return 0.0;
+        }
+
         if ($this->manual_fine_override) {
             return (float) $this->fine_eid_20;
         }
@@ -260,6 +285,20 @@ class ProRecord extends Model
      */
     public function getFinesStatusSummaryAttribute(): array
     {
+        // 0. If fines have been settled (paid or waived)
+        if ($this->fines_settled_at) {
+            $settledDate = $this->fines_settled_at->format('d M Y');
+            $typeLabel = $this->fine_settlement_type === 'waived' ? 'Waived (GDRFA)' : 'Fines Settled';
+            $paid = (float) $this->fine_amount_paid;
+            $amtText = $paid > 0 ? ' • AED ' . number_format($paid, 2) : '';
+            return [
+                'status'      => 'settled',
+                'label'       => $typeLabel,
+                'color'       => 'success',
+                'description' => "Settled {$settledDate}{$amtText}" . ($this->fine_receipt_number ? " (Rcpt: {$this->fine_receipt_number})" : ''),
+            ];
+        }
+
         $today = Carbon::today();
 
         // 1. If residence visa expiry exists
@@ -506,8 +545,8 @@ class ProRecord extends Model
         $overdue = $this->days_overdue;
         $totalFines = $this->calculated_total_fines;
 
-        // 1. CRITICAL: Fines actively accruing (overstay penalties)
-        if ($overdue > 0 || $totalFines > 0) {
+        // 1. CRITICAL: Fines actively accruing (overstay penalties) - only if not settled
+        if (! $this->fines_settled_at && ($overdue > 0 || $totalFines > 0)) {
             $fineFormatted = number_format($totalFines, 0);
             return [
                 'level'       => 'critical',
@@ -517,8 +556,8 @@ class ProRecord extends Model
             ];
         }
 
-        // 2. HIGH URGENCY: Expired visa within grace period
-        if ($this->residence_visa_expiry && $today->gte($this->residence_visa_expiry)) {
+        // 2. HIGH URGENCY: Expired visa within grace period (only if fines not settled)
+        if (! $this->fines_settled_at && $this->residence_visa_expiry && $today->gte($this->residence_visa_expiry)) {
             if ($this->fines_start_date && $today->lte($this->fines_start_date)) {
                 $graceDays = (int) $today->diffInDays($this->fines_start_date);
                 return [
@@ -562,13 +601,16 @@ class ProRecord extends Model
             ];
         }
 
-        // 5. Completed (Residency valid, no fines)
-        if ($this->status === 'completed' && $overdue === 0 && $totalFines == 0) {
+        // 5. Completed (Residency valid or fines settled, and pipeline finished)
+        $stages = $this->pipeline_stages;
+        $isPipelineDone = ($stages['percentage'] ?? 0) >= 100 || strtolower((string) $this->residence_visa_stage_status) === 'completed';
+
+        if ($this->status === 'completed' || ($isPipelineDone && ($this->fines_settled_at || $totalFines == 0))) {
             return [
                 'level'       => 'completed',
                 'tag'         => 'Completed',
                 'color'       => 'success',
-                'description' => null,
+                'description' => $this->fines_settled_at ? 'Fines Settled • Compliant' : null,
             ];
         }
 
@@ -586,7 +628,7 @@ class ProRecord extends Model
             'level'       => 'normal',
             'tag'         => 'In Progress',
             'color'       => 'warning',
-            'description' => null,
+            'description' => $this->fines_settled_at ? 'Fines Settled (AED ' . number_format((float) $this->fine_amount_paid, 0) . ')' : null,
         ];
     }
 
@@ -730,11 +772,70 @@ class ProRecord extends Model
                 $record->status = 'completed';
             }
 
-            // Sync dynamic fines if not manually overridden
-            if (! $record->manual_fine_override) {
+            // Sync dynamic fines if not manually overridden and not settled
+            if (! $record->manual_fine_override && ! $record->fines_settled_at) {
                 $record->fine_pr_50 = $record->calculated_fine_pr_50;
                 $record->fine_eid_20 = $record->calculated_fine_eid_20;
             }
         });
+    }
+
+    /**
+     * Settle overstay fines (payment or waiver) and close outstanding penalties.
+     */
+    public function settleFines(
+        string $type,
+        float $amountPaid,
+        ?string $receiptNumber = null,
+        ?string $attachment = null,
+        ?string $notes = null,
+        ?Carbon $settledAt = null,
+        ?int $userId = null
+    ): void {
+        $settledAt = $settledAt ?: Carbon::now();
+
+        $this->forceFill([
+            'fines_settled_at'        => $settledAt,
+            'fine_settlement_type'    => $type,
+            'fine_amount_paid'        => $amountPaid,
+            'fine_receipt_number'     => $receiptNumber,
+            'fine_receipt_attachment' => $attachment,
+            'fine_settlement_notes'   => $notes,
+            'fine_settled_by'         => $userId ?: auth()->id(),
+            'fine_pr_50'              => 0.00,
+            'fine_eid_20'             => 0.00,
+            'manual_fine_override'    => true,
+        ]);
+
+        // If all stages are done or 100% complete, close the pipeline as completed
+        $stages = $this->pipeline_stages;
+        if (($stages['percentage'] ?? 0) >= 100 || strtolower((string) $this->residence_visa_stage_status) === 'completed') {
+            $this->status = 'completed';
+        }
+
+        $this->save();
+    }
+
+    /**
+     * Reopen or cancel a fine settlement.
+     */
+    public function reopenFines(): void
+    {
+        $this->forceFill([
+            'fines_settled_at'        => null,
+            'fine_settlement_type'    => null,
+            'fine_amount_paid'        => 0.00,
+            'fine_receipt_number'     => null,
+            'fine_receipt_attachment' => null,
+            'fine_settlement_notes'   => null,
+            'fine_settled_by'         => null,
+            'manual_fine_override'    => false,
+        ]);
+
+        if ($this->status === 'completed' && ($this->pipeline_stages['percentage'] ?? 0) < 100) {
+            $this->status = 'in_progress';
+        }
+
+        $this->save();
     }
 }
