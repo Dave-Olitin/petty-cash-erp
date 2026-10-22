@@ -26,14 +26,15 @@ class ProRecordsOverviewWidget extends BaseWidget
     {
         $today = Carbon::today();
 
-        // 1. Overstay Fines KPI (Only count genuinely expired visas past grace period)
-        $overdueRecords = ProRecord::whereNotNull('residence_visa_expiry')
+        // 1. Overstay Fines KPI (Only count genuinely expired visas past grace period without settled fines)
+        $overdueRecords = ProRecord::whereNull('fines_settled_at')
+            ->whereNotNull('residence_visa_expiry')
             ->where('residence_visa_expiry', '<', $today)
             ->whereNotNull('fines_start_date')
             ->where('fines_start_date', '<', $today)
             ->get();
         $totalFines = $overdueRecords->sum(fn (ProRecord $r) => $r->calculated_total_fines);
-        $overdueCount = $overdueRecords->count();
+        $overdueCount = $overdueRecords->filter(fn (ProRecord $r) => $r->calculated_total_fines > 0)->count();
 
         // 2. Visas & Passports Expiring (< 30 days for visa, < 6mo for passport)
         $visasExpiring30d = ProRecord::whereNotNull('residence_visa_expiry')

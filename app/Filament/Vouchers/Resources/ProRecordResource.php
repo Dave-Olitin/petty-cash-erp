@@ -914,6 +914,8 @@ class ProRecordResource extends Resource
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\ViewAction::make(),
                     Tables\Actions\EditAction::make(),
+                    self::getSettleFinesTableAction(),
+                    self::getViewFineSettlementTableAction(),
                     Tables\Actions\DeleteAction::make(),
                 ])
                 ->icon('heroicon-m-ellipsis-horizontal')
@@ -1064,6 +1066,16 @@ class ProRecordResource extends Resource
                                 Column::make('grand_total_with_fines')
                                     ->heading('REMAINING BALANCE (FEE + FINES AED)')
                                     ->formatStateUsing(fn ($state, ProRecord $record) => number_format((float) $record->grand_total_with_fines, 2)),
+                                Column::make('fines_settled_at')
+                                    ->heading('FINES SETTLED DATE')
+                                    ->formatStateUsing(fn ($state) => $state ? \Carbon\Carbon::parse($state)->format('d M Y') : ''),
+                                Column::make('fine_settlement_type')
+                                    ->heading('FINES SETTLEMENT TYPE')
+                                    ->formatStateUsing(fn ($state) => $state ? ucfirst((string) $state) : ''),
+                                Column::make('fine_amount_paid')
+                                    ->heading('FINES AMOUNT PAID (AED)')
+                                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2)),
+                                Column::make('fine_receipt_number')->heading('FINES RECEIPT / REF #'),
                                 Column::make('remarks')->heading('REMARKS / NOTES'),
                                 Column::make('created_at')
                                     ->heading('RECORD CREATED DATE')
@@ -1271,6 +1283,54 @@ class ProRecordResource extends Resource
                             ->money('AED')
                             ->color(fn ($state) => (float) $state > 0 ? 'danger' : 'success')
                             ->weight(FontWeight::Bold),
+
+                        // ── Settlement Status & Payment Proof (When Settled) ──
+                        Infolists\Components\TextEntry::make('fine_settlement_type')
+                            ->label('Fine Settlement Status')
+                            ->badge()
+                            ->formatStateUsing(fn ($state) => match ($state) {
+                                'paid'   => 'Paid Settlement',
+                                'waived' => 'Waived / Exempted (GDRFA)',
+                                default  => ucfirst((string) $state),
+                            })
+                            ->color('success')
+                            ->visible(fn (ProRecord $record) => (bool) $record->fines_settled_at),
+
+                        Infolists\Components\TextEntry::make('fine_amount_paid')
+                            ->label('Fine Amount Settled')
+                            ->money('AED')
+                            ->weight(FontWeight::Bold)
+                            ->color('success')
+                            ->visible(fn (ProRecord $record) => (bool) $record->fines_settled_at),
+
+                        Infolists\Components\TextEntry::make('fine_receipt_number')
+                            ->label('Receipt / Ref #')
+                            ->copyable()
+                            ->placeholder('N/A')
+                            ->visible(fn (ProRecord $record) => (bool) $record->fines_settled_at),
+
+                        Infolists\Components\TextEntry::make('fines_settled_at')
+                            ->label('Settlement Date')
+                            ->dateTime('d M Y, h:i A')
+                            ->visible(fn (ProRecord $record) => (bool) $record->fines_settled_at),
+
+                        Infolists\Components\TextEntry::make('fineSettledByUser.name')
+                            ->label('Settled By')
+                            ->placeholder('System Admin')
+                            ->visible(fn (ProRecord $record) => (bool) $record->fines_settled_at),
+
+                        Infolists\Components\TextEntry::make('fine_receipt_attachment')
+                            ->label('Receipt Document')
+                            ->formatStateUsing(fn ($state) => '📄 View Attached Receipt')
+                            ->url(fn ($state) => $state ? asset('storage/' . $state) : null, shouldOpenInNewTab: true)
+                            ->color('primary')
+                            ->visible(fn (ProRecord $record) => ! empty($record->fine_receipt_attachment)),
+
+                        Infolists\Components\TextEntry::make('fine_settlement_notes')
+                            ->label('Settlement Remarks / Notes')
+                            ->placeholder('None recorded')
+                            ->visible(fn (ProRecord $record) => (bool) $record->fines_settled_at)
+                            ->columnSpanFull(),
                     ])->columns(3),
 
                 // ── 4. Government & Identity Numbers ─────────────────────────
@@ -1481,5 +1541,153 @@ class ProRecordResource extends Resource
             ->body("Loaded fees from {$category->name} for {$processType}.")
             ->success()
             ->send();
+    }
+
+    public static function getSettleFinesTableAction(): Tables\Actions\Action
+    {
+        return Tables\Actions\Action::make('settle_fines')
+            ->label('Settle / Pay Fines')
+            ->icon('heroicon-m-banknotes')
+            ->color('success')
+            ->visible(fn (ProRecord $record): bool => ! $record->fines_settled_at && ($record->calculated_total_fines > 0 || ($record->fines_start_date && Carbon::today()->gt($record->fines_start_date))))
+            ->modalHeading(fn (ProRecord $record) => "Settle Overstay Fines — {$record->employee_name}")
+            ->modalDescription('Record fine payment or official GDRFA waiver to clear active overstay penalties and update status.')
+            ->modalIcon('heroicon-o-banknotes')
+            ->modalWidth('lg')
+            ->form([
+                Forms\Components\Grid::make(2)->schema([
+                    Forms\Components\Placeholder::make('active_fines_info')
+                        ->label('Active Overstay Fines')
+                        ->content(fn (ProRecord $record): string => 'AED ' . number_format($record->calculated_total_fines, 2) . ($record->days_overdue > 0 ? " ({$record->days_overdue} days overdue)" : ''))
+                        ->columnSpanFull(),
+
+                    Forms\Components\Select::make('fine_settlement_type')
+                        ->label('Settlement Type')
+                        ->options([
+                            'paid'   => 'Paid (Full / Discounted Settlement)',
+                            'waived' => 'Waived / Exempted by GDRFA',
+                        ])
+                        ->default('paid')
+                        ->required()
+                        ->reactive()
+                        ->afterStateUpdated(function (callable $set, $state, ProRecord $record) {
+                            if ($state === 'waived') {
+                                $set('fine_amount_paid', 0);
+                            } else {
+                                $set('fine_amount_paid', $record->calculated_total_fines);
+                            }
+                        }),
+
+                    Forms\Components\TextInput::make('fine_amount_paid')
+                        ->label('Amount Paid (AED)')
+                        ->prefix('AED')
+                        ->numeric()
+                        ->default(fn (ProRecord $record) => $record->calculated_total_fines)
+                        ->required()
+                        ->helperText('Actual amount paid at GDRFA / Amer center.'),
+
+                    Forms\Components\TextInput::make('fine_receipt_number')
+                        ->label('Receipt / Ref #')
+                        ->placeholder('e.g. GDRFA-2026-98124 or Amer Receipt #')
+                        ->required(fn (callable $get) => $get('fine_settlement_type') === 'paid')
+                        ->helperText('Government receipt or MB transaction number.'),
+
+                    Forms\Components\DatePicker::make('fines_settled_at')
+                        ->label('Settlement Date')
+                        ->default(Carbon::today())
+                        ->native(false)
+                        ->required(),
+
+                    Forms\Components\FileUpload::make('fine_receipt_attachment')
+                        ->label('Receipt Document / Payment Proof (PDF or Image)')
+                        ->disk('public')
+                        ->directory('pro-fines-receipts')
+                        ->acceptedFileTypes(['application/pdf', 'image/*'])
+                        ->maxSize(10240)
+                        ->columnSpanFull(),
+
+                    Forms\Components\Textarea::make('fine_settlement_notes')
+                        ->label('Settlement Notes / Remarks')
+                        ->placeholder('e.g. Paid at Amer Center Al Twar, fines cleared in GDRFA system...')
+                        ->rows(2)
+                        ->columnSpanFull(),
+                ]),
+            ])
+            ->action(function (array $data, ProRecord $record) {
+                $record->settleFines(
+                    type: $data['fine_settlement_type'] ?? 'paid',
+                    amountPaid: (float) ($data['fine_amount_paid'] ?? 0),
+                    receiptNumber: $data['fine_receipt_number'] ?? null,
+                    attachment: $data['fine_receipt_attachment'] ?? null,
+                    notes: $data['fine_settlement_notes'] ?? null,
+                    settledAt: ! empty($data['fines_settled_at']) ? Carbon::parse($data['fines_settled_at']) : Carbon::now(),
+                    userId: auth()->id()
+                );
+
+                \Filament\Notifications\Notification::make()
+                    ->title('Fines Settled')
+                    ->body("Overstay penalties for {$record->employee_name} have been cleared.")
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public static function getViewFineSettlementTableAction(): Tables\Actions\Action
+    {
+        return Tables\Actions\Action::make('view_fine_settlement')
+            ->label('Fine Settlement Info')
+            ->icon('heroicon-m-check-badge')
+            ->color('success')
+            ->visible(fn (ProRecord $record): bool => (bool) $record->fines_settled_at)
+            ->modalHeading(fn (ProRecord $record) => "Fine Settlement Details — {$record->employee_name}")
+            ->modalIcon('heroicon-o-check-badge')
+            ->modalWidth('md')
+            ->infolist([
+                Infolists\Components\TextEntry::make('fine_settlement_type')
+                    ->label('Settlement Type')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state === 'waived' ? 'Waived / Exempted (GDRFA)' : 'Paid Settlement')
+                    ->color('success'),
+                Infolists\Components\TextEntry::make('fine_amount_paid')
+                    ->label('Amount Settled')
+                    ->money('AED'),
+                Infolists\Components\TextEntry::make('fine_receipt_number')
+                    ->label('Receipt / Ref #')
+                    ->placeholder('N/A')
+                    ->copyable(),
+                Infolists\Components\TextEntry::make('fines_settled_at')
+                    ->label('Settlement Date')
+                    ->dateTime('d M Y, h:i A'),
+                Infolists\Components\TextEntry::make('fineSettledByUser.name')
+                    ->label('Settled By')
+                    ->placeholder('System Admin'),
+                Infolists\Components\TextEntry::make('fine_receipt_attachment')
+                    ->label('Receipt Document')
+                    ->formatStateUsing(fn ($state) => '📄 View Attached Receipt')
+                    ->url(fn ($state) => $state ? asset('storage/' . $state) : null, shouldOpenInNewTab: true)
+                    ->color('primary')
+                    ->visible(fn (ProRecord $record) => ! empty($record->fine_receipt_attachment)),
+                Infolists\Components\TextEntry::make('fine_settlement_notes')
+                    ->label('Remarks / Notes')
+                    ->placeholder('None')
+                    ->columnSpanFull(),
+            ])
+            ->extraModalActions([
+                Tables\Actions\Action::make('reopen_fines')
+                    ->label('Reopen / Cancel Settlement')
+                    ->color('danger')
+                    ->icon('heroicon-m-arrow-path')
+                    ->requiresConfirmation()
+                    ->modalHeading('Reopen Overstay Fines?')
+                    ->modalDescription('This will cancel the settlement and re-enable dynamic overstay fine tracking.')
+                    ->action(function (ProRecord $record) {
+                        $record->reopenFines();
+                        \Filament\Notifications\Notification::make()
+                            ->title('Settlement Cancelled')
+                            ->body("Fines reopened for {$record->employee_name}.")
+                            ->warning()
+                            ->send();
+                    }),
+            ]);
     }
 }

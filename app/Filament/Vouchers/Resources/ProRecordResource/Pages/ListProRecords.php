@@ -59,8 +59,8 @@ class ListProRecords extends ListRecords
                 ->badge(static::getResource()::getModel()::where('process_type', 'renewal')->count()),
 
             'overdue_fines' => Tab::make('Active Fines')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotNull('residence_visa_expiry')->where('residence_visa_expiry', '<', $today)->whereNotNull('fines_start_date')->where('fines_start_date', '<', $today))
-                ->badge(static::getResource()::getModel()::whereNotNull('residence_visa_expiry')->where('residence_visa_expiry', '<', $today)->whereNotNull('fines_start_date')->where('fines_start_date', '<', $today)->count())
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('fines_settled_at')->whereNotNull('residence_visa_expiry')->where('residence_visa_expiry', '<', $today)->whereNotNull('fines_start_date')->where('fines_start_date', '<', $today))
+                ->badge(static::getResource()::getModel()::whereNull('fines_settled_at')->whereNotNull('residence_visa_expiry')->where('residence_visa_expiry', '<', $today)->whereNotNull('fines_start_date')->where('fines_start_date', '<', $today)->count())
                 ->badgeColor('danger'),
 
             'expiring_soon' => Tab::make('Expiring Soon')
