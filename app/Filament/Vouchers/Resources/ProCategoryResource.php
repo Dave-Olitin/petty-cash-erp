@@ -140,7 +140,7 @@ class ProCategoryResource extends Resource
                             ->required(),
 
                         Forms\Components\TextInput::make('change_status_cost')
-                            ->label('Change Status (Inside UAE)')
+                            ->label('Change Status (Local)')
                             ->numeric()
                             ->default(650.00)
                             ->prefix('AED')
@@ -251,7 +251,7 @@ class ProCategoryResource extends Resource
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('new_joiner_inside_total')
-                    ->label('Total (New Joiner Inside)')
+                    ->label('Total (New Joiner Local)')
                     ->money('AED')
                     ->weight(FontWeight::Bold)
                     ->color('info'),

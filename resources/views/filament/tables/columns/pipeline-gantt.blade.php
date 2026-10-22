@@ -25,15 +25,25 @@
         $currentStage = 'All Completed';
     }
 
+    $completedCost = (float) ($progress['completed_cost'] ?? 0);
+    $remainingFee = (float) ($progress['remaining_fee'] ?? 0);
+    $totalFee = (float) ($progress['total_fee'] ?? 0);
+
     $summaryTooltip = $completed . ' of ' . $total . ' stages completed (' . $percentage . '%)';
+    if ($totalFee > 0) {
+        $summaryTooltip .= "\nAED " . number_format($completedCost, 2) . " completed • AED " . number_format($remainingFee, 2) . " remaining";
+    }
     $tooltipLines = [$summaryTooltip, '----------------------'];
     foreach ($stages as $i => $s) {
         $st = match($s['state'] ?? '') {
             'completed' => '✓ Completed',
             'in_progress' => '● In Progress',
+            'na' => 'N/A (No Fee)',
             default => 'Pending',
         };
-        $tooltipLines[] = ($i + 1) . '. ' . $s['label'] . ' — ' . $st;
+        $c = (float) ($s['cost'] ?? 0);
+        $costStr = $c > 0 ? ' (AED ' . number_format($c, 0) . ')' : ' (No Fee)';
+        $tooltipLines[] = ($i + 1) . '. ' . $s['label'] . $costStr . ' — ' . $st;
     }
     $fullTooltip = implode("\n", $tooltipLines);
 @endphp
@@ -51,12 +61,13 @@
                 $color = match($st) {
                     'completed' => '#10b981', // green
                     'in_progress' => '#f59e0b', // amber
+                    'na' => '#cbd5e1', // subtle slate (N/A)
                     default => '#e5e7eb', // gray
                 };
             @endphp
             <div 
                 style="flex: 1; height: 100%; border-radius: 2px; background-color: {{ $color }};"
-                title="{{ $stage['label'] }}: {{ ucfirst($st) }}"
+                title="{{ $stage['label'] }}: {{ $st === 'na' ? 'N/A (No Fee)' : ucfirst($st) }}"
             ></div>
         @endforeach
     </div>

@@ -14,6 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Support\Enums\FontWeight;
+use Illuminate\Database\Eloquent\Builder;
 use pxlrbt\FilamentExcel\Actions\Tables\ExportAction;
 use pxlrbt\FilamentExcel\Exports\ExcelExport;
 use pxlrbt\FilamentExcel\Columns\Column;
@@ -214,8 +215,8 @@ class ProRecordResource extends Resource
                                                     ])->columns(3)
                                                     ->visible(fn (callable $get) => in_array($get('process_type'), ['new_inside', 'new_outside'])),
 
-                                                // 5. CHANGE STATUS (Only New Joiner Inside UAE)
-                                                Forms\Components\Fieldset::make('5. CHANGE STATUS (Inside UAE Amendment)')
+                                                // 5. CHANGE STATUS (Only New Joiner Local)
+                                                Forms\Components\Fieldset::make('5. CHANGE STATUS (Local Amendment)')
                                                     ->schema([
                                                         Forms\Components\Select::make('change_status_status')
                                                             ->label('Status')
@@ -422,7 +423,7 @@ class ProRecordResource extends Resource
                             ->schema([
                                 Forms\Components\Select::make('ledger_branch_id')
                                     ->label('Sponsoring Branch')
-                                    ->relationship('ledgerBranch', 'name')
+                                    ->relationship('ledgerBranch', 'name', fn (Builder $query, ?ProRecord $record) => $query->where('is_active', true)->orWhere('id', $record?->ledger_branch_id))
                                     ->searchable()
                                     ->preload()
                                     ->required()
@@ -445,8 +446,8 @@ class ProRecordResource extends Resource
                                 Forms\Components\Select::make('process_type')
                                     ->label('Process Type')
                                     ->options([
-                                        'new_inside'   => 'New Joiner (Inside UAE)',
-                                        'new_outside'  => 'New Joiner (Outside UAE)',
+                                        'new_inside'   => 'New Joiner (Local)',
+                                        'new_outside'  => 'New Joiner (PH)',
                                         'renewal'      => 'Visa Renewal',
                                         'cancellation' => 'Visa Cancellation',
                                     ])
@@ -555,8 +556,8 @@ class ProRecordResource extends Resource
                 Tables\Columns\TextColumn::make('process_type')
                     ->label('Category & Process')
                     ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'new_inside'   => 'New (Inside)',
-                        'new_outside'  => 'New (Outside)',
+                        'new_inside'   => 'New (Local)',
+                        'new_outside'  => 'New (PH)',
                         'renewal'      => 'Renewal',
                         'cancellation' => 'Cancellation',
                         default        => ucfirst(str_replace('_', ' ', $state)),
@@ -609,21 +610,91 @@ class ProRecordResource extends Resource
                     ->money('AED')
                     ->alignEnd()
                     ->color('gray')
+                    ->description(function (ProRecord $record): ?string {
+                        $completed = (float) $record->completed_stage_cost;
+                        if ($completed > 0) {
+                            return 'Paid: AED ' . number_format($completed, 0);
+                        }
+                        return 'Total Budget';
+                    })
                     ->sortable(),
 
-                // 7. Total with Fee & Fines Combined
+                // 7. Total with Fee & Fines Combined (Deducted based on completed progress)
                 Tables\Columns\TextColumn::make('grand_total_with_fines')
                     ->label('Total (Fee + Fines)')
                     ->money('AED')
                     ->alignEnd()
                     ->weight(FontWeight::Bold)
-                    ->description(function (ProRecord $record): string {
-                        if ($record->calculated_total_fines > 0) {
-                            return 'Fee: ' . number_format($record->total_cost, 0) . ' + Fine: ' . number_format($record->calculated_total_fines, 0);
+                    ->color(function (ProRecord $record): string {
+                        if ($record->status === 'completed' || $record->grand_total_with_fines == 0) {
+                            return 'success';
                         }
-                        return 'Govt Fees Only';
+                        if ($record->calculated_total_fines > 0) {
+                            return 'danger';
+                        }
+                        return 'gray';
                     })
-                    ->sortable(query: fn ($query, $direction) => $query->orderByRaw('(COALESCE(total_cost, 0) + COALESCE(fine_pr_50, 0) + COALESCE(fine_eid_20, 0)) ' . $direction)),
+                    ->description(function (ProRecord $record): string {
+                        $stages = $record->pipeline_stages;
+                        $completedCost = (float) ($stages['completed_cost'] ?? 0);
+                        $fines = (float) $record->calculated_total_fines;
+
+                        if ($record->status === 'completed' || ($stages['percentage'] ?? 0) === 100) {
+                            if ($fines > 0) {
+                                return 'Fees settled • Fine: ' . number_format($fines, 0);
+                            }
+                            return '✓ Fully Settled';
+                        }
+
+                        $parts = [];
+                        if ($completedCost > 0) {
+                            $parts[] = 'Deducted: AED ' . number_format($completedCost, 0);
+                        } else {
+                            $parts[] = '0 stages done';
+                        }
+
+                        if ($fines > 0) {
+                            $parts[] = '+Fine: ' . number_format($fines, 0);
+                        }
+
+                        return implode(' • ', $parts);
+                    })
+                    ->tooltip(function (ProRecord $record): string {
+                        $stages = $record->pipeline_stages;
+                        $totalFee = number_format((float) ($stages['total_fee'] ?? $record->total_cost), 2);
+                        $completedCost = number_format((float) ($stages['completed_cost'] ?? 0), 2);
+                        $remainingFee = number_format((float) ($stages['remaining_fee'] ?? 0), 2);
+                        $fines = number_format((float) $record->calculated_total_fines, 2);
+                        $balance = number_format((float) $record->grand_total_with_fines, 2);
+
+                        return "Budgeted Fee: AED {$totalFee}\n"
+                            . "- Completed / Deducted: AED {$completedCost}\n"
+                            . "= Remaining Fee: AED {$remainingFee}\n"
+                            . "+ Accrued Fines: AED {$fines}\n"
+                            . "--------------------------------\n"
+                            . "Balance Due: AED {$balance}";
+                    })
+                    ->sortable(query: function ($query, $direction) {
+                        $sql = "(
+                            CASE 
+                                WHEN status = 'completed' THEN 0 
+                                ELSE GREATEST(0, COALESCE(total_cost, 0) - (
+                                    CASE WHEN LOWER(COALESCE(offer_letter_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(offer_letter_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(dubins_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(dubins_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(wp_submission_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(wp_submission_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(evisa_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(evisa_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(change_status_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(change_status_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(iloe_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(iloe_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(contract_submission_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(contract_submission_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(emirates_id_stage_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(emirates_id_stage_cost, 0) ELSE 0 END +
+                                    CASE WHEN LOWER(COALESCE(residence_visa_stage_status, '')) IN ('completed', 'done', 'approved') THEN COALESCE(residence_visa_stage_cost, 0) ELSE 0 END
+                                ))
+                            END 
+                            + COALESCE(fine_pr_50, 0) 
+                            + COALESCE(fine_eid_20, 0)
+                        )";
+                        return $query->orderByRaw("{$sql} {$direction}");
+                    }),
 
                 // 8. Status (Action-oriented badge tag as last column)
                 Tables\Columns\TextColumn::make('action_status')
@@ -808,8 +879,8 @@ class ProRecordResource extends Resource
                 Tables\Filters\SelectFilter::make('process_type')
                     ->label('Process Type')
                     ->options([
-                        'new_inside'   => 'New Joiner (Inside)',
-                        'new_outside'  => 'New Joiner (Outside)',
+                        'new_inside'   => 'New Joiner (Local)',
+                        'new_outside'  => 'New Joiner (PH)',
                         'renewal'      => 'Visa Renewal',
                         'cancellation' => 'Cancellation',
                     ]),
@@ -871,8 +942,8 @@ class ProRecordResource extends Resource
                                 Column::make('process_type')
                                     ->heading('PROCESS TYPE')
                                     ->formatStateUsing(fn ($state) => match ($state) {
-                                        'new_inside'   => 'New Joiner (Inside UAE)',
-                                        'new_outside'  => 'New Joiner (Outside UAE)',
+                                        'new_inside'   => 'New Joiner (Local)',
+                                        'new_outside'  => 'New Joiner (PH)',
                                         'renewal'      => 'Visa Renewal',
                                         'cancellation' => 'Visa Cancellation',
                                         default        => ucfirst((string) $state),
@@ -990,6 +1061,9 @@ class ProRecordResource extends Resource
                                 Column::make('total_cost')
                                     ->heading('TOTAL PROCESSING COST (AED)')
                                     ->formatStateUsing(fn ($state) => number_format((float) $state, 2)),
+                                Column::make('grand_total_with_fines')
+                                    ->heading('REMAINING BALANCE (FEE + FINES AED)')
+                                    ->formatStateUsing(fn ($state, ProRecord $record) => number_format((float) $record->grand_total_with_fines, 2)),
                                 Column::make('remarks')->heading('REMARKS / NOTES'),
                                 Column::make('created_at')
                                     ->heading('RECORD CREATED DATE')
@@ -1053,8 +1127,8 @@ class ProRecordResource extends Resource
                             ->label('Process Type')
                             ->badge()
                             ->formatStateUsing(fn ($state) => match ($state) {
-                                'new_inside'   => 'New Joiner (Inside UAE)',
-                                'new_outside'  => 'New Joiner (Outside UAE)',
+                                'new_inside'   => 'New Joiner (Local)',
+                                'new_outside'  => 'New Joiner (PH)',
                                 'renewal'      => 'Visa Renewal',
                                 'cancellation' => 'Visa Cancellation',
                                 default        => ucfirst(str_replace('_', ' ', (string) $state)),
@@ -1091,8 +1165,16 @@ class ProRecordResource extends Resource
                             ->money('AED')
                             ->weight(FontWeight::Bold)
                             ->size(Infolists\Components\TextEntry\TextEntrySize::Large)
-                            ->color('success'),
-                    ])->columns(4),
+                            ->color('gray'),
+
+                        Infolists\Components\TextEntry::make('grand_total_with_fines')
+                            ->label('Balance Due (Fee + Fines)')
+                            ->money('AED')
+                            ->weight(FontWeight::Bold)
+                            ->size(Infolists\Components\TextEntry\TextEntrySize::Large)
+                            ->color(fn ($state, ProRecord $record) => $record->status === 'completed' || $state == 0 ? 'success' : 'danger')
+                            ->helperText(fn (ProRecord $record) => 'Deducted: AED ' . number_format($record->completed_stage_cost, 0) . ' completed'),
+                    ])->columns(5),
 
                 // ── 2. Progress Bar UI: 9-Stage Visa Pipeline Tracker ─────────
                 Infolists\Components\Section::make('Visa Processing Pipeline Progress')
@@ -1302,6 +1384,29 @@ class ProRecordResource extends Resource
     public static function recalculateLiveTotal(callable $get, callable $set): void
     {
         $processType = $get('process_type');
+
+        $stageMap = [
+            'offer_letter_cost'          => 'offer_letter_status',
+            'dubins_cost'                => 'dubins_status',
+            'wp_submission_cost'         => 'wp_submission_status',
+            'evisa_cost'                 => 'evisa_status',
+            'change_status_cost'         => 'change_status_status',
+            'iloe_cost'                  => 'iloe_status',
+            'contract_submission_cost'   => 'contract_submission_status',
+            'emirates_id_stage_cost'     => 'emirates_id_stage_status',
+            'residence_visa_stage_cost'  => 'residence_visa_stage_status',
+        ];
+
+        // For amount 0: there is no need for Pending => auto-set to 'N/A'
+        foreach ($stageMap as $costField => $statusField) {
+            $costVal = (float) ($get($costField) ?: 0);
+            $currStatus = (string) $get($statusField);
+            if ($costVal <= 0 && in_array(strtolower($currStatus), ['pending', ''])) {
+                $set($statusField, 'N/A');
+            } elseif ($costVal > 0 && in_array(strtolower($currStatus), ['n/a', 'na'])) {
+                $set($statusField, 'Pending');
+            }
+        }
 
         $costs = [
             (float) ($get('dubins_cost') ?: 0),

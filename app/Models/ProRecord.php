@@ -224,9 +224,33 @@ class ProRecord extends Model
     }
 
     /**
-     * Combined total of pipeline processing fee + active overstay fines.
+     * Total cost of all stages that have been marked completed.
+     */
+    public function getCompletedStageCostAttribute(): float
+    {
+        return (float) ($this->pipeline_stages['completed_cost'] ?? 0.00);
+    }
+
+    /**
+     * Remaining processing fee after deducting completed stages.
+     */
+    public function getRemainingProcessingFeeAttribute(): float
+    {
+        return (float) ($this->pipeline_stages['remaining_fee'] ?? 0.00);
+    }
+
+    /**
+     * Combined total of remaining processing fee + active overstay fines (deducted as stages complete).
      */
     public function getGrandTotalWithFinesAttribute(): float
+    {
+        return (float) ($this->remaining_processing_fee + $this->calculated_total_fines);
+    }
+
+    /**
+     * Gross total of budgeted processing fee + active overstay fines (before stage deductions).
+     */
+    public function getGrossTotalWithFinesAttribute(): float
     {
         return (float) ($this->total_cost + $this->calculated_total_fines);
     }
@@ -385,26 +409,53 @@ class ProRecord extends Model
         }
 
         $completed = 0;
+        $completedCost = 0.0;
+        $totalStageCost = 0.0;
+        $applicableCount = 0;
+
         foreach ($stages as &$stg) {
-            $s = strtolower(str_replace([' ', '-'], '_', (string) ($stg['status'] ?? 'pending')));
-            if (in_array($s, ['completed', 'done', 'approved'])) {
+            $cost = (float) ($stg['cost'] ?? 0);
+            $totalStageCost += $cost;
+
+            $s = strtolower(str_replace([' ', '-', '/'], '_', (string) ($stg['status'] ?? 'pending')));
+
+            if ($this->status === 'completed' || in_array($s, ['completed', 'done', 'approved'])) {
                 $stg['state'] = 'completed';
                 $completed++;
+                $completedCost += $cost;
+                $applicableCount++;
             } elseif (in_array($s, ['in_progress', 'processing', 'submitted'])) {
                 $stg['state'] = 'in_progress';
+                $applicableCount++;
+            } elseif ($cost <= 0 || in_array($s, ['n_a', 'na', 'not_applicable', 'none', 'exempt'])) {
+                $stg['state'] = 'na';
+                // Amount 0: no fee required, not pending => marked as N/A
             } else {
                 $stg['state'] = 'pending';
+                $applicableCount++;
             }
         }
 
-        $total = count($stages);
-        $percent = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+        $totalStages = count($stages);
+        $applicableTotal = $applicableCount > 0 ? $applicableCount : $totalStages;
+
+        if ($this->status === 'completed') {
+            $completed = $applicableTotal;
+            $completedCost = (float) $this->total_cost;
+        }
+
+        $percent = $applicableTotal > 0 ? (int) round(($completed / $applicableTotal) * 100) : 0;
+        $remainingFee = (float) max(0.00, (float) $this->total_cost - $completedCost);
 
         return [
-            'stages'     => $stages,
-            'completed'  => $completed,
-            'total'      => $total,
-            'percentage' => $percent,
+            'stages'         => $stages,
+            'completed'      => $completed,
+            'total'          => $applicableTotal,
+            'raw_total'      => $totalStages,
+            'percentage'     => $percent,
+            'completed_cost' => $completedCost,
+            'remaining_fee'  => $remainingFee,
+            'total_fee'      => (float) $this->total_cost,
         ];
     }
 
@@ -612,10 +663,53 @@ class ProRecord extends Model
     protected static function booted(): void
     {
         static::saving(function (ProRecord $record) {
-            // Automatically keep total_cost synchronized
-            $record->total_cost = $record->calculateTotalCost();
+            // Guarantee non-nullable numeric columns have valid defaults so MySQL never throws 1048 Cannot be null
+            $costFields = [
+                'offer_letter_cost',
+                'dubins_cost',
+                'wp_submission_cost',
+                'evisa_cost',
+                'change_status_cost',
+                'iloe_cost',
+                'contract_submission_cost',
+                'emirates_id_stage_cost',
+                'residence_visa_stage_cost',
+                'fine_eid_20',
+                'fine_pr_50',
+                'total_cost',
+            ];
+            foreach ($costFields as $field) {
+                if (is_null($record->{$field})) {
+                    $record->{$field} = 0.00;
+                }
+            }
+
+            // Automatically keep total_cost synchronized if stage fees exist
+            $calculatedTotal = $record->calculateTotalCost();
+            if ($calculatedTotal > 0 || empty($record->total_cost)) {
+                $record->total_cost = $calculatedTotal;
+            }
+
+            // For amount 0, stages are not pending — auto-set to 'N/A' if currently 'Pending' or empty
+            $stageStatusMap = [
+                'offer_letter_status'        => 'offer_letter_cost',
+                'dubins_status'              => 'dubins_cost',
+                'wp_submission_status'       => 'wp_submission_cost',
+                'evisa_status'               => 'evisa_cost',
+                'change_status_status'       => 'change_status_cost',
+                'iloe_status'                => 'iloe_cost',
+                'contract_submission_status' => 'contract_submission_cost',
+                'emirates_id_stage_status'   => 'emirates_id_stage_cost',
+                'residence_visa_stage_status' => 'residence_visa_stage_cost',
+            ];
+            foreach ($stageStatusMap as $statusField => $costField) {
+                if ((float) ($record->{$costField} ?? 0) <= 0 && in_array(strtolower((string) $record->{$statusField}), ['pending', ''])) {
+                    $record->{$statusField} = 'N/A';
+                }
+            }
 
             $graceDays = (int) ($record->grace_period_days ?: 30);
+            $record->grace_period_days = $graceDays;
 
             // Auto-calculate / sanitize fines_start_date from visa expiry + grace period
             if ($record->residence_visa_expiry) {

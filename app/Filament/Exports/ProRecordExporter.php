@@ -21,8 +21,8 @@ class ProRecordExporter extends Exporter
             ExportColumn::make('process_type')
                 ->label('Process Type')
                 ->formatStateUsing(fn ($state) => match ($state) {
-                    'new_inside'   => 'New Joiner (Inside UAE)',
-                    'new_outside'  => 'New Joiner (Outside UAE)',
+                    'new_inside'   => 'New Joiner (Local)',
+                    'new_outside'  => 'New Joiner (PH)',
                     'renewal'      => 'Visa Renewal',
                     'cancellation' => 'Visa Cancellation',
                     default        => ucfirst(str_replace('_', ' ', (string) $state)),
@@ -57,6 +57,9 @@ class ProRecordExporter extends Exporter
                 ->label('Total Accrued Fines (AED)')
                 ->state(fn (ProRecord $record): float => $record->calculated_total_fines),
             ExportColumn::make('total_cost')->label('Total Processing Cost (AED)'),
+            ExportColumn::make('grand_total_with_fines')
+                ->label('Remaining Balance (Fee + Fines AED)')
+                ->state(fn (ProRecord $record): float => $record->grand_total_with_fines),
             ExportColumn::make('remarks')->label('Remarks'),
             ExportColumn::make('created_at')->label('Created Date'),
         ];
