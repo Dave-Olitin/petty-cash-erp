@@ -14,17 +14,56 @@ class ProRecordImporter extends Importer
 {
     protected static ?string $model = ProRecord::class;
 
+    /**
+     * Use sync connection by default so imports execute immediately in production
+     * without requiring an active queue worker daemon. Can be overridden in .env.
+     */
+    public function getJobConnection(): ?string
+    {
+        return env('IMPORT_QUEUE_CONNECTION', 'sync');
+    }
+
+    /**
+     * Robust date parser for Excel dates, serial numbers, and multiple string formats.
+     */
     protected static function parseDate(?string $value): ?string
     {
         if (blank($value)) {
             return null;
         }
 
+        $v = trim((string) $value);
+
+        // Check for Excel numeric serial date (e.g., 40000 to 70000)
+        if (is_numeric($v) && (int) $v > 30000 && (int) $v < 70000) {
+            $unix = ((int) $v - 25569) * 86400;
+            return gmdate('Y-m-d', $unix);
+        }
+
+        // Handle DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY
+        if (preg_match('/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/', $v, $m)) {
+            return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+        }
+
         try {
-            return Carbon::parse(trim($value))->toDateString();
+            return Carbon::parse($v)->toDateString();
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Robust currency/money parser to strip currency codes (AED), symbols, and thousand separators.
+     * Defaults to 0.00 so non-nullable decimal columns in the database never trigger 1048 Cannot be null.
+     */
+    protected static function parseMoney(mixed $value, float $default = 0.00): float
+    {
+        if (blank($value)) {
+            return $default;
+        }
+
+        $cleaned = preg_replace('/[^0-9.-]/', '', (string) $value);
+        return is_numeric($cleaned) ? (float) $cleaned : $default;
     }
 
     public static function getColumns(): array
@@ -33,7 +72,7 @@ class ProRecordImporter extends Importer
             ImportColumn::make('employee_name')
                 ->label('Employee Name')
                 ->exampleHeader('Employee Name')
-                ->guess(['employee_name', 'Employee Name', 'EMPLOYEE NAME', 'Employee Full Name', 'Employee', 'Name'])
+                ->guess(['employee_name', 'Employee Name', 'EMPLOYEE NAME', 'Employee Full Name', 'Employee', 'Name', 'Full Name'])
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:255'])
                 ->example('Juan Dela Cruz'),
@@ -41,28 +80,56 @@ class ProRecordImporter extends Importer
             ImportColumn::make('branch')
                 ->label('Sponsoring Branch')
                 ->exampleHeader('Sponsoring Branch')
-                ->guess(['branch', 'Sponsoring Branch', 'SPONSORING BRANCH', 'Branch', 'BRANCH', 'ledgerBranch.name'])
+                ->guess(['branch', 'Sponsoring Branch', 'SPONSORING BRANCH', 'Branch', 'BRANCH', 'ledgerBranch.name', 'Ledger Branch', 'Company', 'Branch Name'])
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('SB MAIN'),
+                ->example('SB MAIN')
+                ->fillRecordUsing(function (ProRecord $record, ?string $state): void {
+                    if (blank($state)) {
+                        return;
+                    }
+                    $branchName = trim((string) $state);
+                    $branch = LedgerBranch::where('name', $branchName)
+                        ->orWhere('name', 'like', "%{$branchName}%")
+                        ->first();
+                    if ($branch) {
+                        $record->ledger_branch_id = $branch->id;
+                        if (empty($record->license_expiry) && $branch->license_expiry) {
+                            $record->license_expiry = $branch->license_expiry;
+                        }
+                    }
+                }),
 
             ImportColumn::make('category')
                 ->label('Category Tier')
                 ->exampleHeader('Category Tier')
-                ->guess(['category', 'Category Tier', 'CATEGORY TIER', 'Category', 'CATEGORY', 'proCategory.name'])
+                ->guess(['category', 'Category Tier', 'CATEGORY TIER', 'Category', 'CATEGORY', 'proCategory.name', 'Labour Category', 'Company Category', 'Tier'])
                 ->rules(['nullable', 'string', 'max:255'])
-                ->example('Category 1 (High Skilled)'),
+                ->example('Category 1 (High Skilled)')
+                ->fillRecordUsing(function (ProRecord $record, ?string $state): void {
+                    if (blank($state)) {
+                        return;
+                    }
+                    $categoryName = trim((string) $state);
+                    $category = ProCategory::where('code', $categoryName)
+                        ->orWhere('name', $categoryName)
+                        ->orWhere('name', 'like', "%{$categoryName}%")
+                        ->first();
+                    if ($category) {
+                        $record->pro_category_id = $category->id;
+                    }
+                }),
 
             ImportColumn::make('process_type')
                 ->label('Process Type')
                 ->exampleHeader('Process Type')
                 ->guess(['process_type', 'Process Type', 'PROCESS TYPE', 'Process'])
                 ->rules(['nullable', 'string'])
-                ->example('New Joiner (Inside UAE)')
+                ->example('New Joiner (Local)')
                 ->castStateUsing(function (?string $state): string {
                     $s = strtolower(trim((string) $state));
                     return match ($s) {
-                        'new joiner (inside uae)', 'new joiner (inside)', 'inside', 'new inside', 'new_inside' => 'new_inside',
-                        'new joiner (outside uae)', 'new joiner (outside)', 'outside', 'new outside', 'new_outside' => 'new_outside',
+                        'new joiner (local)', 'local', 'new local', 'new joiner (inside uae)', 'new joiner (inside)', 'inside', 'new inside', 'new_inside' => 'new_inside',
+                        'new joiner (ph)', 'ph', 'new ph', 'new joiner (outside uae)', 'new joiner (outside)', 'outside', 'new outside', 'new_outside' => 'new_outside',
                         'visa renewal', 'renewal' => 'renewal',
                         'visa cancellation', 'cancellation' => 'cancellation',
                         default => in_array($s, ['new_inside', 'new_outside', 'renewal', 'cancellation']) ? $s : 'new_inside',
@@ -187,6 +254,11 @@ class ProRecordImporter extends Importer
                 ->guess(['grace_period_days', 'Grace Period (Days)', 'GRACE PERIOD (DAYS)', 'Grace Period'])
                 ->numeric()
                 ->rules(['nullable', 'integer', 'min:0'])
+                ->castStateUsing(function ($state) {
+                    if (blank($state)) return 30;
+                    $cleaned = preg_replace('/[^0-9]/', '', (string) $state);
+                    return is_numeric($cleaned) ? (int) $cleaned : 30;
+                })
                 ->example('30'),
 
             ImportColumn::make('fines_start_date')
@@ -201,76 +273,97 @@ class ProRecordImporter extends Importer
                 ->exampleHeader('Daily Fine EID-20')
                 ->guess(['fine_eid_20', 'Daily Fine EID-20', 'DAILY FINE EID-20 (AED)', 'FINE (EID-20)'])
                 ->numeric()
-                ->rules(['nullable', 'numeric']),
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('fine_pr_50')
                 ->label('Daily Fine PR-50')
                 ->exampleHeader('Daily Fine PR-50')
                 ->guess(['fine_pr_50', 'Daily Fine PR-50', 'DAILY FINE PR-50 (AED)', 'FINE (PR-50)'])
                 ->numeric()
-                ->rules(['nullable', 'numeric']),
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             // Stage Costs
             ImportColumn::make('offer_letter_cost')
                 ->label('Offer Letter Cost')
                 ->exampleHeader('Offer Letter Cost')
                 ->guess(['offer_letter_cost', 'Offer Letter Cost', 'OFFER LETTER COST (AED)', 'OFFER LETTER'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('dubins_cost')
                 ->label('Dubins Cost')
                 ->exampleHeader('Dubins Cost')
                 ->guess(['dubins_cost', 'Dubins Cost', 'DUBINS COST (AED)', 'DUBINS'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('wp_submission_cost')
                 ->label('Work Permit Cost')
                 ->exampleHeader('Work Permit Cost')
                 ->guess(['wp_submission_cost', 'Work Permit Cost', 'WORK PERMIT COST (AED)', 'WP SUBMISSION'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('evisa_cost')
                 ->label('eVisa Cost')
                 ->exampleHeader('eVisa Cost')
                 ->guess(['evisa_cost', 'eVisa Cost', 'EVISA COST (AED)', 'EVISA'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('change_status_cost')
                 ->label('Change Status Cost')
                 ->exampleHeader('Change Status Cost')
                 ->guess(['change_status_cost', 'Change Status Cost', 'CHANGE STATUS COST (AED)', 'CHANGE STATUS'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('iloe_cost')
                 ->label('ILOE Cost')
                 ->exampleHeader('ILOE Cost')
                 ->guess(['iloe_cost', 'ILOE Cost', 'ILOE COST (AED)', 'ILOE'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('contract_submission_cost')
                 ->label('Labour Contract Cost')
                 ->exampleHeader('Labour Contract Cost')
                 ->guess(['contract_submission_cost', 'Labour Contract Cost', 'LABOUR CONTRACT COST (AED)', 'CONTRACT SUBMISSION'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('emirates_id_stage_cost')
                 ->label('Emirates ID Stage Cost')
                 ->exampleHeader('Emirates ID Stage Cost')
                 ->guess(['emirates_id_stage_cost', 'Emirates ID Stage Cost', 'EMIRATES ID STAGE COST (AED)', 'EMIRATES ID'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('residence_visa_stage_cost')
                 ->label('Residence Visa Stage Cost')
                 ->exampleHeader('Residence Visa Stage Cost')
                 ->guess(['residence_visa_stage_cost', 'Residence Visa Stage Cost', 'RESIDENCE VISA STAGE COST (AED)', 'RESIDENCE VISA'])
-                ->numeric(),
+                ->numeric()
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('total_cost')
                 ->label('Total Processing Cost')
                 ->exampleHeader('Total Processing Cost')
                 ->guess(['total_cost', 'Total Processing Cost', 'TOTAL PROCESSING COST (AED)', 'TOTAL', 'Total Cost'])
                 ->numeric()
-                ->rules(['nullable', 'numeric']),
+                ->rules(['nullable', 'numeric'])
+                ->castStateUsing(fn ($state) => static::parseMoney($state)),
 
             ImportColumn::make('remarks')
                 ->label('Remarks')
@@ -302,7 +395,7 @@ class ProRecordImporter extends Importer
 
         if (! $record) {
             $record = new ProRecord();
-            $record->user_id = auth()->id();
+            $record->user_id = $this->import->user_id ?? auth()->id();
             $record->status = 'draft';
         }
 
@@ -314,6 +407,9 @@ class ProRecordImporter extends Importer
                 ->first();
             if ($branch) {
                 $record->ledger_branch_id = $branch->id;
+                if (empty($record->license_expiry) && $branch->license_expiry) {
+                    $record->license_expiry = $branch->license_expiry;
+                }
             }
         }
 

@@ -30,6 +30,12 @@ class ListProRecords extends ListRecords
                         ->send();
                 }),
 
+            Actions\ImportAction::make()
+                ->label('Import Records')
+                ->importer(\App\Filament\Imports\ProRecordImporter::class)
+                ->color('gray')
+                ->icon('heroicon-m-arrow-up-tray'),
+
             Actions\CreateAction::make()
                 ->label('New Record')
                 ->icon('heroicon-m-plus'),
